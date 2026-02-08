@@ -32,25 +32,77 @@ export default function ChatBox({ mode }: { mode: Mode }) {
   }
 
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      <div style={{ flex: 1, padding: 12, overflowY: "auto" }}>
+    <div
+      style={{
+        height: "calc(100vh - 72px)", // header height compensation
+        display: "flex",
+        flexDirection: "column",
+        background: "#f8fafc",
+      }}
+    >
+      {/* Messages */}
+      <div
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: 20,
+        }}
+      >
         {history.map((m, i) => (
-          <div key={i} style={{ marginBottom: 8 }}>
-            <b>{m.role === "user" ? "You" : "Study Mate"}:</b>{" "}
+          <div
+            key={i}
+            style={{
+              marginBottom: 12,
+              maxWidth: "80%",
+              alignSelf: m.role === "user" ? "flex-end" : "flex-start",
+              background: m.role === "user" ? "#2563eb" : "#e5e7eb",
+              color: m.role === "user" ? "#ffffff" : "#0f172a",
+              padding: "10px 14px",
+              borderRadius: 12,
+            }}
+          >
             {m.content}
           </div>
         ))}
       </div>
 
-      <div style={{ display: "flex", gap: 8, padding: 12 }}>
+      {/* Input */}
+      <div
+        style={{
+          padding: 16,
+          borderTop: "1px solid #e5e7eb",
+          background: "#ffffff",
+          display: "flex",
+          gap: 12,
+        }}
+      >
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Type here…"
-          style={{ flex: 1 }}
+          placeholder="Type your answer here..."
+          style={{
+            flex: 1,
+            padding: 12,
+            fontSize: 16,
+            borderRadius: 8,
+            border: "1px solid #cbd5f5",
+          }}
         />
-        <button onClick={handleSend} disabled={loading}>
-          {loading ? "..." : "Send"}
+
+        <button
+          onClick={handleSend}
+          disabled={loading}
+          style={{
+            padding: "0 20px",
+            fontSize: 16,
+            borderRadius: 8,
+            border: "none",
+            background: "#2563eb",
+            color: "#ffffff",
+            cursor: "pointer",
+          }}
+        >
+          {loading ? "…" : "Send"}
         </button>
       </div>
     </div>
