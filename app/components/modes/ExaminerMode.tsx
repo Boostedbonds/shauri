@@ -2,11 +2,9 @@
 
 import { useState } from "react";
 import { getStudent } from "@/app/lib/student";
-import { saveRecord } from "@/app/lib/progress";
 
 export default function ExaminerMode() {
   const student = getStudent();
-  const profile = student?.profile ?? null;
 
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
@@ -16,8 +14,8 @@ export default function ExaminerMode() {
   const askExaminer = async () => {
     if (!question.trim()) return;
 
-    if (!profile) {
-      alert("Student profile not found. Please select child again.");
+    if (!student) {
+      alert("Student not selected. Please select child again.");
       return;
     }
 
@@ -32,20 +30,13 @@ export default function ExaminerMode() {
           mode: "examiner",
           question,
           answer,
-          classLevel: profile.classLevel,
+          classLevel: student.classLevel,
         }),
       });
 
       const data = await res.json();
       setResult(data.reply);
-
-      saveRecord({
-        childId: profile.id,
-        date: new Date().toLocaleString(),
-        mode: "examiner",
-        score: findScore(data.reply),
-      });
-    } catch (e) {
+    } catch {
       alert("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
@@ -79,11 +70,4 @@ export default function ExaminerMode() {
       )}
     </div>
   );
-}
-
-/* ------------------ helpers ------------------ */
-
-function findScore(text: string): string {
-  const match = text.match(/total\s*marks\s*[:\-]?\s*(\d+)/i);
-  return match ? match[1] : "N/A";
 }

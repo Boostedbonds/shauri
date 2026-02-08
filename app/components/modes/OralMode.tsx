@@ -1,103 +1,97 @@
 "use client";
 
-import { useState } from "react";
-import { getActiveProfile } from "../../lib/profiles";
-import { saveInsight } from "../../lib/analytics";
+import { useEffect, useState } from "react";
 
-type Msg = {
-  role: "user" | "assistant";
-  content: string;
+type Level = "weak" | "partial" | "strong";
+
+type Profile = {
+  id: string;
+  name: string;
 };
 
-export default function OralMode() {
-  const profile = getActiveProfile();
-  const [messages, setMessages] = useState<Msg[]>([]);
-  const [input, setInput] = useState("");
-  const [topic, setTopic] = useState("");
+type Insight = {
+  childId: string;
+  topic: string;
+  level: Level;
+  date: string;
+};
 
-  if (!profile) {
-    return (
-      <div className="screen">
-        <div className="card">No child selected.</div>
-      </div>
-    );
+function saveInsight(_insight: Insight): void {
+  return;
+}
+
+export default function OralMode() {
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [topic, setTopic] = useState<string>("");
+  const [level, setLevel] = useState<Level>("partial");
+
+  useEffect(() => {
+    const raw = localStorage.getItem("studymate_profile");
+    if (!raw) return;
+
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (
+        typeof parsed === "object" &&
+        parsed !== null &&
+        "id" in parsed &&
+        typeof (parsed as any).id === "string"
+      ) {
+        setProfile(parsed as Profile);
+      }
+    } catch {
+      return;
+    }
+  }, []);
+
+  function handleLevelChange(value: string) {
+    if (value === "weak" || value === "partial" || value === "strong") {
+      setLevel(value);
+    }
   }
 
-  async function send() {
-    if (!input.trim()) return;
+  function handleSave() {
+    if (!profile) return;
+    if (!topic.trim()) return;
 
-    const userMsg: Msg = { role: "user", content: input };
-    const next = [...messages, userMsg];
-    setMessages(next);
-    setInput("");
+    const insight: Insight = {
+      childId: profile.id,
+      topic: topic.trim(),
+      level: level,
+      date: new Date().toLocaleString(),
+    };
 
-    const res = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        mode: "oral",
-        messages: next,
-      }),
-    });
+    saveInsight(insight);
+    setTopic("");
+    setLevel("partial");
+  }
 
-    const data = await res.json();
-    const reply = data.reply as string;
-
-    setMessages(m => [...m, { role: "assistant", content: reply }]);
-
-    /* ── SIMPLE UNDERSTANDING HEURISTIC ── */
-    let level: "weak" | "partial" | "strong" = "partial";
-
-    if (
-      reply.toLowerCase().includes("not correct") ||
-      reply.toLowerCase().includes("let me explain again")
-    ) {
-      level = "weak";
-    } else if (
-      reply.toLowerCase().includes("good") ||
-      reply.toLowerCase().includes("correct")
-    ) {
-      level = "strong";
-    }
-
-    if (topic.trim()) {
-      saveInsight({
-        childId: profile.id,
-        topic: topic.trim(),
-        level,
-        date: new Date().toLocaleString(),
-      });
-    }
+  if (!profile) {
+    return <div style={{ padding: 16 }}>No child profile loaded.</div>;
   }
 
   return (
-    <div className="screen">
-      <div className="card stack">
-        <h2>Oral Mode – {profile.name}</h2>
+    <div style={{ padding: 16 }}>
+      <h2>Oral Mode</h2>
 
-        <input
-          placeholder="Current topic (e.g. Motion)"
-          value={topic}
-          onChange={(e) => setTopic(e.target.value)}
-        />
+      <input
+        value={topic}
+        onChange={(e) => setTopic(e.target.value)}
+        placeholder="Topic"
+        style={{ display: "block", marginBottom: 8 }}
+      />
 
-        <div style={{ maxHeight: 250, overflowY: "auto" }}>
-          {messages.map((m, i) => (
-            <div key={i}>
-              <b>{m.role === "user" ? "You:" : "Teacher:"}</b>
-              <p>{m.content}</p>
-            </div>
-          ))}
-        </div>
+      <select
+        value={level}
+        onChange={(e) => handleLevelChange(e.target.value)}
+        style={{ display: "block", marginBottom: 8 }}
+      >
+        <option value="weak">Weak</option>
+        <option value="partial">Partial</option>
+        <option value="strong">Strong</option>
+      </select>
 
-        <input
-          placeholder="Answer or ask"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-        />
-
-        <button onClick={send}>Send</button>
-      </div>
+      <button onClick={handleSave}>Save</button>
     </div>
   );
 }
