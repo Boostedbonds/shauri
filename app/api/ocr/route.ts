@@ -1,42 +1,32 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
-export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { imageBase64 } = body;
+export async function POST(req: Request) {
+  try {
+    const formData = await req.formData();
+    const file = formData.get("file") as File | null;
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content:
-            "Extract handwritten student exam answers exactly as written. Do not correct, summarize, or improve language.",
-        },
-        {
-          role: "user",
-          content: [
-            { type: "text", text: "Extract the answers from this image." },
-            {
-              type: "image_url",
-              image_url: {
-                url: imageBase64,
-              },
-            },
-          ],
-        },
-      ],
-    }),
-  });
+    if (!file) {
+      return NextResponse.json({ text: "" });
+    }
 
-  const data = await res.json();
+    // PDFs: try to read embedded text (works for many PDFs)
+    if (file.type === "application/pdf") {
+      const text = await file.text();
+      return NextResponse.json({
+        text: text || "PDF uploaded. Please specify your question.",
+      });
+    }
 
-  return NextResponse.json({
-    text: data.choices[0].message.content,
-  });
+    // Images: placeholder (OCR can be added later)
+    if (file.type.startsWith("image/")) {
+      return NextResponse.json({
+        text:
+          "Image uploaded. OCR is not enabled yet — please type the question or describe the image.",
+      });
+    }
+
+    return NextResponse.json({ text: "" });
+  } catch {
+    return NextResponse.json({ text: "" });
+  }
 }
