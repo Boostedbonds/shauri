@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import ChatUI from "../components/ChatUI";
-import ChatInput from "../components/ChatInput";
+import ChatUI from "@/components/ChatUI";
+import ChatInput from "@/components/ChatInput";
 
 type Message = {
   role: "user" | "assistant";
@@ -11,25 +11,29 @@ type Message = {
 
 export default function TeacherPage() {
   const [messages, setMessages] = useState<Message[]>([
-    {
-      role: "assistant",
-      content: "Hi 😊 What would you like to study today?",
-    },
+    { role: "assistant", content: "Hi 😊 What would you like to study today?" },
   ]);
 
-  function handleSend(text: string) {
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", content: text },
-      {
-        role: "assistant",
-        content: "Got it! Let’s break it down step by step.",
-      },
+  async function handleSend(text: string) {
+    const updated = [...messages, { role: "user", content: text }];
+    setMessages(updated);
+
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: updated }),
+    });
+
+    const data = await res.json();
+
+    setMessages([
+      ...updated,
+      { role: "assistant", content: data.reply },
     ]);
   }
 
   return (
-    <div style={{ minHeight: "100vh", paddingTop: "24px" }}>
+    <div style={{ minHeight: "100vh", paddingTop: 32 }}>
       <h1 style={{ textAlign: "center" }}>Teacher Mode</h1>
       <ChatUI messages={messages} />
       <ChatInput onSend={handleSend} />
