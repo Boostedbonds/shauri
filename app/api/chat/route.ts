@@ -9,25 +9,25 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { mode, message } = body ?? {};
 
-    const apiKey = process.env.GEMINI_API_KEY;
-
-    if (!apiKey || !message) {
+    if (!message || !process.env.GEMINI_API_KEY) {
       return NextResponse.json(
-        { error: "Missing message or API key" },
+        { error: "Missing message or GEMINI_API_KEY" },
         { status: 400 }
       );
     }
 
     const prompt = `
 You are StudyMate in ${mode?.toUpperCase() || "TEACHER"} mode.
-You teach CBSE Class 9 students clearly and correctly.
+You help CBSE Class 9 students.
+Explain clearly, step-by-step.
 
-Student message:
+Student question:
 ${message}
 `;
 
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" +
+        process.env.GEMINI_API_KEY,
       {
         method: "POST",
         headers: {
@@ -45,9 +45,9 @@ ${message}
     );
 
     if (!res.ok) {
-      const err = await res.text();
+      const errorText = await res.text();
       return NextResponse.json(
-        { error: "Gemini API failed", detail: err },
+        { error: "Gemini API failed", detail: errorText },
         { status: 500 }
       );
     }
@@ -60,7 +60,7 @@ ${message}
     return NextResponse.json({ reply });
   } catch (err) {
     return NextResponse.json(
-      { error: "Server exception" },
+      { error: "Server crash", detail: String(err) },
       { status: 500 }
     );
   }
