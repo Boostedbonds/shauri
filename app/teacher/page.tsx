@@ -34,15 +34,15 @@ export default function TeacherPage() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-slate-50 pb-32">
       <header className="px-6 py-4 border-b bg-white">
-        <h1 className="text-xl font-semibold">StudyMate</h1>
+        <h1 className="text-2xl font-semibold">StudyMate</h1>
         <p className="text-sm text-gray-500">
           CBSE Class 9 Learning Platform
         </p>
       </header>
 
-      <main className="flex-1 overflow-y-auto py-6">
+      <main className="flex-1 overflow-y-auto py-8">
         <ChatUI messages={messages} />
       </main>
 
