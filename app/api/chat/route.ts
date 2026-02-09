@@ -1,40 +1,57 @@
 import { NextResponse } from "next/server";
 
+type Message = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 export async function POST(req: Request) {
-  const body = await req.json();
-  const message: string = (body?.message || "").toLowerCase().trim();
+  try {
+    const body = await req.json();
+    const messages: Message[] = body.messages ?? [];
 
-  let reply = "";
+    const lastUser = [...messages].reverse().find(m => m.role === "user");
 
-  if (!message) {
-    reply = "Please ask a question.";
-  } else if (message === "hi" || message === "hello") {
-    reply = "Hi! 😊 What would you like to study today?";
-  } else if (message.includes("day")) {
-    const today = new Date();
-    reply = `Today is ${today.toLocaleDateString("en-IN", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    })}.`;
-  } else if (message.includes("what is")) {
-    reply = [
-      "Here’s a simple explanation:",
-      "• Focus on the definition",
-      "• Understand with an example",
-      "• Revise once",
-    ].join("\n");
-  } else {
-    reply = [
-      "Here’s a short answer:",
-      "• Read the question carefully",
-      "• Break it into parts",
-      "• Answer step by step",
-      "",
-      "Want a detailed explanation?",
-    ].join("\n");
+    if (!lastUser) {
+      return NextResponse.json({ reply: "Please ask a question." });
+    }
+
+    // 🔒 HARD SAFE FALLBACK (never breaks build)
+    if (!process.env.GEMINI_API_KEY) {
+      return NextResponse.json({
+        reply: `I understand your question: "${lastUser.content}". Let's go step by step.`,
+      });
+    }
+
+    const geminiRes = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=" +
+        process.env.GEMINI_API_KEY,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: lastUser.content }],
+            },
+          ],
+        }),
+      }
+    );
+
+    const geminiData = await geminiRes.json();
+
+    const reply =
+      geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ??
+      "I couldn't generate a response. Please try again.";
+
+    return NextResponse.json({ reply });
+  } catch (error) {
+    return NextResponse.json({
+      reply: "Something went wrong. Please try again.",
+    });
   }
-
-  return NextResponse.json({ reply });
 }
