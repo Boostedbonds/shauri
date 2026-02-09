@@ -5,9 +5,13 @@ export type ChatHistoryItem = {
   content: string;
 };
 
-type ChatResponse =
-  | { reply: string }
-  | { error: string; detail?: string };
+type ChatSuccess = { reply: string };
+type ChatError = { error: string; detail?: string };
+type ChatResponse = ChatSuccess | ChatError;
+
+function isChatError(data: ChatResponse): data is ChatError {
+  return "error" in data;
+}
 
 export async function sendChatMessage(
   mode: Mode,
@@ -32,7 +36,10 @@ export async function sendChatMessage(
     const data = (await res.json()) as ChatResponse;
 
     if (!res.ok) {
-      return data?.error ?? "Server error";
+      if (isChatError(data)) {
+        return data.error;
+      }
+      return "Server error";
     }
 
     if ("reply" in data && typeof data.reply === "string") {
