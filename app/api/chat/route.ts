@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+export const runtime = "nodejs"; // 🔑 REQUIRED FOR OPENAI
+
 type Mode = "teacher" | "examiner" | "oral" | "progress";
 
 type ChatRequestBody = {
@@ -25,18 +27,17 @@ function buildSystemPrompt(mode: Mode): string {
 export async function POST(req: NextRequest) {
   try {
     if (!process.env.OPENAI_API_KEY) {
-      console.error("OPENAI_API_KEY missing");
       return NextResponse.json(
-        { error: "Server not configured" },
+        { error: "OPENAI_API_KEY missing" },
         { status: 500 }
       );
     }
 
     const body = (await req.json().catch(() => null)) as ChatRequestBody | null;
 
-    if (!body || !body.mode || !body.message || !body.message.trim()) {
+    if (!body?.mode || !body?.message?.trim()) {
       return NextResponse.json(
-        { error: "Invalid request body" },
+        { error: "Invalid request" },
         { status: 400 }
       );
     }
@@ -50,39 +51,26 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         model: "gpt-4.1-mini",
         input: [
-          {
-            role: "system",
-            content: buildSystemPrompt(body.mode),
-          },
-          {
-            role: "user",
-            content: body.message,
-          },
+          { role: "system", content: buildSystemPrompt(body.mode) },
+          { role: "user", content: body.message },
         ],
       }),
     });
 
     if (!response.ok) {
-      const errText = await response.text();
-      console.error("OpenAI HTTP error:", errText);
-      return NextResponse.json(
-        { error: errText },
-        { status: 500 }
-      );
+      const err = await response.text();
+      return NextResponse.json({ error: err }, { status: 500 });
     }
 
-    const data = await response.json().catch(() => null);
-    console.log("OpenAI raw response:", JSON.stringify(data));
+    const data = await response.json();
 
     const reply =
       data?.output_text ??
       data?.output?.[0]?.content?.[0]?.text ??
-      data?.output?.[0]?.content?.[0]?.value ??
       "No response generated.";
 
     return NextResponse.json({ reply });
   } catch (err) {
-    console.error("Unexpected server error:", err);
     return NextResponse.json(
       { error: "Unexpected server error" },
       { status: 500 }
