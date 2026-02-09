@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import ChatUI from "@/components/ChatUI";
-import ChatInput from "@/components/ChatInput";
+import ChatUI from "../components/ChatUI";
+import ChatInput from "../components/ChatInput";
 
 export default function OralPage() {
   const [messages, setMessages] = useState([
     {
-      role: "assistant",
+      role: "assistant" as const,
       content: "Oral Mode 🎤 Speak or type your answer.",
     },
   ]);
