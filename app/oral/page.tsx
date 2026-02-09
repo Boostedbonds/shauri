@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState } from "react";
 import ChatUI, { ChatMessage } from "../components/ChatUI";
 import ChatInput from "../components/ChatInput";
 
@@ -30,22 +30,22 @@ export default function OralPage() {
     const aiMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: "assistant",
-      content: data?.reply ?? "No response",
+      content: data.reply,
     };
 
     setMessages((prev) => [...prev, aiMsg]);
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 pb-32">
-      <header className="px-6 py-4 border-b bg-white">
-        <h1 className="text-2xl font-semibold">StudyMate — Oral</h1>
+    <div className="flex min-h-screen flex-col bg-white">
+      <header className="border-b px-6 py-4">
+        <h1 className="text-xl font-semibold">StudyMate — Oral</h1>
         <p className="text-sm text-gray-500">
-          Viva & spoken-answer practice
+          Viva & spoken answer practice
         </p>
       </header>
 
-      <main className="flex-1 overflow-y-auto py-8">
+      <main className="flex-1 overflow-y-auto px-4 py-6">
         <ChatUI messages={messages} />
       </main>
 

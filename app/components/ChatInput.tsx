@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Props = {
   onSend: (text: string) => void;
@@ -31,31 +31,22 @@ export default function ChatInput({ onSend }: Props) {
   };
 
   return (
-    <div className="fixed bottom-6 left-0 right-0 flex justify-center px-4">
-      <div className="w-full max-w-3xl flex items-end gap-2 bg-white border border-gray-300 rounded-2xl px-3 py-2 shadow-lg">
-        <button
-          type="button"
-          className="h-10 w-10 rounded-full border border-gray-300 hover:bg-gray-100"
-          aria-label="Attach"
-        >
-          +
-        </button>
-
+    <div className="border-t bg-white px-4 py-4">
+      <div className="mx-auto max-w-3xl flex gap-2">
         <textarea
           ref={textareaRef}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="Type your question or answer…"
+          placeholder="Type your message…"
           rows={1}
-          className="flex-1 resize-none overflow-hidden px-2 py-2 text-base focus:outline-none"
+          className="flex-1 resize-none rounded-xl border border-gray-300 px-4 py-3 text-base focus:outline-none"
         />
 
         <button
-          type="button"
           onClick={send}
           disabled={!text.trim()}
-          className="h-10 px-5 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-40"
+          className="rounded-xl bg-black px-6 text-white disabled:opacity-40"
         >
           Send
         </button>
