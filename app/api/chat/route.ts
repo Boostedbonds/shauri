@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+export const runtime = "nodejs"; // 🔥 REQUIRED FOR GEMINI
+
 type Mode = "teacher" | "examiner" | "oral" | "progress";
 
 export async function POST(req: NextRequest) {
@@ -18,15 +20,14 @@ export async function POST(req: NextRequest) {
 
     const prompt = `
 You are StudyMate in ${mode?.toUpperCase() || "TEACHER"} mode.
-You teach CBSE Class 9 students clearly and correctly.
+You teach CBSE Class 9 students clearly.
 
 Student message:
 ${message}
 `;
 
     const res = await fetch(
-      "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=" +
-        apiKey,
+      `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: {
@@ -44,9 +45,9 @@ ${message}
     );
 
     if (!res.ok) {
-      const errText = await res.text();
+      const err = await res.text();
       return NextResponse.json(
-        { error: "Gemini API error", detail: errText },
+        { error: "Gemini API failed", detail: err },
         { status: 500 }
       );
     }
