@@ -4,14 +4,57 @@ import Header from "../components/Header";
 
 export default function ProgressPage() {
   return (
-    <div style={{ minHeight: "100vh", background: "#f8fafc" }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        background:
+          "linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 40%, #e0e7ff 100%)",
+      }}
+    >
       <Header onLogout={() => (window.location.href = "/")} />
 
-      <main style={{ padding: 40, maxWidth: 900, margin: "0 auto" }}>
-        <h1>Progress Dashboard</h1>
-        <p style={{ color: "#475569" }}>
-          Progress data will appear here.
+      <main
+        style={{
+          flex: 1,
+          padding: "64px 32px",
+          maxWidth: 1000,
+          margin: "0 auto",
+        }}
+      >
+        <h1
+          style={{
+            fontSize: 36,
+            marginBottom: 12,
+          }}
+        >
+          Progress Dashboard
+        </h1>
+
+        <p
+          style={{
+            color: "#475569",
+            fontSize: 18,
+            marginBottom: 32,
+          }}
+        >
+          Your learning progress, strengths, and improvement areas will appear here.
         </p>
+
+        <div
+          style={{
+            background: "#ffffff",
+            borderRadius: 20,
+            padding: "48px 40px",
+            boxShadow: "0 20px 40px rgba(0,0,0,0.08)",
+            textAlign: "center",
+            color: "#64748b",
+            fontSize: 16,
+          }}
+        >
+          📊 Progress tracking will be available soon.
+        </div>
       </main>
     </div>
   );

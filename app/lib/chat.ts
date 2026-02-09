@@ -10,24 +10,33 @@ export async function sendChatMessage(
   message: string,
   history: ChatHistoryItem[] = []
 ): Promise<string> {
-  if (!message.trim()) return "";
+  try {
+    if (!message || !message.trim()) return "";
 
-  const res = await fetch("/api/chat", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      mode,
-      message,
-      history,
-    }),
-  });
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        mode,
+        message,
+        history,
+      }),
+    });
 
-  if (!res.ok) {
+    if (!res.ok) {
+      return "Error: server failed.";
+    }
+
+    const data = (await res.json()) as { reply?: string } | null;
+
+    if (!data || typeof data.reply !== "string") {
+      return "No response.";
+    }
+
+    return data.reply;
+  } catch {
     return "Error: server failed.";
   }
-
-  const data = (await res.json()) as { reply?: string } | null;
-  return data?.reply ?? "No response.";
 }

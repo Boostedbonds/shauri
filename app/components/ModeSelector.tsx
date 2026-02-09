@@ -4,21 +4,27 @@ import Header from "./Header";
 
 export default function ModeSelector() {
   return (
-    <div style={{ minHeight: "100vh", background: "#f8fafc" }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        background:
+          "linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 40%, #e0e7ff 100%)",
+      }}
+    >
       <Header onLogout={() => (window.location.href = "/")} />
 
       <main
         style={{
-          maxWidth: 1200,
+          maxWidth: 1400,
           margin: "0 auto",
-          padding: "56px 24px",
+          padding: "64px 32px",
         }}
       >
         <h1
           style={{
             textAlign: "center",
-            fontSize: 36,
-            marginBottom: 8,
+            fontSize: 40,
+            marginBottom: 10,
           }}
         >
           Choose Your Learning Mode
@@ -28,7 +34,8 @@ export default function ModeSelector() {
           style={{
             textAlign: "center",
             color: "#475569",
-            marginBottom: 44,
+            marginBottom: 56,
+            fontSize: 18,
           }}
         >
           Select how you want to study today
@@ -37,11 +44,12 @@ export default function ModeSelector() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-            gap: 28,
+            gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+            gap: 36,
           }}
         >
           <ModeCard
+            icon="👩‍🏫"
             title="Teacher Mode"
             desc="Learn concepts with clear NCERT-aligned explanations and examples."
             color="#2563eb"
@@ -49,6 +57,7 @@ export default function ModeSelector() {
           />
 
           <ModeCard
+            icon="🧪"
             title="Examiner Mode"
             desc="Practice full-length question papers with evaluation and feedback."
             color="#16a34a"
@@ -56,6 +65,7 @@ export default function ModeSelector() {
           />
 
           <ModeCard
+            icon="🗣️"
             title="Oral Mode"
             desc="Strengthen recall and confidence with spoken question practice."
             color="#9333ea"
@@ -63,6 +73,7 @@ export default function ModeSelector() {
           />
 
           <ModeCard
+            icon="📊"
             title="Progress Dashboard"
             desc="Track performance, strengths, weaknesses, and improvements."
             color="#ea580c"
@@ -75,6 +86,7 @@ export default function ModeSelector() {
 }
 
 function ModeCard(props: {
+  icon: string;
   title: string;
   desc: string;
   color: string;
@@ -84,18 +96,29 @@ function ModeCard(props: {
     <div
       style={{
         background: "#ffffff",
-        borderRadius: 18,
-        padding: "26px 24px",
-        border: "1px solid #e5e7eb",
+        borderRadius: 22,
+        padding: "32px 28px",
+        boxShadow: "0 12px 30px rgba(0,0,0,0.08)",
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
-        minHeight: 210,
+        minHeight: 340,
       }}
     >
       <div>
-        <h3 style={{ marginBottom: 10 }}>{props.title}</h3>
-        <p style={{ color: "#475569", fontSize: 14, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>{props.icon}</div>
+
+        <h3 style={{ marginBottom: 14, fontSize: 24 }}>
+          {props.title}
+        </h3>
+
+        <p
+          style={{
+            color: "#475569",
+            fontSize: 16,
+            lineHeight: 1.6,
+          }}
+        >
           {props.desc}
         </p>
       </div>
@@ -103,14 +126,15 @@ function ModeCard(props: {
       <a
         href={props.href}
         style={{
-          marginTop: 22,
-          padding: "12px",
+          marginTop: 28,
+          padding: "14px",
           background: props.color,
           color: "#ffffff",
-          borderRadius: 10,
+          borderRadius: 14,
           textDecoration: "none",
           textAlign: "center",
           fontWeight: 600,
+          fontSize: 18,
         }}
       >
         Start Learning →

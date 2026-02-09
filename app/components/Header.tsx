@@ -4,7 +4,7 @@ export default function Header({ onLogout }: { onLogout?: () => void }) {
   return (
     <header
       style={{
-        padding: "16px 32px",
+        padding: "18px 36px",
         background: "#ffffff",
         borderBottom: "1px solid #e5e7eb",
         display: "flex",
@@ -13,8 +13,22 @@ export default function Header({ onLogout }: { onLogout?: () => void }) {
       }}
     >
       <div>
-        <h2 style={{ margin: 0, color: "#1e3a8a" }}>StudyMate</h2>
-        <small style={{ color: "#475569" }}>
+        <h2
+          style={{
+            margin: 0,
+            color: "#1e3a8a",
+            fontSize: 24,
+            fontWeight: 700,
+          }}
+        >
+          StudyMate
+        </h2>
+        <small
+          style={{
+            color: "#475569",
+            fontSize: 14,
+          }}
+        >
           CBSE Class 9 Learning Platform
         </small>
       </div>
@@ -23,13 +37,14 @@ export default function Header({ onLogout }: { onLogout?: () => void }) {
         <button
           onClick={onLogout}
           style={{
-            padding: "8px 14px",
-            borderRadius: 8,
-            border: "1px solid #1e3a8a",
-            background: "#fff",
-            color: "#1e3a8a",
+            padding: "10px 18px",
+            borderRadius: 10,
+            border: "1px solid #2563eb",
+            background: "#ffffff",
+            color: "#2563eb",
             cursor: "pointer",
-            fontWeight: 500,
+            fontWeight: 600,
+            fontSize: 15,
           }}
         >
           Logout

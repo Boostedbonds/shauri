@@ -5,9 +5,18 @@ import ChatBox from "../components/ChatBox";
 
 export default function ExaminerPage() {
   return (
-    <div style={{ height: "100vh", background: "#f8fafc" }}>
+    <div
+      style={{
+        height: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        background: "#f1f5f9",
+      }}
+    >
       <Header onLogout={() => (window.location.href = "/")} />
-      <ChatBox mode="examiner" />
+      <div style={{ flex: 1 }}>
+        <ChatBox mode="examiner" />
+      </div>
     </div>
   );
 }

@@ -26,7 +26,8 @@ export default function HomePage() {
       <div
         style={{
           minHeight: "100vh",
-          background: "linear-gradient(135deg,#1e3a8a,#059669)",
+          background:
+            "linear-gradient(135deg, #e0f2fe 0%, #bae6fd 40%, #c7d2fe 100%)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -36,23 +37,24 @@ export default function HomePage() {
           onSubmit={handleSubmit}
           style={{
             background: "#ffffff",
-            padding: "48px 42px",
-            borderRadius: 18,
-            width: 420,
+            padding: "52px 46px",
+            borderRadius: 20,
+            width: 440,
             textAlign: "center",
+            boxShadow: "0 20px 40px rgba(0,0,0,0.08)",
           }}
         >
-          <h1 style={{ fontSize: 34, marginBottom: 8 }}>StudyMate</h1>
-          <p style={{ marginBottom: 28 }}>
+          <h1 style={{ fontSize: 36, marginBottom: 6 }}>StudyMate</h1>
+          <p style={{ marginBottom: 30, color: "#475569" }}>
             CBSE Class 9 Learning Platform
           </p>
 
           <div
             style={{
               background: "#eef2ff",
-              padding: 14,
-              borderRadius: 10,
-              marginBottom: 22,
+              padding: 16,
+              borderRadius: 12,
+              marginBottom: 24,
               fontWeight: 600,
             }}
           >
@@ -66,16 +68,17 @@ export default function HomePage() {
             onChange={(e) => setCode(e.target.value)}
             style={{
               width: "100%",
-              padding: 14,
-              fontSize: 16,
+              padding: 16,
+              fontSize: 18,
               marginBottom: 14,
-              borderRadius: 10,
+              borderRadius: 12,
               border: "1px solid #cbd5f5",
+              textAlign: "center",
             }}
           />
 
           {error && (
-            <div style={{ color: "red", marginBottom: 12 }}>
+            <div style={{ color: "#dc2626", marginBottom: 14 }}>
               {error}
             </div>
           )}
@@ -84,12 +87,12 @@ export default function HomePage() {
             type="submit"
             style={{
               width: "100%",
-              padding: 14,
-              background: "#1e3a8a",
+              padding: 16,
+              background: "#2563eb",
               color: "#ffffff",
-              borderRadius: 10,
+              borderRadius: 12,
               border: "none",
-              fontSize: 16,
+              fontSize: 18,
               cursor: "pointer",
             }}
           >
@@ -98,10 +101,10 @@ export default function HomePage() {
 
           <div
             style={{
-              marginTop: 26,
+              marginTop: 28,
               background: "#fef9c3",
               padding: 14,
-              borderRadius: 10,
+              borderRadius: 12,
               fontSize: 13,
             }}
           >
