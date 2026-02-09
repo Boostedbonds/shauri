@@ -4,10 +4,15 @@ import { useState } from "react";
 import ChatUI from "../components/ChatUI";
 import ChatInput from "../components/ChatInput";
 
+type Message = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 export default function ExaminerPage() {
-  const [messages, setMessages] = useState([
+  const [messages, setMessages] = useState<Message[]>([
     {
-      role: "assistant" as const,
+      role: "assistant",
       content: "Examiner Mode 📘 Ready for practice questions?",
     },
   ]);

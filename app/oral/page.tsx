@@ -4,10 +4,15 @@ import { useState } from "react";
 import ChatUI from "../components/ChatUI";
 import ChatInput from "../components/ChatInput";
 
+type Message = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 export default function OralPage() {
-  const [messages, setMessages] = useState([
+  const [messages, setMessages] = useState<Message[]>([
     {
-      role: "assistant" as const,
+      role: "assistant",
       content: "Oral Mode 🎤 Speak or type your answer.",
     },
   ]);
