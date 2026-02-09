@@ -1,36 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
 
-export const runtime = "nodejs";
+export const runtime = "nodejs"; // REQUIRED
 
 export async function POST(req: NextRequest) {
   try {
     const { message, mode } = await req.json();
 
     if (!message) {
-      return NextResponse.json({ error: "Missing message" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Message missing" },
+        { status: 400 }
+      );
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
       return NextResponse.json(
-        { error: "Missing GEMINI_API_KEY" },
+        { error: "GEMINI_API_KEY not found" },
         { status: 500 }
       );
     }
 
-    const prompt = `You are StudyMate in ${mode || "teacher"} mode.
-CBSE Class 9 level.
-Student question:
-${message}`;
+    const prompt = `
+You are StudyMate in ${mode?.toUpperCase() || "TEACHER"} mode.
+Explain clearly for a CBSE Class 9 student.
 
-    const res = await fetch(
+Student:
+${message}
+`;
+
+    const response = await fetch(
       "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-goog-api-key": apiKey,
+          "X-goog-api-key": apiKey, // ✅ CORRECT AUTH
         },
         body: JSON.stringify({
           contents: [
@@ -42,16 +48,16 @@ ${message}`;
       }
     );
 
-    const text = await res.text();
+    const raw = await response.text();
 
-    if (!res.ok) {
+    if (!response.ok) {
       return NextResponse.json(
-        { error: "Gemini API failed", detail: text },
+        { error: "Gemini API failed", detail: raw },
         { status: 500 }
       );
     }
 
-    const data = JSON.parse(text);
+    const data = JSON.parse(raw);
     const reply =
       data?.candidates?.[0]?.content?.parts?.[0]?.text ??
       "No response generated.";
@@ -59,7 +65,7 @@ ${message}`;
     return NextResponse.json({ reply });
   } catch (err: any) {
     return NextResponse.json(
-      { error: "Server crashed", detail: String(err) },
+      { error: "Server error", detail: String(err) },
       { status: 500 }
     );
   }
