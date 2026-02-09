@@ -31,9 +31,10 @@ export default function ChatInput({ onSend }: Props) {
   };
 
   return (
-    <div className="border-t bg-gray-50 px-4 py-4">
-      <div className="mx-auto max-w-3xl">
-        <div className="flex items-end gap-3 rounded-2xl border bg-white p-3 shadow-md">
+    <div className="border-t bg-gray-50 py-6">
+      {/* Centered container like ChatGPT */}
+      <div className="mx-auto max-w-3xl px-4">
+        <div className="flex items-end gap-3 rounded-2xl border bg-white px-4 py-3 shadow-lg">
           <textarea
             ref={textareaRef}
             value={text}
@@ -41,13 +42,14 @@ export default function ChatInput({ onSend }: Props) {
             onKeyDown={onKeyDown}
             placeholder="Type your message…"
             rows={1}
-            className="flex-1 resize-none bg-transparent px-2 py-2 text-base focus:outline-none"
+            className="flex-1 resize-none bg-transparent text-base leading-relaxed focus:outline-none"
+            style={{ minHeight: "48px" }}
           />
 
           <button
             onClick={send}
             disabled={!text.trim()}
-            className="rounded-xl bg-blue-600 px-6 py-2 text-white font-medium hover:bg-blue-700 disabled:opacity-40"
+            className="rounded-xl bg-blue-600 px-6 py-2.5 text-white font-medium hover:bg-blue-700 disabled:opacity-40"
           >
             Send
           </button>
