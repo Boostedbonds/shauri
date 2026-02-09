@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
-export const runtime = "nodejs"; // 🔑 REQUIRED FOR OPENAI
+export const runtime = "nodejs";
 
 type Mode = "teacher" | "examiner" | "oral" | "progress";
 
 type ChatRequestBody = {
   mode?: Mode;
   message?: string;
+  history?: { role: "user" | "assistant"; content: string }[];
 };
 
 function buildSystemPrompt(mode: Mode): string {
@@ -42,20 +43,27 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4.1-mini",
-        input: [
-          { role: "system", content: buildSystemPrompt(body.mode) },
-          { role: "user", content: body.message },
-        ],
-      }),
-    });
+    const messages = [
+      { role: "system", content: buildSystemPrompt(body.mode) },
+      ...(body.history ?? []),
+      { role: "user", content: body.message },
+    ];
+
+    const response = await fetch(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-3.5-turbo",
+          messages,
+          temperature: 0.4,
+        }),
+      }
+    );
 
     if (!response.ok) {
       const err = await response.text();
@@ -65,12 +73,11 @@ export async function POST(req: NextRequest) {
     const data = await response.json();
 
     const reply =
-      data?.output_text ??
-      data?.output?.[0]?.content?.[0]?.text ??
+      data?.choices?.[0]?.message?.content ??
       "No response generated.";
 
     return NextResponse.json({ reply });
-  } catch (err) {
+  } catch {
     return NextResponse.json(
       { error: "Unexpected server error" },
       { status: 500 }
