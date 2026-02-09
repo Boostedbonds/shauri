@@ -10,9 +10,9 @@ export async function sendChatMessage(
   message: string,
   history: ChatHistoryItem[] = []
 ): Promise<string> {
-  try {
-    if (!message || !message.trim()) return "";
+  if (!message || !message.trim()) return "";
 
+  try {
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: {
@@ -25,18 +25,29 @@ export async function sendChatMessage(
       }),
     });
 
-    if (!res.ok) {
-      return "Error: server failed.";
+    const text = await res.text();
+    let data: any = null;
+
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      // non-JSON response
     }
 
-    const data = (await res.json()) as { reply?: string } | null;
+    if (!res.ok) {
+      return (
+        data?.error ||
+        data?.detail ||
+        `Server error (${res.status})`
+      );
+    }
 
     if (!data || typeof data.reply !== "string") {
-      return "No response.";
+      return "No response from AI.";
     }
 
     return data.reply;
-  } catch {
-    return "Error: server failed.";
+  } catch (err) {
+    return "Network or runtime error.";
   }
 }
