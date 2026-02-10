@@ -1,8 +1,15 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+
 type Message = {
   role: "user" | "assistant";
   content: string;
+};
+
+type Props = {
+  messages: Message[];
+  isOralMode?: boolean;
 };
 
 function splitUploadedContent(content: string) {
@@ -18,7 +25,45 @@ function splitUploadedContent(content: string) {
   };
 }
 
-export default function ChatUI({ messages }: { messages: Message[] }) {
+export default function ChatUI({ messages, isOralMode = false }: Props) {
+  const lastSpokenIndexRef = useRef<number>(-1);
+
+  useEffect(() => {
+    if (!isOralMode) return;
+    if (!("speechSynthesis" in window)) return;
+
+    // Find the latest assistant message
+    const lastIndex = messages.length - 1;
+    const lastMessage = messages[lastIndex];
+
+    if (
+      lastMessage?.role !== "assistant" ||
+      lastIndex === lastSpokenIndexRef.current
+    ) {
+      return;
+    }
+
+    // Stop any ongoing speech
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(
+      splitUploadedContent(lastMessage.content).text ||
+        lastMessage.content
+    );
+
+    utterance.lang = "en-IN";
+    utterance.rate = 0.95;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+
+    window.speechSynthesis.speak(utterance);
+    lastSpokenIndexRef.current = lastIndex;
+
+    return () => {
+      window.speechSynthesis.cancel();
+    };
+  }, [messages, isOralMode]);
+
   return (
     <div
       style={{
