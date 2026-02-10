@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ChatUI from "../components/ChatUI";
 import ChatInput from "../components/ChatInput";
 
@@ -17,6 +17,14 @@ export default function TeacherPage() {
         "I’m here to help you learn clearly and confidently. What topic would you like to study today?",
     },
   ]);
+
+  // 🔽 Auto-scroll anchor
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+
+  // 🔁 Scroll to bottom whenever messages update
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   async function handleSend(text: string, uploadedText?: string) {
     if (!text.trim() && !uploadedText) return;
@@ -42,12 +50,24 @@ ${uploadedText}
     const updatedMessages: Message[] = [...messages, userMessage];
     setMessages(updatedMessages);
 
+    // 🔹 Read student context from localStorage
+    let student = null;
+    try {
+      const stored = localStorage.getItem("studymate_student");
+      if (stored) {
+        student = JSON.parse(stored);
+      }
+    } catch {
+      student = null;
+    }
+
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         mode: "teacher",
         messages: updatedMessages,
+        student, // ✅ PASS STUDENT CONTEXT
         uploadedText: uploadedText ?? null,
       }),
     });
@@ -66,8 +86,15 @@ ${uploadedText}
   }
 
   return (
-    <div style={{ minHeight: "100vh", paddingTop: 24 }}>
-      {/* 🔙 Back to Mode Selector (NOT logout) */}
+    <div
+      style={{
+        minHeight: "100vh",
+        paddingTop: 24,
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      {/* 🔙 Back to Mode Selector */}
       <div style={{ paddingLeft: 24, marginBottom: 16 }}>
         <button
           onClick={() => (window.location.href = "/modes")}
@@ -89,8 +116,29 @@ ${uploadedText}
         Teacher Mode
       </h1>
 
-      <ChatUI messages={messages} />
-      <ChatInput onSend={handleSend} />
+      {/* 💬 Chat area */}
+      <div
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          paddingBottom: 96, // ⬅ prevents last message hiding
+        }}
+      >
+        <ChatUI messages={messages} />
+        <div ref={bottomRef} />
+      </div>
+
+      {/* ⌨️ Input fixed at bottom */}
+      <div
+        style={{
+          position: "sticky",
+          bottom: 0,
+          background: "#f8fafc",
+          paddingBottom: 16,
+        }}
+      >
+        <ChatInput onSend={handleSend} />
+      </div>
     </div>
   );
 }
