@@ -1,34 +1,73 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Props = {
   onSend: (message: string, uploadedText?: string) => void;
 };
 
+declare global {
+  interface Window {
+    webkitSpeechRecognition?: any;
+    SpeechRecognition?: any;
+  }
+}
+
 export default function ChatInput({ onSend }: Props) {
   const [value, setValue] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
   const [uploadedText, setUploadedText] = useState<string | null>(null);
+  const [listening, setListening] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const recognitionRef = useRef<any>(null);
 
-  function handleSend() {
-    const trimmed = value.trim();
-    if (!trimmed && !uploadedText) return;
+  /* -------------------- MIC SETUP -------------------- */
+  useEffect(() => {
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
 
-    onSend(trimmed, uploadedText ?? undefined);
+    if (!SpeechRecognition) return;
 
-    setValue("");
-    clearAttachment();
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-IN";
+    recognition.interimResults = false;
+    recognition.continuous = false;
+
+    recognition.onresult = (event: any) => {
+      const transcript = Array.from(event.results)
+        .map((r: any) => r[0].transcript)
+        .join(" ");
+
+      setValue((prev) => (prev ? `${prev} ${transcript}` : transcript));
+    };
+
+    recognition.onend = () => setListening(false);
+    recognition.onerror = () => setListening(false);
+
+    recognitionRef.current = recognition;
+  }, []);
+
+  function toggleMic() {
+    if (!recognitionRef.current) {
+      alert("Microphone is not supported in this browser.");
+      return;
+    }
+
+    if (listening) {
+      recognitionRef.current.stop();
+      setListening(false);
+    } else {
+      recognitionRef.current.start();
+      setListening(true);
+    }
   }
 
+  /* -------------------- ATTACHMENT -------------------- */
   function clearAttachment() {
     setFileName(null);
     setUploadedText(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -37,7 +76,7 @@ export default function ChatInput({ onSend }: Props) {
 
     setFileName(file.name);
 
-    // 🔒 STUB extraction (safe)
+    // Backend will do real OCR / PDF parsing
     if (file.type === "application/pdf") {
       setUploadedText(
         `Student uploaded a PDF file named "${file.name}". Treat this as provided study material or answer sheet.`
@@ -51,6 +90,17 @@ export default function ChatInput({ onSend }: Props) {
         `Student uploaded a file named "${file.name}". Treat this as provided content.`
       );
     }
+  }
+
+  /* -------------------- SEND -------------------- */
+  function handleSend() {
+    const trimmed = value.trim();
+    if (!trimmed && !uploadedText) return;
+
+    onSend(trimmed, uploadedText ?? undefined);
+
+    setValue("");
+    clearAttachment();
   }
 
   return (
@@ -78,6 +128,7 @@ export default function ChatInput({ onSend }: Props) {
           gap: 6,
         }}
       >
+        {/* 📎 Attachment preview */}
         {fileName && (
           <div
             style={{
@@ -106,14 +157,8 @@ export default function ChatInput({ onSend }: Props) {
           </div>
         )}
 
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-          }}
-        >
-          {/* ➕ Attachment button (LEFT like ChatGPT) */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {/* ➕ Attachment */}
           <input
             ref={fileInputRef}
             type="file"
@@ -140,11 +185,31 @@ export default function ChatInput({ onSend }: Props) {
             +
           </button>
 
-          {/* Text input */}
+          {/* 🎤 Mic */}
+          <button
+            type="button"
+            onClick={toggleMic}
+            title={listening ? "Stop listening" : "Start speaking"}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: "50%",
+              border: "none",
+              background: listening ? "#dc2626" : "#e5e7eb",
+              color: listening ? "#ffffff" : "#0f172a",
+              fontSize: 18,
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+          >
+            {listening ? "■" : "🎤"}
+          </button>
+
+          {/* ✍️ Text input */}
           <textarea
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            placeholder="Ask StudyMate anything…"
+            placeholder="Type or speak…"
             rows={1}
             style={{
               flex: 1,
@@ -166,7 +231,7 @@ export default function ChatInput({ onSend }: Props) {
             }}
           />
 
-          {/* Send button */}
+          {/* ➤ Send */}
           <button
             onClick={handleSend}
             style={{
