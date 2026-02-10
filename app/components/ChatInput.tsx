@@ -15,15 +15,17 @@ export default function ChatInput({ onSend }: Props) {
 
   function handleSend() {
     const trimmed = value.trim();
-
     if (!trimmed && !uploadedText) return;
 
     onSend(trimmed, uploadedText ?? undefined);
 
     setValue("");
-    setUploadedText(null);
-    setFileName(null);
+    clearAttachment();
+  }
 
+  function clearAttachment() {
+    setFileName(null);
+    setUploadedText(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -35,34 +37,27 @@ export default function ChatInput({ onSend }: Props) {
 
     setFileName(file.name);
 
-    /**
-     * STUB EXTRACTION (build-safe)
-     * Real PDF / Image OCR can be plugged later
-     */
+    // 🔒 STUB extraction (safe)
     if (file.type === "application/pdf") {
       setUploadedText(
         `Student uploaded a PDF file named "${file.name}". Treat this as provided study material or answer sheet.`
       );
-      return;
-    }
-
-    if (file.type.startsWith("image/")) {
+    } else if (file.type.startsWith("image/")) {
       setUploadedText(
         `Student uploaded an image file named "${file.name}". Treat this as provided study material or answer sheet.`
       );
-      return;
+    } else {
+      setUploadedText(
+        `Student uploaded a file named "${file.name}". Treat this as provided content.`
+      );
     }
-
-    setUploadedText(
-      `Student uploaded a file named "${file.name}". Treat this as provided content.`
-    );
   }
 
   return (
     <div
       style={{
         position: "fixed",
-        bottom: "24px",
+        bottom: 24,
         left: 0,
         right: 0,
         display: "flex",
@@ -73,60 +68,52 @@ export default function ChatInput({ onSend }: Props) {
       <div
         style={{
           width: "100%",
-          maxWidth: "720px",
+          maxWidth: 720,
           background: "white",
-          borderRadius: "18px",
+          borderRadius: 18,
           boxShadow: "0 10px 30px rgba(0,0,0,0.12)",
-          padding: "12px",
+          padding: 12,
           display: "flex",
           flexDirection: "column",
-          gap: "8px",
+          gap: 6,
         }}
       >
         {fileName && (
           <div
             style={{
-              fontSize: "13px",
+              fontSize: 13,
               color: "#475569",
-              paddingLeft: "6px",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              paddingLeft: 6,
             }}
           >
             📎 {fileName}
+            <button
+              onClick={clearAttachment}
+              style={{
+                border: "none",
+                background: "transparent",
+                cursor: "pointer",
+                fontSize: 14,
+                color: "#ef4444",
+              }}
+              title="Remove attachment"
+            >
+              ✕
+            </button>
           </div>
         )}
 
         <div
           style={{
             display: "flex",
-            gap: "12px",
-            alignItems: "flex-end",
+            alignItems: "center",
+            gap: 10,
           }}
         >
-          <textarea
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            placeholder="Ask StudyMate anything…"
-            rows={2}
-            style={{
-              flex: 1,
-              resize: "none",
-              border: "none",
-              outline: "none",
-              fontSize: "16px",
-              lineHeight: "1.5",
-              padding: "12px",
-              borderRadius: "12px",
-              background: "#f8fafc",
-              minHeight: "52px",
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-          />
-
+          {/* ➕ Attachment button (LEFT like ChatGPT) */}
           <input
             ref={fileInputRef}
             type="file"
@@ -139,29 +126,59 @@ export default function ChatInput({ onSend }: Props) {
             type="button"
             onClick={() => fileInputRef.current?.click()}
             style={{
+              width: 40,
+              height: 40,
+              borderRadius: 10,
               background: "#e2e8f0",
               border: "none",
-              borderRadius: "12px",
-              padding: "10px 12px",
-              fontSize: "18px",
+              fontSize: 22,
               cursor: "pointer",
+              flexShrink: 0,
             }}
-            title="Upload PDF or Image"
+            title="Attach PDF or Image"
           >
-            📎
+            +
           </button>
 
+          {/* Text input */}
+          <textarea
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="Ask StudyMate anything…"
+            rows={1}
+            style={{
+              flex: 1,
+              resize: "none",
+              border: "none",
+              outline: "none",
+              fontSize: 16,
+              lineHeight: "1.5",
+              padding: "12px 14px",
+              borderRadius: 12,
+              background: "#f8fafc",
+              minHeight: 44,
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+          />
+
+          {/* Send button */}
           <button
             onClick={handleSend}
             style={{
               background: "#38bdf8",
               color: "white",
               border: "none",
-              borderRadius: "12px",
+              borderRadius: 12,
               padding: "10px 18px",
-              fontSize: "15px",
+              fontSize: 15,
               fontWeight: 600,
               cursor: "pointer",
+              flexShrink: 0,
             }}
           >
             Send
