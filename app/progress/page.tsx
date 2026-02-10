@@ -11,7 +11,7 @@ type ExamAttempt = {
   chapters: string[];
   timeTakenSeconds: number;
   rawAnswerText: string;
-  scorePercent?: number; // ← expected from evaluation
+  scorePercent?: number;
 };
 
 /* CBSE performance bands */
@@ -29,6 +29,14 @@ function getTrend(scores: number[]) {
   if (diff > 0) return "↑ Improving";
   if (diff < 0) return "↓ Declining";
   return "→ Stable";
+}
+
+function getOverallReadiness(bands: string[]) {
+  if (bands.every((b) => b === "Good" || b === "Excellent"))
+    return "On Track";
+  if (bands.some((b) => b === "Needs Work" || b === "Weak"))
+    return "Needs Attention";
+  return "Developing";
 }
 
 const SUBJECT_COLORS = [
@@ -72,6 +80,25 @@ export default function ProgressPage() {
     });
   }, [attempts]);
 
+  /* ===== CBSE READINESS SNAPSHOT ===== */
+
+  const snapshot = useMemo(() => {
+    if (subjects.length === 0) return null;
+
+    const priority = [...subjects].sort(
+      (a, b) => a.latest - b.latest
+    )[0];
+
+    const overall = getOverallReadiness(
+      subjects.map((s) => s.band)
+    );
+
+    return {
+      overall,
+      priority,
+    };
+  }, [subjects]);
+
   function exportProgress() {
     const blob = new Blob([JSON.stringify(attempts, null, 2)], {
       type: "application/json",
@@ -89,7 +116,10 @@ export default function ProgressPage() {
     reader.onload = () => {
       const parsed = JSON.parse(reader.result as string);
       if (Array.isArray(parsed)) {
-        localStorage.setItem("studymate_exam_attempts", JSON.stringify(parsed));
+        localStorage.setItem(
+          "studymate_exam_attempts",
+          JSON.stringify(parsed)
+        );
         setAttempts(parsed);
         alert("Progress imported successfully.");
       }
@@ -182,11 +212,50 @@ export default function ProgressPage() {
         }}
       >
         <h1 style={{ fontSize: 36 }}>Progress Dashboard</h1>
-        <p style={{ color: "#475569", fontSize: 18, marginBottom: 32 }}>
-          X-axis: Tests attempted · Y-axis: Marks percentage
-        </p>
 
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 48 }}>
+        {/* ===== SNAPSHOT ===== */}
+        {snapshot && (
+          <div
+            style={{
+              marginTop: 24,
+              marginBottom: 40,
+              background: "#ffffff",
+              borderRadius: 20,
+              padding: 28,
+              boxShadow: "0 12px 30px rgba(0,0,0,0.08)",
+            }}
+          >
+            <h2 style={{ fontSize: 24, marginBottom: 12 }}>
+              CBSE Readiness Snapshot
+            </h2>
+
+            {subjects.map((s) => (
+              <div key={s.subject} style={{ marginBottom: 8 }}>
+                <strong>{s.subject}</strong> → {s.band}
+              </div>
+            ))}
+
+            <p style={{ marginTop: 16 }}>
+              <strong>Priority Focus:</strong>{" "}
+              {snapshot.priority.subject} (
+              {snapshot.priority.band})
+            </p>
+
+            <p style={{ marginTop: 8 }}>
+              <strong>Overall Readiness:</strong>{" "}
+              {snapshot.overall}
+            </p>
+          </div>
+        )}
+
+        {/* Existing layout */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "2fr 1fr",
+            gap: 48,
+          }}
+        >
           {/* Chart */}
           <div
             style={{
@@ -242,8 +311,8 @@ export default function ProgressPage() {
               subjects.map((s) => (
                 <p key={s.subject} style={{ marginBottom: 16 }}>
                   <strong>{s.subject}:</strong> Currently in the{" "}
-                  <b>{s.band}</b> range. Latest score is {s.latest}% with a
-                  trend of <b>{s.trend}</b>. Focus revision accordingly.
+                  <b>{s.band}</b> range. Latest score is {s.latest}%
+                  with a trend of <b>{s.trend}</b>.
                 </p>
               ))
             )}
