@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 /**
+ * Force Node runtime (required for pdf-parse)
+ */
+export const runtime = "nodejs";
+
+/**
  * Ensure API key exists
  */
 const apiKey = process.env.GEMINI_API_KEY;
@@ -25,18 +30,9 @@ If a query is unrelated to studies, gently refuse and clearly state that you ans
     return `
 ${GLOBAL_RULE}
 You are in TEACHER MODE.
-
-Rules:
-- Follow NCERT textbooks strictly.
-- Follow CBSE syllabus and exam orientation.
-- Explain in simple Class 9–10 language.
-- Break explanations into clear steps or points.
-- Use stories, analogies, or real-life examples only when helpful.
-- Describe diagrams, maps, and processes in words when useful.
-- Ask 2–3 short thinking or revision questions after explaining.
-- Encourage curiosity but stay within CBSE syllabus.
-- Do NOT conduct tests or evaluations.
-- Never refuse only because knowledge base is empty.
+- Follow NCERT strictly.
+- Explain clearly.
+- No tests or evaluation.
 `;
   }
 
@@ -44,42 +40,12 @@ Rules:
     return `
 ${GLOBAL_RULE}
 You are a STRICT but FAIR CBSE examiner.
-
-CORE PRINCIPLES:
-- Examiner does NOT guess subject, class, chapters, or syllabus.
-- Examiner waits for student to specify exam details.
-- Examiner asks for missing details ONLY ONCE.
-
-PRE-EXAM PHASE:
-- Student may describe class, subject, chapter(s), full book, or topics.
-- Do NOT generate any question paper yet.
-
-START CONDITIONS:
-- Generate the FULL QUESTION PAPER ONLY when:
-  1) Exam details are clearly specified AND
-  2) Student types START or BEGIN
-
-IF START IS TYPED WITHOUT DETAILS:
-- Ask ONCE: "Please specify class, subject, and chapter(s) for the test."
-- Then wait silently.
-
-QUESTION PAPER RULES:
-- Display the ENTIRE paper in ONE message.
-- Include class, subject, chapter(s), time (suggested), and marks.
-- Do NOT pause or wait for answers.
-
-SILENT EXAM MODE:
-- After paper display, remain COMPLETELY SILENT.
-- Do NOT respond to answers, uploads, or partial submissions.
-- Do NOT give hints, corrections, feedback, or marks.
-
-ANSWER COLLECTION:
-- All messages after START are part of the answer sheet.
-- Uploaded images/PDFs are valid answer sheets.
-
-END CONDITIONS:
-- Exam ends ONLY when student types SUBMIT, DONE, STOP, or END TEST.
-- Time taken will be provided separately by the system.
+- Never guess syllabus.
+- Ask missing exam details ONLY ONCE.
+- Generate paper ONLY after details + START/BEGIN.
+- Remain silent after paper.
+- Accept uploads as answer sheets.
+- End exam on SUBMIT / DONE / STOP.
 `;
   }
 
@@ -87,13 +53,7 @@ END CONDITIONS:
     return `
 ${GLOBAL_RULE}
 You are in ORAL MODE.
-
-Rules:
-- Conversational student–teacher interaction.
-- Student may ask to listen to any topic or chapter.
-- Explain concepts verbally.
-- Ask short oral questions.
-- No formal tests, no marks.
+- Conversational explanations only.
 `;
   }
 
@@ -101,15 +61,32 @@ Rules:
     return `
 ${GLOBAL_RULE}
 You are in PROGRESS DASHBOARD MODE.
-
-Rules:
-- Analytics-only mode.
-- Summarize performance trends.
-- No teaching, no testing.
+- Analytics only.
 `;
   }
 
   return GLOBAL_RULE;
+}
+
+/**
+ * REAL PDF EXTRACTION (CommonJS require — 100% safe)
+ */
+async function extractPdfText(base64Data: string): Promise<string | null> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const pdfParse = require("pdf-parse");
+
+    const buffer = Buffer.from(base64Data, "base64");
+    const data = await pdfParse(buffer);
+
+    if (!data?.text) return null;
+
+    // protect LLM context
+    return data.text.slice(0, 15000);
+  } catch (err) {
+    console.error("PDF parse failed:", err);
+    return null;
+  }
 }
 
 /**
@@ -125,10 +102,24 @@ export async function POST(req: NextRequest) {
 
     const mode = typeof body.mode === "string" ? body.mode : "teacher";
 
-    const uploadedText =
-      typeof body.uploadedText === "string" && body.uploadedText.trim()
-        ? body.uploadedText.trim()
-        : null;
+    let uploadedContent: string | null = null;
+
+    // REAL PDF handling
+    if (
+      body.uploadedFile &&
+      body.uploadedFile.type === "application/pdf" &&
+      typeof body.uploadedFile.base64 === "string"
+    ) {
+      const extracted = await extractPdfText(body.uploadedFile.base64);
+      uploadedContent =
+        extracted ??
+        `Student uploaded a PDF named "${body.uploadedFile.name}", but text extraction failed.`;
+    }
+
+    // Fallback for stub uploads
+    if (!uploadedContent && typeof body.uploadedText === "string") {
+      uploadedContent = body.uploadedText.trim();
+    }
 
     const lastUserMessage =
       body.messages
@@ -137,7 +128,7 @@ export async function POST(req: NextRequest) {
         .find((m: any) => m?.role === "user" && typeof m?.content === "string")
         ?.content ?? null;
 
-    if (!lastUserMessage && !uploadedText) {
+    if (!lastUserMessage && !uploadedContent) {
       return NextResponse.json(
         { reply: "Please ask a valid academic question to continue." },
         { status: 200 }
@@ -148,10 +139,10 @@ export async function POST(req: NextRequest) {
 
     let finalUserInput = "";
 
-    if (uploadedText) {
+    if (uploadedContent) {
       finalUserInput += `
 [UPLOADED CONTENT]
-${uploadedText}
+${uploadedContent}
 `;
     }
 
@@ -168,20 +159,13 @@ ${lastUserMessage}
 
     const result = await model.generateContent({
       contents: [
-        {
-          role: "user",
-          parts: [{ text: systemPrompt }],
-        },
-        {
-          role: "user",
-          parts: [{ text: finalUserInput }],
-        },
+        { role: "user", parts: [{ text: systemPrompt }] },
+        { role: "user", parts: [{ text: finalUserInput }] },
       ],
     });
 
     const reply =
-      result?.response?.candidates?.[0]?.content?.parts?.[0]?.text ??
-      "";
+      result?.response?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
 
     return NextResponse.json({ reply }, { status: 200 });
   } catch (error) {
