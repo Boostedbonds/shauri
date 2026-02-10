@@ -20,9 +20,8 @@ type ExamAttempt = {
 };
 
 export default function ExaminerPage() {
-  const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", content: "Examiner Mode" },
-  ]);
+  // ❌ Removed duplicate "Examiner Mode" chat message
+  const [messages, setMessages] = useState<Message[]>([]);
 
   // ⏱️ Timer state
   const [examStarted, setExamStarted] = useState(false);
@@ -62,7 +61,6 @@ export default function ExaminerPage() {
       subject = "Social Science";
     else if (joined.includes("hindi")) subject = "Hindi";
 
-    // chapters are free-text for now
     return {
       subject,
       chapters: [],
@@ -160,10 +158,10 @@ ${uploadedText}
 
   return (
     <div style={{ minHeight: "100vh", paddingTop: 24 }}>
-      {/* 🔙 Back Button */}
+      {/* 🔙 Back → Mode Selector (NOT logout) */}
       <div style={{ paddingLeft: 24, marginBottom: 16 }}>
         <button
-          onClick={() => (window.location.href = "/")}
+          onClick={() => (window.location.href = "/modes")}
           style={{
             padding: "10px 16px",
             background: "#2563eb",
@@ -198,6 +196,7 @@ ${uploadedText}
         </div>
       )}
 
+      {/* ✅ Single heading only */}
       <h1 style={{ textAlign: "center", marginBottom: 16 }}>
         Examiner Mode
       </h1>

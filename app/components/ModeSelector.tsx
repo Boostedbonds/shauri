@@ -42,6 +42,7 @@ export default function ModeSelector() {
           "linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 40%, #e0e7ff 100%)",
       }}
     >
+      {/* Logout intentionally goes to access control */}
       <Header onLogout={() => (window.location.href = "/")} />
 
       <main

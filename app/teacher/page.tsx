@@ -13,7 +13,8 @@ export default function TeacherPage() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      content: "Hi 😊 What would you like to study today?",
+      content:
+        "I’m here to help you learn clearly and confidently. What topic would you like to study today?",
     },
   ]);
 
@@ -69,7 +70,7 @@ ${uploadedText}
       {/* 🔙 Back to Mode Selector (NOT logout) */}
       <div style={{ paddingLeft: 24, marginBottom: 16 }}>
         <button
-          onClick={() => (window.location.href = "/")}
+          onClick={() => (window.location.href = "/modes")}
           style={{
             padding: "10px 16px",
             background: "#2563eb",

@@ -67,10 +67,10 @@ ${uploadedText}
 
   return (
     <div style={{ minHeight: "100vh", paddingTop: 24 }}>
-      {/* 🔙 Back to Mode Selector */}
+      {/* 🔙 Back → Mode Selector (NOT logout) */}
       <div style={{ paddingLeft: 24, marginBottom: 16 }}>
         <button
-          onClick={() => (window.location.href = "/")}
+          onClick={() => (window.location.href = "/modes")}
           style={{
             padding: "10px 16px",
             background: "#2563eb",

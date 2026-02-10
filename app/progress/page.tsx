@@ -105,7 +105,6 @@ export default function ProgressPage() {
     reader.readAsText(file);
   }
 
-  /* ---------- PDF DOWNLOAD ---------- */
   function downloadPDF() {
     window.print();
   }
@@ -120,6 +119,7 @@ export default function ProgressPage() {
           "linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 40%, #e0e7ff 100%)",
       }}
     >
+      {/* Logout stays logout */}
       <Header onLogout={() => (window.location.href = "/")} />
 
       <main
@@ -130,10 +130,10 @@ export default function ProgressPage() {
           margin: "0 auto",
         }}
       >
-        {/* 🔙 Back */}
+        {/* 🔙 Back → Mode Selector */}
         <div style={{ marginBottom: 24 }}>
           <button
-            onClick={() => (window.location.href = "/")}
+            onClick={() => (window.location.href = "/modes")}
             style={{
               padding: "10px 16px",
               background: "#2563eb",
