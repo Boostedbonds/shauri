@@ -11,7 +11,10 @@ export type Message = {
 
 export default function TeacherPage() {
   const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", content: "Hi 😊 What would you like to study today?" },
+    {
+      role: "assistant",
+      content: "Hi 😊 What would you like to study today?",
+    },
   ]);
 
   async function handleSend(text: string, uploadedText?: string) {
@@ -42,7 +45,7 @@ ${uploadedText}
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        mode: "teacher", // 🔒 CRITICAL: enforce Teacher Mode rules
+        mode: "teacher",
         messages: updatedMessages,
         uploadedText: uploadedText ?? null,
       }),
@@ -63,7 +66,7 @@ ${uploadedText}
 
   return (
     <div style={{ minHeight: "100vh", paddingTop: 24 }}>
-      {/* 🔙 Back Button — locked base UI style */}
+      {/* 🔙 Back to Mode Selector (NOT logout) */}
       <div style={{ paddingLeft: 24, marginBottom: 16 }}>
         <button
           onClick={() => (window.location.href = "/")}
@@ -77,7 +80,7 @@ ${uploadedText}
             cursor: "pointer",
           }}
         >
-          ← Back
+          ← Modes
         </button>
       </div>
 

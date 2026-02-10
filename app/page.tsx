@@ -3,41 +3,36 @@
 import { useState } from "react";
 import ModeSelector from "./components/ModeSelector";
 
-const PARENT_CODE = "0330";
+const ACCESS_CODE = "0330";
 
 export default function HomePage() {
-  const [name, setName] = useState("");
-  const [studentClass, setStudentClass] = useState("");
   const [code, setCode] = useState("");
+  const [name, setName] = useState("");
   const [authorized, setAuthorized] = useState(false);
   const [error, setError] = useState("");
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
+    if (code !== ACCESS_CODE) {
+      setError("Invalid access code");
+      return;
+    }
+
     if (!name.trim()) {
       setError("Please enter student name");
       return;
     }
 
-    if (!studentClass) {
-      setError("Please select class");
-      return;
-    }
+    const studentContext = {
+      name: name.trim(),
+      class: "9",
+      board: "CBSE",
+    };
 
-    if (code !== PARENT_CODE) {
-      setError("Invalid access code");
-      return;
-    }
-
-    // ✅ Save student context
     localStorage.setItem(
       "studymate_student",
-      JSON.stringify({
-        name: name.trim(),
-        class: studentClass,
-        board: "CBSE",
-      })
+      JSON.stringify(studentContext)
     );
 
     setAuthorized(true);
@@ -69,22 +64,21 @@ export default function HomePage() {
         >
           <h1 style={{ fontSize: 36, marginBottom: 6 }}>StudyMate</h1>
           <p style={{ marginBottom: 28, color: "#475569" }}>
-            CBSE Learning Platform
+            CBSE Class 9 Learning Platform
           </p>
 
           <div
             style={{
               background: "#eef2ff",
-              padding: 14,
+              padding: 16,
               borderRadius: 12,
-              marginBottom: 24,
+              marginBottom: 22,
               fontWeight: 600,
             }}
           >
             Access Control
           </div>
 
-          {/* Student Name */}
           <input
             type="text"
             placeholder="Student Name"
@@ -92,7 +86,7 @@ export default function HomePage() {
             onChange={(e) => setName(e.target.value)}
             style={{
               width: "100%",
-              padding: 14,
+              padding: 16,
               fontSize: 16,
               marginBottom: 14,
               borderRadius: 12,
@@ -101,37 +95,14 @@ export default function HomePage() {
             }}
           />
 
-          {/* Class Selector */}
-          <select
-            value={studentClass}
-            onChange={(e) => setStudentClass(e.target.value)}
-            style={{
-              width: "100%",
-              padding: 14,
-              fontSize: 16,
-              marginBottom: 14,
-              borderRadius: 12,
-              border: "1px solid #cbd5f5",
-              textAlign: "center",
-            }}
-          >
-            <option value="">Select Class</option>
-            <option value="6">Class 6</option>
-            <option value="7">Class 7</option>
-            <option value="8">Class 8</option>
-            <option value="9">Class 9</option>
-            <option value="10">Class 10</option>
-          </select>
-
-          {/* Parent Code */}
           <input
             type="password"
-            placeholder="Parent Access Code"
+            placeholder="Access Code"
             value={code}
             onChange={(e) => setCode(e.target.value)}
             style={{
               width: "100%",
-              padding: 14,
+              padding: 16,
               fontSize: 16,
               marginBottom: 14,
               borderRadius: 12,
@@ -171,7 +142,7 @@ export default function HomePage() {
               fontSize: 13,
             }}
           >
-            Parent authorization is required to access this platform.
+            This platform requires parent authorization for access.
           </div>
         </form>
       </div>

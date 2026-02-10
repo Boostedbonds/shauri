@@ -11,7 +11,11 @@ type Message = {
 
 export default function OralPage() {
   const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", content: "Oral Mode 🎤 Speak or type your answer." },
+    {
+      role: "assistant",
+      content:
+        "I’m your CBSE learning partner 🎤 You can speak or type your answers. Let’s begin.",
+    },
   ]);
 
   async function handleSend(text: string, uploadedText?: string) {
@@ -42,7 +46,7 @@ ${uploadedText}
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        mode: "oral", // 🔒 Oral Mode enforced
+        mode: "oral",
         messages: updatedMessages,
         uploadedText: uploadedText ?? null,
       }),
@@ -63,7 +67,7 @@ ${uploadedText}
 
   return (
     <div style={{ minHeight: "100vh", paddingTop: 24 }}>
-      {/* 🔙 Back Button */}
+      {/* 🔙 Back to Mode Selector */}
       <div style={{ paddingLeft: 24, marginBottom: 16 }}>
         <button
           onClick={() => (window.location.href = "/")}
@@ -77,7 +81,7 @@ ${uploadedText}
             cursor: "pointer",
           }}
         >
-          ← Back
+          ← Modes
         </button>
       </div>
 

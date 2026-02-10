@@ -46,13 +46,17 @@ export default function ModeSelector() {
 
       <main
         style={{
+          minHeight: "calc(100vh - 80px)",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
           maxWidth: 1400,
           margin: "0 auto",
-          padding: "56px 32px",
+          padding: "32px",
         }}
       >
         {/* 👋 Welcome */}
-        <div style={{ textAlign: "center", marginBottom: 32 }}>
+        <div style={{ textAlign: "center", marginBottom: 28 }}>
           <h1 style={{ fontSize: 36, marginBottom: 6 }}>
             Welcome, {student.name}
           </h1>
@@ -65,7 +69,7 @@ export default function ModeSelector() {
           style={{
             textAlign: "center",
             fontSize: 32,
-            marginBottom: 10,
+            marginBottom: 8,
           }}
         >
           Choose Your Learning Mode
@@ -75,7 +79,7 @@ export default function ModeSelector() {
           style={{
             textAlign: "center",
             color: "#475569",
-            marginBottom: 56,
+            marginBottom: 40,
             fontSize: 18,
           }}
         >
@@ -85,40 +89,44 @@ export default function ModeSelector() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
             gap: 36,
           }}
         >
           <ModeCard
             icon="👩‍🏫"
             title="Teacher Mode"
-            desc="Learn concepts with clear NCERT-aligned explanations and examples."
+            desc="Learn concepts with clear CBSE-aligned explanations and examples."
             color="#2563eb"
             href="/teacher"
+            cta="Start Learning →"
           />
 
           <ModeCard
             icon="🧪"
             title="Examiner Mode"
-            desc="Practice full-length question papers with evaluation and feedback."
+            desc="Practice full-length question papers in exam conditions."
             color="#16a34a"
             href="/examiner"
+            cta="Start Test →"
           />
 
           <ModeCard
             icon="🗣️"
             title="Oral Mode"
-            desc="Strengthen recall and confidence with spoken question practice."
+            desc="Improve recall and confidence through spoken practice."
             color="#9333ea"
             href="/oral"
+            cta="Start Speaking →"
           />
 
           <ModeCard
             icon="📊"
             title="Progress Dashboard"
-            desc="Track performance, strengths, weaknesses, and improvements."
+            desc="Review performance, strengths, and areas to improve."
             color="#ea580c"
             href="/progress"
+            cta="View Progress →"
           />
         </div>
       </main>
@@ -132,6 +140,7 @@ function ModeCard(props: {
   desc: string;
   color: string;
   href: string;
+  cta: string;
 }) {
   return (
     <div
@@ -143,7 +152,7 @@ function ModeCard(props: {
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
-        minHeight: 340,
+        minHeight: 320,
       }}
     >
       <div>
@@ -178,7 +187,7 @@ function ModeCard(props: {
           fontSize: 18,
         }}
       >
-        Start Learning →
+        {props.cta}
       </a>
     </div>
   );
