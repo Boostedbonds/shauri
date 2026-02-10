@@ -57,6 +57,21 @@ export default function ModeSelector() {
           flexDirection: "column",
         }}
       >
+        {/* About link */}
+        <div style={{ marginBottom: 12 }}>
+          <a
+            href="/about"
+            style={{
+              fontSize: 14,
+              color: "#2563eb",
+              textDecoration: "none",
+              fontWeight: 500,
+            }}
+          >
+            About StudyMate
+          </a>
+        </div>
+
         {/* 👋 Welcome */}
         <div style={{ textAlign: "center", marginBottom: 24 }}>
           <h1 style={{ fontSize: 36, marginBottom: 6 }}>
@@ -88,7 +103,7 @@ export default function ModeSelector() {
           Select how you want to study today
         </p>
 
-        {/* ✅ Modes Grid – natural flow, no forced centering */}
+        {/* ✅ Modes Grid */}
         <div style={{ width: "100%" }}>
           <div
             style={{

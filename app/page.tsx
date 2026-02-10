@@ -49,17 +49,15 @@ export default function HomePage() {
         background:
           "linear-gradient(135deg, #e0f2fe 0%, #bae6fd 40%, #c7d2fe 100%)",
         display: "flex",
-        flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        position: "relative",
       }}
     >
       <form
         onSubmit={handleSubmit}
         style={{
           background: "#ffffff",
-          padding: "52px 46px",
+          padding: "52px 46px 32px",
           borderRadius: 20,
           width: 460,
           textAlign: "center",
@@ -175,22 +173,21 @@ export default function HomePage() {
         >
           This platform requires parent authorization for student access.
         </div>
-      </form>
 
-      {/* Soft legal footer */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: 18,
-          fontSize: 12,
-          color: "#64748b",
-          textAlign: "center",
-        }}
-      >
-        © StudyMate. All rights reserved.
-        <br />
-        For educational use only.
-      </div>
+        {/* Soft legal footer – anchored to card */}
+        <div
+          style={{
+            marginTop: 22,
+            fontSize: 12,
+            color: "#475569",
+            lineHeight: 1.4,
+          }}
+        >
+          © StudyMate. All rights reserved.
+          <br />
+          For educational use only.
+        </div>
+      </form>
     </div>
   );
 }
