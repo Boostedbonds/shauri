@@ -42,7 +42,7 @@ ${uploadedText}
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        mode: "oral", // 🔒 CRITICAL: enforce Oral Mode rules
+        mode: "oral", // 🔒 Oral Mode enforced
         messages: updatedMessages,
         uploadedText: uploadedText ?? null,
       }),
@@ -63,7 +63,7 @@ ${uploadedText}
 
   return (
     <div style={{ minHeight: "100vh", paddingTop: 24 }}>
-      {/* 🔙 Back Button — locked base UI style */}
+      {/* 🔙 Back Button */}
       <div style={{ paddingLeft: 24, marginBottom: 16 }}>
         <button
           onClick={() => (window.location.href = "/")}
@@ -85,7 +85,9 @@ ${uploadedText}
         Oral Mode
       </h1>
 
-      <ChatUI messages={messages} />
+      {/* 🔊 Voice-enabled ChatUI */}
+      <ChatUI messages={messages} isOralMode />
+
       <ChatInput onSend={handleSend} />
     </div>
   );
