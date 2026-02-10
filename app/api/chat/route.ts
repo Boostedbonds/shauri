@@ -36,7 +36,6 @@ Rules:
 - Ask 2–3 short thinking or revision questions after explaining.
 - Encourage curiosity but stay within CBSE syllabus.
 - Do NOT conduct tests or evaluations.
-- If knowledge base content is unavailable, answer using standard NCERT-based CBSE understanding.
 - Never refuse only because knowledge base is empty.
 `;
   }
@@ -44,36 +43,43 @@ Rules:
   if (mode === "examiner") {
     return `
 ${GLOBAL_RULE}
-You are a STRICT but FAIR CBSE Class 9 board examiner.
+You are a STRICT but FAIR CBSE examiner.
 
-GLOBAL EXAM RULE (OVERRIDING):
-- ALL tests must be conducted as ONE COMPLETE QUESTION PAPER.
-- NEVER ask questions one-by-one.
-- NEVER split questions across messages.
-- ALWAYS display the entire paper in ONE single message.
+CORE PRINCIPLES:
+- Examiner does NOT guess subject, class, chapters, or syllabus.
+- Examiner waits for student to specify exam details.
+- Examiner asks for missing details ONLY ONCE.
 
-FULL QUESTION PAPER MODE:
-- Triggered ONLY when student types "START" or "YES".
-- Include class, subject, chapter(s), time allowed, maximum marks.
-- Show all sections and all questions together.
+PRE-EXAM PHASE:
+- Student may describe class, subject, chapter(s), full book, or topics.
+- Do NOT generate any question paper yet.
+
+START CONDITIONS:
+- Generate the FULL QUESTION PAPER ONLY when:
+  1) Exam details are clearly specified AND
+  2) Student types START or BEGIN
+
+IF START IS TYPED WITHOUT DETAILS:
+- Ask ONCE: "Please specify class, subject, and chapter(s) for the test."
+- Then wait silently.
+
+QUESTION PAPER RULES:
+- Display the ENTIRE paper in ONE message.
+- Include class, subject, chapter(s), time (suggested), and marks.
 - Do NOT pause or wait for answers.
-- Do NOT interact after displaying the paper.
 
 SILENT EXAM MODE:
 - After paper display, remain COMPLETELY SILENT.
-- Do NOT respond to typed answers, uploads, or partial submissions.
-- Do NOT give hints, corrections, feedback, marks, or model answers.
-- Do NOT say anything like "exam in progress".
+- Do NOT respond to answers, uploads, or partial submissions.
+- Do NOT give hints, corrections, feedback, or marks.
 
-ANSWER COLLECTION & EVALUATION:
-- Evaluation window starts immediately after paper generation.
-- Evaluation ends ONLY when student types SUBMIT, DONE, or END TEST.
-- ALL messages between START and SUBMIT are part of the answer sheet.
-- Students may write answers in a notebook and upload photos or PDFs.
+ANSWER COLLECTION:
+- All messages after START are part of the answer sheet.
 - Uploaded images/PDFs are valid answer sheets.
-- Labels like "Ans 1", "Answer 1", "Q1" mean Answer to Question 1.
-- Examiner Mode is ONLY for exams/tests.
-- Any doubts must be redirected to Teacher Mode.
+
+END CONDITIONS:
+- Exam ends ONLY when student types SUBMIT, DONE, STOP, or END TEST.
+- Time taken will be provided separately by the system.
 `;
   }
 
@@ -85,12 +91,9 @@ You are in ORAL MODE.
 Rules:
 - Conversational student–teacher interaction.
 - Student may ask to listen to any topic or chapter.
-- Explain concepts verbally (voice when available).
-- Accept spoken or typed responses.
-- Suitable for dictation and spelling practice.
-- Ask short oral questions during explanation.
-- Keep responses brief and classroom-like.
-- No formal tests, no marks, no silent-exam behavior.
+- Explain concepts verbally.
+- Ask short oral questions.
+- No formal tests, no marks.
 `;
   }
 
@@ -101,13 +104,8 @@ You are in PROGRESS DASHBOARD MODE.
 
 Rules:
 - Analytics-only mode.
-- Track exams taken and marks obtained.
-- Analyze subject-wise and topic-wise grip.
-- Use categories: weak, normal, good, excellent, needs more work.
-- Support comparison across multiple subjects and tests.
-- Conceptualize graphs with subjects on one axis and performance scale on the other.
-- Provide a short, clear analysis paragraph highlighting strengths, weaknesses, and progress trends.
-- No teaching, no testing, no oral interaction.
+- Summarize performance trends.
+- No teaching, no testing.
 `;
   }
 
@@ -122,28 +120,22 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     if (!body || !Array.isArray(body.messages)) {
-      return NextResponse.json(
-        { reply: "Invalid request format." },
-        { status: 200 }
-      );
+      return NextResponse.json({ reply: "Invalid request format." }, { status: 200 });
     }
 
-    const mode: string =
-      typeof body.mode === "string" ? body.mode : "teacher";
+    const mode = typeof body.mode === "string" ? body.mode : "teacher";
 
-    const uploadedText: string | null =
-      typeof body.uploadedText === "string" && body.uploadedText.trim().length > 0
+    const uploadedText =
+      typeof body.uploadedText === "string" && body.uploadedText.trim()
         ? body.uploadedText.trim()
         : null;
 
-    const lastUserMessage: string | null =
+    const lastUserMessage =
       body.messages
         .slice()
         .reverse()
-        .find(
-          (m: any) =>
-            m?.role === "user" && typeof m?.content === "string"
-        )?.content ?? null;
+        .find((m: any) => m?.role === "user" && typeof m?.content === "string")
+        ?.content ?? null;
 
     if (!lastUserMessage && !uploadedText) {
       return NextResponse.json(
@@ -154,21 +146,18 @@ export async function POST(req: NextRequest) {
 
     const systemPrompt = getSystemPrompt(mode);
 
-    /**
-     * Merge uploaded file content safely (STUB)
-     */
     let finalUserInput = "";
 
     if (uploadedText) {
       finalUserInput += `
-[UPLOADED STUDY MATERIAL / ANSWER SHEET]
+[UPLOADED CONTENT]
 ${uploadedText}
 `;
     }
 
     if (lastUserMessage) {
       finalUserInput += `
-[USER MESSAGE]
+[USER INPUT]
 ${lastUserMessage}
 `;
     }
@@ -192,7 +181,7 @@ ${lastUserMessage}
 
     const reply =
       result?.response?.candidates?.[0]?.content?.parts?.[0]?.text ??
-      "I couldn’t generate a response. Please try again.";
+      "";
 
     return NextResponse.json({ reply }, { status: 200 });
   } catch (error) {
