@@ -11,33 +11,34 @@ type ExamAttempt = {
   chapters: string[];
   timeTakenSeconds: number;
   rawAnswerText: string;
+  scorePercent?: number; // ← expected from evaluation
 };
 
-/* Calm academic palette */
+/* CBSE performance bands */
+function getBand(score: number) {
+  if (score >= 86) return "Excellent";
+  if (score >= 71) return "Good";
+  if (score >= 51) return "Average";
+  if (score >= 31) return "Weak";
+  return "Needs Work";
+}
+
+function getTrend(scores: number[]) {
+  if (scores.length < 2) return "—";
+  const diff = scores[scores.length - 1] - scores[scores.length - 2];
+  if (diff > 0) return "↑ Improving";
+  if (diff < 0) return "↓ Declining";
+  return "→ Stable";
+}
+
 const SUBJECT_COLORS = [
-  "#2563eb", // blue
-  "#0d9488", // teal
-  "#7c3aed", // violet
-  "#ea580c", // orange
-  "#4f46e5", // indigo
-  "#059669", // emerald
+  "#2563eb",
+  "#0d9488",
+  "#7c3aed",
+  "#ea580c",
+  "#4f46e5",
+  "#059669",
 ];
-
-function getProgressPercent(count: number) {
-  if (count >= 6) return 90;
-  if (count >= 4) return 70;
-  if (count >= 2) return 45;
-  if (count >= 1) return 20;
-  return 0;
-}
-
-function getStatus(percent: number) {
-  if (percent >= 80) return "Excellent progress";
-  if (percent >= 60) return "Good progress";
-  if (percent >= 40) return "Steady start";
-  if (percent > 0) return "Getting started";
-  return "Not started";
-}
 
 export default function ProgressPage() {
   const [attempts, setAttempts] = useState<ExamAttempt[]>([]);
@@ -45,25 +46,27 @@ export default function ProgressPage() {
 
   useEffect(() => {
     const stored = localStorage.getItem("studymate_exam_attempts");
-    if (stored) {
-      setAttempts(JSON.parse(stored));
-    }
+    if (stored) setAttempts(JSON.parse(stored));
   }, []);
 
-  /* Subjects emerge dynamically from exams */
-  const subjectStats = useMemo(() => {
-    const map: Record<string, number> = {};
+  const subjects = useMemo(() => {
+    const map: Record<string, number[]> = {};
 
     attempts.forEach((a) => {
-      map[a.subject] = (map[a.subject] ?? 0) + 1;
+      if (typeof a.scorePercent === "number") {
+        map[a.subject] ??= [];
+        map[a.subject].push(a.scorePercent);
+      }
     });
 
-    return Object.entries(map).map(([subject, count], index) => {
-      const percent = getProgressPercent(count);
+    return Object.entries(map).map(([subject, scores], index) => {
+      const latest = scores[scores.length - 1];
       return {
         subject,
-        percent,
-        status: getStatus(percent),
+        scores,
+        latest,
+        band: getBand(latest),
+        trend: getTrend(scores),
         color: SUBJECT_COLORS[index % SUBJECT_COLORS.length],
       };
     });
@@ -84,27 +87,14 @@ export default function ProgressPage() {
   function handleImportFile(file: File) {
     const reader = new FileReader();
     reader.onload = () => {
-      try {
-        const parsed = JSON.parse(reader.result as string);
-        if (Array.isArray(parsed)) {
-          localStorage.setItem(
-            "studymate_exam_attempts",
-            JSON.stringify(parsed)
-          );
-          setAttempts(parsed);
-          alert("Progress imported successfully.");
-        } else {
-          alert("Invalid progress file.");
-        }
-      } catch {
-        alert("Failed to import file.");
+      const parsed = JSON.parse(reader.result as string);
+      if (Array.isArray(parsed)) {
+        localStorage.setItem("studymate_exam_attempts", JSON.stringify(parsed));
+        setAttempts(parsed);
+        alert("Progress imported successfully.");
       }
     };
     reader.readAsText(file);
-  }
-
-  function downloadPDF() {
-    window.print();
   }
 
   return (
@@ -124,7 +114,6 @@ export default function ProgressPage() {
         style={{
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "center",
           padding: "24px 32px",
           maxWidth: 1400,
           margin: "0 auto",
@@ -139,7 +128,6 @@ export default function ProgressPage() {
             color: "#fff",
             borderRadius: 12,
             border: "none",
-            cursor: "pointer",
           }}
         >
           ← Back
@@ -171,19 +159,6 @@ export default function ProgressPage() {
           >
             Import
           </button>
-
-          <button
-            onClick={downloadPDF}
-            style={{
-              padding: "10px 16px",
-              background: "#334155",
-              color: "#fff",
-              borderRadius: 12,
-              border: "none",
-            }}
-          >
-            Download PDF
-          </button>
         </div>
       </div>
 
@@ -197,7 +172,6 @@ export default function ProgressPage() {
         }
       />
 
-      {/* Main */}
       <main
         style={{
           flex: 1,
@@ -207,102 +181,72 @@ export default function ProgressPage() {
           width: "100%",
         }}
       >
-        <h1 style={{ fontSize: 36, marginBottom: 8 }}>
-          Progress Dashboard
-        </h1>
+        <h1 style={{ fontSize: 36 }}>Progress Dashboard</h1>
         <p style={{ color: "#475569", fontSize: 18, marginBottom: 32 }}>
-          Subject-wise growth based on exams attempted so far.
+          X-axis: Tests attempted · Y-axis: Marks percentage
         </p>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "2fr 1fr",
-            gap: 48,
-          }}
-        >
-          {/* Graph */}
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 48 }}>
+          {/* Chart */}
           <div
             style={{
               background: "#fff",
               borderRadius: 24,
-              padding: "40px 32px",
+              padding: 32,
               boxShadow: "0 20px 40px rgba(0,0,0,0.08)",
             }}
           >
-            {subjectStats.length === 0 ? (
-              <div
-                style={{
-                  textAlign: "center",
-                  color: "#64748b",
-                  padding: 60,
-                }}
-              >
-                Progress bars will appear automatically as exams are taken.
-              </div>
+            {subjects.length === 0 ? (
+              <p style={{ textAlign: "center", color: "#64748b" }}>
+                Take at least one test to see progress.
+              </p>
             ) : (
-              <div
-                style={{
-                  display: "flex",
-                  gap: 36,
-                  alignItems: "flex-end",
-                  height: 260,
-                }}
-              >
-                {subjectStats.map((s) => (
+              subjects.map((s) => (
+                <div key={s.subject} style={{ marginBottom: 24 }}>
+                  <strong>{s.subject}</strong>
                   <div
-                    key={s.subject}
                     style={{
-                      flex: 1,
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      gap: 12,
+                      height: 14,
+                      background: "#e5e7eb",
+                      borderRadius: 8,
+                      overflow: "hidden",
+                      marginTop: 6,
                     }}
                   >
                     <div
                       style={{
-                        height: 200,
-                        width: 52,
-                        background: "#e5e7eb",
-                        borderRadius: 14,
-                        overflow: "hidden",
-                        display: "flex",
-                        alignItems: "flex-end",
+                        width: `${s.latest}%`,
+                        height: "100%",
+                        background: s.color,
                       }}
-                    >
-                      <div
-                        style={{
-                          height: `${s.percent}%`,
-                          width: "100%",
-                          background: s.color,
-                          transition: "height 0.8s ease",
-                        }}
-                      />
-                    </div>
-
-                    <div style={{ fontWeight: 600 }}>
-                      {s.subject}
-                    </div>
-                    <div style={{ fontSize: 13, color: s.color }}>
-                      {s.status}
-                    </div>
+                    />
                   </div>
-                ))}
-              </div>
+                  <div style={{ fontSize: 14, marginTop: 4 }}>
+                    {s.latest}% · {s.band} · {s.trend}
+                  </div>
+                </div>
+              ))
             )}
           </div>
 
-          {/* Feedback */}
+          {/* Summary */}
           <div>
             <h2 style={{ fontSize: 22, marginBottom: 12 }}>
               Progress Summary
             </h2>
-            <p style={{ color: "#475569", lineHeight: 1.7 }}>
-              This view reflects learning growth based on exams attempted.
-              Subjects appear automatically as tests are taken, helping
-              students and parents clearly understand progress over time.
-            </p>
+            {subjects.length === 0 ? (
+              <p style={{ color: "#475569" }}>
+                No exam data available yet.
+              </p>
+            ) : (
+              subjects.map((s) => (
+                <p key={s.subject} style={{ marginBottom: 16 }}>
+                  <strong>{s.subject}:</strong> Currently in the{" "}
+                  <b>{s.band}</b> range. Latest score is {s.latest}% with a
+                  trend of <b>{s.trend}</b>. Focus revision accordingly.
+                </p>
+              ))
+            )}
           </div>
         </div>
       </main>
