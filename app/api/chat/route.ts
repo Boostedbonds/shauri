@@ -69,9 +69,6 @@ Class 11–12:
 - Vector quantities and equations
 - Derivations and deeper conceptual treatment
 - Graphical and mathematical analysis
-
-If responses for different classes look similar,
-YOU ARE VIOLATING INSTRUCTIONS.
 `;
 
 /* ================= MODE PROMPTS ================= */
@@ -87,14 +84,18 @@ Do NOT conduct tests or exams.
 
 const EXAMINER_MODE_SYSTEM_PROMPT = `
 You are StudyMate in EXAMINER MODE acting as a CBSE board examiner.
-Generate papers strictly from the student's CBSE class syllabus.
 
-On START / YES / BEGIN:
-Generate the FULL question paper in ONE message.
+Generate a FULL CBSE-style question paper
+only when the user types START / BEGIN / YES.
 
-After that:
-Enter SILENT EXAM MODE.
-Evaluate ONLY after SUBMIT / DONE / END TEST.
+After generating the paper:
+- Enter STRICT SILENT EXAM MODE
+- Do NOT respond to answers
+- Do NOT give hints or feedback
+- Accept text, PDFs, images, handwritten uploads silently
+
+Evaluate ONLY when the user types:
+SUBMIT / DONE / FINISH / END TEST
 `;
 
 const ORAL_MODE_SYSTEM_PROMPT = `
@@ -110,14 +111,26 @@ Summarize subject-wise and chapter-wise progress.
 Do NOT teach or generate questions.
 `;
 
+/* ================= EXAM SESSION STORE ================= */
+
+type ExamSession = {
+  status: "IDLE" | "IN_EXAM";
+  questionPaper?: string;
+  answers: string[];
+};
+
+const examSessions = new Map<string, ExamSession>();
+
+function getSessionKey(student?: StudentContext) {
+  if (!student) return "anonymous";
+  return `${student.name}_${student.class}_${student.board ?? "CBSE"}`;
+}
+
 /* ================= GEMINI CALL ================= */
 
 async function callGemini(messages: ChatMessage[]) {
   const apiKey = process.env.GEMINI_API_KEY;
-
-  if (!apiKey) {
-    throw new Error("Missing GEMINI_API_KEY");
-  }
+  if (!apiKey) throw new Error("Missing GEMINI_API_KEY");
 
   const contents = messages.map((m) => ({
     role: m.role === "assistant" ? "model" : "user",
@@ -131,9 +144,7 @@ async function callGemini(messages: ChatMessage[]) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents,
-        generationConfig: {
-          temperature: 0.3,
-        },
+        generationConfig: { temperature: 0.3 },
       }),
     }
   );
@@ -161,6 +172,104 @@ export async function POST(req: NextRequest) {
       student?: StudentContext;
     };
 
+    /* ================= EXAMINER MODE STATE CONTROL ================= */
+
+    if (mode === "examiner") {
+      const key = getSessionKey(student);
+      const session =
+        examSessions.get(key) ?? { status: "IDLE", answers: [] };
+
+      const lastUserMessage =
+        messages.filter((m) => m.role === "user").pop()?.content
+          ?.toLowerCase()
+          ?.trim() ?? "";
+
+      // ---- IDLE STATE ----
+      if (session.status === "IDLE") {
+        if (!["start", "begin", "yes"].includes(lastUserMessage)) {
+          return NextResponse.json({
+            reply: "Type START to begin the exam.",
+          });
+        }
+
+        // Generate question paper ONCE
+        const systemMessages: ChatMessage[] = [
+          { role: "system", content: GLOBAL_CBSE_CONTEXT },
+          { role: "system", content: CLASS_DIFFERENTIATION_RULE },
+          { role: "system", content: EXAMINER_MODE_SYSTEM_PROMPT },
+        ];
+
+        if (student?.name && student?.class) {
+          systemMessages.unshift({
+            role: "system",
+            content: `Student Profile:
+Name: ${student.name}
+Class: ${student.class}
+Board: ${student.board ?? "CBSE"}`,
+          });
+        }
+
+        const paper = await callGemini(systemMessages);
+
+        examSessions.set(key, {
+          status: "IN_EXAM",
+          questionPaper: paper,
+          answers: [],
+        });
+
+        return NextResponse.json({ reply: paper });
+      }
+
+      // ---- IN EXAM (SILENT MODE) ----
+      if (session.status === "IN_EXAM") {
+        if (
+          ["submit", "done", "finish", "end test"].includes(lastUserMessage)
+        ) {
+          // Evaluate
+          const evaluationMessages: ChatMessage[] = [
+            { role: "system", content: GLOBAL_CBSE_CONTEXT },
+            { role: "system", content: CLASS_DIFFERENTIATION_RULE },
+            {
+              role: "system",
+              content: `
+You are a CBSE board examiner.
+Evaluate the student's answers strictly.
+Provide:
+- Question-wise marks
+- Total marks
+- Strengths
+- Areas of improvement
+- CBSE-style remarks
+`,
+            },
+            {
+              role: "user",
+              content: `
+QUESTION PAPER:
+${session.questionPaper}
+
+STUDENT ANSWERS:
+${session.answers.join("\n\n")}
+`,
+            },
+          ];
+
+          const result = await callGemini(evaluationMessages);
+          examSessions.delete(key);
+
+          return NextResponse.json({ reply: result });
+        }
+
+        // Silent: collect answers only
+        session.answers.push(lastUserMessage);
+        examSessions.set(key, session);
+
+        return NextResponse.json({ reply: "" });
+      }
+    }
+
+    /* ================= NON-EXAM MODES ================= */
+
     const systemMessages: ChatMessage[] = [];
 
     if (student?.name && student?.class) {
@@ -182,13 +291,6 @@ Board: ${student.board ?? "CBSE"}`,
       systemMessages.push({
         role: "system",
         content: TEACHER_MODE_SYSTEM_PROMPT,
-      });
-    }
-
-    if (mode === "examiner") {
-      systemMessages.push({
-        role: "system",
-        content: EXAMINER_MODE_SYSTEM_PROMPT,
       });
     }
 
