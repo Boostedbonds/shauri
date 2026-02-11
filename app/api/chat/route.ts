@@ -270,10 +270,36 @@ Generate a NEW and UNIQUE CBSE question paper.
 Class: ${student?.class ?? "Not specified"}
 User Request: ${session.subjectRequest}
 
-Follow CBSE format strictly.
-Mention total marks.
-Mention time allowed: ${duration} minutes.
-Vary internal questions.
+STRICT RULES:
+
+1) If SINGLE chapter requested:
+- Total Questions: 10
+- Section A: 3 questions × 1 mark each
+- Section B: 3 questions × 3 marks each
+- Section C: 4 questions × 5 marks each
+- Total Marks = 32
+
+2) If MULTIPLE chapters requested (2–4 chapters):
+- Maximum 20 questions total
+- Distribute questions almost equally across chapters
+- Mix 1, 3, and 5 mark questions
+- Total marks between 40–60 depending on scope
+
+3) If FULL BOOK or entire syllabus requested:
+- Follow STRICT CBSE Board Pattern:
+  Section A: Objective (1 mark)
+  Section B: Short Answer (2–3 marks)
+  Section C: Long Answer (4–5 marks)
+  Include internal choices
+  Include case-based questions
+
+GENERAL RULES:
+- Cover all mentioned chapters proportionally
+- Do NOT exceed 20 questions unless full syllabus
+- Vary internal wording each time
+- Maintain CBSE formatting structure
+- Clearly mention Total Marks
+- Clearly mention Time Allowed: ${duration} minutes
 `;
 
           const paper = await callGemini(
@@ -281,7 +307,7 @@ Vary internal questions.
               { role: "system", content: GLOBAL_CONTEXT },
               { role: "user", content: paperPrompt },
             ],
-            0.7 // variation upgrade
+            0.7
           );
 
           const now = Date.now();
@@ -384,7 +410,7 @@ ${session.answers.join("\n\n")}
       }
     }
 
-    /* ================= OTHER MODES UNCHANGED ================= */
+    /* ================= OTHER MODES ================= */
 
     if (mode === "progress") {
       const summaryData = attempts
