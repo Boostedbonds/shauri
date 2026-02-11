@@ -14,7 +14,6 @@ type ExamAttempt = {
   scorePercent?: number;
 };
 
-/* CBSE performance bands */
 function getBand(score: number) {
   if (score >= 86) return "Excellent";
   if (score >= 71) return "Good";
@@ -31,14 +30,6 @@ function getTrend(scores: number[]) {
   return "→ Stable";
 }
 
-function getOverallReadiness(bands: string[]) {
-  if (bands.every((b) => b === "Good" || b === "Excellent"))
-    return "On Track";
-  if (bands.some((b) => b === "Needs Work" || b === "Weak"))
-    return "Needs Attention";
-  return "Developing";
-}
-
 const SUBJECT_COLORS = [
   "#2563eb",
   "#0d9488",
@@ -50,7 +41,7 @@ const SUBJECT_COLORS = [
 
 export default function ProgressPage() {
   const [attempts, setAttempts] = useState<ExamAttempt[]>([]);
-  const [aiSummary, setAiSummary] = useState<string>("");
+  const [aiSummary, setAiSummary] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -66,22 +57,18 @@ export default function ProgressPage() {
   async function generateAISummary(data: ExamAttempt[]) {
     if (!data.length) return;
 
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mode: "progress",
-          attempts: data,
-        }),
-      });
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mode: "progress",
+        attempts: data,
+      }),
+    });
 
-      const result = await res.json();
-      if (typeof result?.reply === "string") {
-        setAiSummary(result.reply);
-      }
-    } catch {
-      setAiSummary("");
+    const result = await res.json();
+    if (typeof result?.reply === "string") {
+      setAiSummary(result.reply);
     }
   }
 
@@ -107,20 +94,6 @@ export default function ProgressPage() {
       };
     });
   }, [attempts]);
-
-  const snapshot = useMemo(() => {
-    if (subjects.length === 0) return null;
-
-    const priority = [...subjects].sort(
-      (a, b) => a.latest - b.latest
-    )[0];
-
-    const overall = getOverallReadiness(
-      subjects.map((s) => s.band)
-    );
-
-    return { overall, priority };
-  }, [subjects]);
 
   function exportProgress() {
     const blob = new Blob([JSON.stringify(attempts, null, 2)], {
@@ -149,9 +122,6 @@ Trend: ${s.trend}
   )
   .join("\n")}
 
-Overall Readiness: ${snapshot?.overall ?? "N/A"}
-Priority Focus: ${snapshot?.priority.subject ?? "N/A"}
-
 AI Academic Insight:
 ${aiSummary || "No AI summary available yet."}
 `;
@@ -176,7 +146,6 @@ ${aiSummary || "No AI summary available yet."}
         );
         setAttempts(parsed);
         generateAISummary(parsed);
-        alert("Progress imported successfully.");
       }
     };
     reader.readAsText(file);
@@ -194,6 +163,7 @@ ${aiSummary || "No AI summary available yet."}
     >
       <Header onLogout={() => (window.location.href = "/")} />
 
+      {/* Top Controls */}
       <div
         style={{
           display: "flex",
@@ -278,45 +248,75 @@ ${aiSummary || "No AI summary available yet."}
           width: "100%",
         }}
       >
-        <h1 style={{ fontSize: 36 }}>Progress Dashboard</h1>
+        <h1 style={{ fontSize: 36, marginBottom: 24 }}>
+          Progress Dashboard
+        </h1>
 
-        {snapshot && (
+        {subjects.length === 0 ? (
+          <p>No exam data available yet.</p>
+        ) : (
           <div
             style={{
-              marginTop: 24,
-              marginBottom: 40,
-              background: "#ffffff",
-              borderRadius: 20,
-              padding: 28,
-              boxShadow: "0 12px 30px rgba(0,0,0,0.08)",
+              display: "grid",
+              gridTemplateColumns: "2fr 1fr",
+              gap: 40,
             }}
           >
-            <h2 style={{ fontSize: 24, marginBottom: 12 }}>
-              CBSE Readiness Snapshot
-            </h2>
+            {/* LEFT – Graph */}
+            <div
+              style={{
+                background: "#fff",
+                borderRadius: 24,
+                padding: 32,
+                boxShadow: "0 20px 40px rgba(0,0,0,0.08)",
+              }}
+            >
+              {subjects.map((s) => (
+                <div key={s.subject} style={{ marginBottom: 24 }}>
+                  <strong>{s.subject}</strong>
 
-            {subjects.map((s) => (
-              <div key={s.subject} style={{ marginBottom: 8 }}>
-                <strong>{s.subject}</strong> → {s.band}
-              </div>
-            ))}
+                  <div
+                    style={{
+                      height: 14,
+                      background: "#e5e7eb",
+                      borderRadius: 8,
+                      overflow: "hidden",
+                      marginTop: 6,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${s.latest}%`,
+                        height: "100%",
+                        background: s.color,
+                      }}
+                    />
+                  </div>
 
-            <p style={{ marginTop: 16 }}>
-              <strong>Priority Focus:</strong>{" "}
-              {snapshot.priority.subject} ({snapshot.priority.band})
-            </p>
+                  <div style={{ fontSize: 14, marginTop: 4 }}>
+                    {s.latest}% · {s.band} · {s.trend}
+                  </div>
+                </div>
+              ))}
+            </div>
 
-            <p style={{ marginTop: 8 }}>
-              <strong>Overall Readiness:</strong>{" "}
-              {snapshot.overall}
-            </p>
+            {/* RIGHT – AI Analysis */}
+            <div
+              style={{
+                background: "#ffffff",
+                borderRadius: 24,
+                padding: 28,
+                boxShadow: "0 20px 40px rgba(0,0,0,0.08)",
+              }}
+            >
+              <h2 style={{ fontSize: 22, marginBottom: 16 }}>
+                Academic Analysis
+              </h2>
 
-            {aiSummary && (
-              <div style={{ marginTop: 20 }}>
-                <h3 style={{ fontSize: 18 }}>AI Academic Insight</h3>
-                <p style={{ marginTop: 8 }}>{aiSummary}</p>
-              </div>
-            )}
+              <p style={{ lineHeight: 1.6 }}>
+                {aiSummary || "Analysis will appear after tests are evaluated."}
+              </p>
+            </div>
           </div>
         )}
       </main>
