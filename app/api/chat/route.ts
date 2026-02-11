@@ -57,12 +57,16 @@ Do not teach.
 const EXAMINER_PROMPT = `
 You are in EXAMINER MODE.
 
-Before START:
-- Be brief and professional.
+STRICT RULES FOR PAPER GENERATION:
+- Use ONLY the chapters explicitly mentioned.
+- DO NOT include any extra chapters.
+- If user says exclude something (like graph, map, diagram), DO NOT include it.
+- Do NOT assume additional chapters.
+- Do NOT add sample/example content.
+- Generate structured CBSE board-style paper only.
 
 During exam:
 - Stay completely silent.
-- Do not respond to answers.
 
 On evaluation:
 - Mention each question number.
@@ -103,7 +107,7 @@ async function callGemini(messages: ChatMessage[]) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents,
-        generationConfig: { temperature: 0.3 },
+        generationConfig: { temperature: 0.2 },
       }),
     }
   );
@@ -116,7 +120,7 @@ async function callGemini(messages: ChatMessage[]) {
   );
 }
 
-/* ================= SUBJECT DETECTION ================= */
+/* ================= HELPERS ================= */
 
 function looksLikeSubjectRequest(text: string) {
   const keywords = [
@@ -141,6 +145,18 @@ function askingIdentity(text: string) {
     text.includes("board") ||
     text.includes("do you know")
   );
+}
+
+/* ================= DURATION LOGIC ================= */
+
+function calculateDurationMinutes(request: string): number {
+  const chapterMatches = request.match(/chapter\s*\d+/gi);
+  const chapterCount = chapterMatches ? chapterMatches.length : 1;
+
+  if (chapterCount >= 4) return 150;
+  if (chapterCount === 3) return 120;
+  if (chapterCount === 2) return 90;
+  return 60;
 }
 
 /* ================= API HANDLER ================= */
@@ -169,7 +185,6 @@ export async function POST(req: NextRequest) {
       /* ---------- IDLE ---------- */
 
       if (session.status === "IDLE") {
-        // ✅ FIXED GREETING (only change made)
         if (["hi", "hello", "hey", "anyone"].includes(lower)) {
           const name = student?.name ?? "Student";
           const cls = student?.class ?? "Unknown";
@@ -179,7 +194,6 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        // Identity verification
         if (askingIdentity(lower)) {
           const name = student?.name ?? "Unknown";
           const cls = student?.class ?? "Unknown";
@@ -189,24 +203,29 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        // START without subject
         if (lower === "start" && !session.subjectRequest) {
           return NextResponse.json({
             reply: "Please tell me the subject and chapters for your test.",
           });
         }
 
-        // START with subject → generate paper
         if (lower === "start" && session.subjectRequest) {
+          const duration = calculateDurationMinutes(session.subjectRequest);
+
           const paperPrompt = `
 Generate a complete CBSE question paper.
 
 Class: ${student?.class ?? "Not specified"}
-Subject Request: ${session.subjectRequest}
+User Request: ${session.subjectRequest}
 
-Follow strict CBSE board format.
-Clearly number all questions.
-Mention total marks and time allowed.
+STRICTLY:
+- Use ONLY chapters mentioned in user request.
+- If user excluded something (graph/map/diagram), do NOT include it.
+- Do NOT include additional chapters.
+- Follow CBSE board format.
+- Clearly number all questions.
+- Mention total marks.
+- Mention time allowed: ${duration} minutes.
 `;
 
           const paper = await callGemini([
@@ -228,10 +247,10 @@ Mention total marks and time allowed.
           return NextResponse.json({
             reply: paper,
             startTime: now,
+            durationMinutes: duration,
           });
         }
 
-        // Subject detection
         if (looksLikeSubjectRequest(lower)) {
           examSessions.set(key, {
             status: "IDLE",
@@ -244,7 +263,6 @@ Mention total marks and time allowed.
           });
         }
 
-        // Default professional response
         return NextResponse.json({
           reply:
             "Examiner Mode is for conducting tests. Please tell me the subject and chapters when ready.",
@@ -269,12 +287,12 @@ ${session.questionPaper ?? ""}
 STUDENT ANSWERS:
 ${session.answers.join("\n\n")}
 
-Also provide:
+Provide:
 - Question-wise marks
 - Total marks obtained
 - Percentage
 - Detailed explanation for each deduction
-- How answers could be improved
+- Improvement suggestions
 - Time taken: ${timeTakenSeconds} seconds
 `;
 
@@ -293,7 +311,6 @@ Also provide:
           });
         }
 
-        // Silent during exam
         session.answers.push(lastUserMessage);
         examSessions.set(key, session);
 
@@ -301,7 +318,7 @@ Also provide:
       }
     }
 
-    /* ================= TEACHER ================= */
+    /* ================= OTHER MODES (UNCHANGED) ================= */
 
     if (mode === "teacher") {
       const reply = await callGemini([
@@ -317,8 +334,6 @@ Also provide:
       return NextResponse.json({ reply });
     }
 
-    /* ================= ORAL ================= */
-
     if (mode === "oral") {
       const reply = await callGemini([
         { role: "system", content: GLOBAL_CONTEXT },
@@ -332,8 +347,6 @@ Also provide:
 
       return NextResponse.json({ reply });
     }
-
-    /* ================= PROGRESS ================= */
 
     if (mode === "progress") {
       const reply = await callGemini([
