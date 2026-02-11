@@ -50,12 +50,40 @@ const SUBJECT_COLORS = [
 
 export default function ProgressPage() {
   const [attempts, setAttempts] = useState<ExamAttempt[]>([]);
+  const [aiSummary, setAiSummary] = useState<string>("");
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem("studymate_exam_attempts");
-    if (stored) setAttempts(JSON.parse(stored));
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      setAttempts(parsed);
+      generateAISummary(parsed);
+    }
   }, []);
+
+  async function generateAISummary(data: ExamAttempt[]) {
+    if (!data.length) return;
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "progress",
+          attempts: data,
+        }),
+      });
+
+      const result = await res.json();
+      if (typeof result?.reply === "string") {
+        setAiSummary(result.reply);
+      }
+    } catch {
+      setAiSummary("");
+    }
+  }
 
   const subjects = useMemo(() => {
     const map: Record<string, number[]> = {};
@@ -80,8 +108,6 @@ export default function ProgressPage() {
     });
   }, [attempts]);
 
-  /* ===== CBSE READINESS SNAPSHOT ===== */
-
   const snapshot = useMemo(() => {
     if (subjects.length === 0) return null;
 
@@ -93,10 +119,7 @@ export default function ProgressPage() {
       subjects.map((s) => s.band)
     );
 
-    return {
-      overall,
-      priority,
-    };
+    return { overall, priority };
   }, [subjects]);
 
   function exportProgress() {
@@ -111,6 +134,37 @@ export default function ProgressPage() {
     URL.revokeObjectURL(url);
   }
 
+  function generatePDF() {
+    const content = `
+StudyMate Progress Report
+
+${subjects
+  .map(
+    (s) =>
+      `${s.subject}
+Latest Score: ${s.latest}%
+Performance Band: ${s.band}
+Trend: ${s.trend}
+`
+  )
+  .join("\n")}
+
+Overall Readiness: ${snapshot?.overall ?? "N/A"}
+Priority Focus: ${snapshot?.priority.subject ?? "N/A"}
+
+AI Academic Insight:
+${aiSummary || "No AI summary available yet."}
+`;
+
+    const blob = new Blob([content], { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "studymate-progress-report.pdf";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function handleImportFile(file: File) {
     const reader = new FileReader();
     reader.onload = () => {
@@ -121,6 +175,7 @@ export default function ProgressPage() {
           JSON.stringify(parsed)
         );
         setAttempts(parsed);
+        generateAISummary(parsed);
         alert("Progress imported successfully.");
       }
     };
@@ -139,7 +194,6 @@ export default function ProgressPage() {
     >
       <Header onLogout={() => (window.location.href = "/")} />
 
-      {/* Top bar */}
       <div
         style={{
           display: "flex",
@@ -189,6 +243,19 @@ export default function ProgressPage() {
           >
             Import
           </button>
+
+          <button
+            onClick={generatePDF}
+            style={{
+              padding: "10px 16px",
+              background: "#ea580c",
+              color: "#fff",
+              borderRadius: 12,
+              border: "none",
+            }}
+          >
+            PDF
+          </button>
         </div>
       </div>
 
@@ -213,7 +280,6 @@ export default function ProgressPage() {
       >
         <h1 style={{ fontSize: 36 }}>Progress Dashboard</h1>
 
-        {/* ===== SNAPSHOT ===== */}
         {snapshot && (
           <div
             style={{
@@ -237,87 +303,22 @@ export default function ProgressPage() {
 
             <p style={{ marginTop: 16 }}>
               <strong>Priority Focus:</strong>{" "}
-              {snapshot.priority.subject} (
-              {snapshot.priority.band})
+              {snapshot.priority.subject} ({snapshot.priority.band})
             </p>
 
             <p style={{ marginTop: 8 }}>
               <strong>Overall Readiness:</strong>{" "}
               {snapshot.overall}
             </p>
+
+            {aiSummary && (
+              <div style={{ marginTop: 20 }}>
+                <h3 style={{ fontSize: 18 }}>AI Academic Insight</h3>
+                <p style={{ marginTop: 8 }}>{aiSummary}</p>
+              </div>
+            )}
           </div>
         )}
-
-        {/* Existing layout */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "2fr 1fr",
-            gap: 48,
-          }}
-        >
-          {/* Chart */}
-          <div
-            style={{
-              background: "#fff",
-              borderRadius: 24,
-              padding: 32,
-              boxShadow: "0 20px 40px rgba(0,0,0,0.08)",
-            }}
-          >
-            {subjects.length === 0 ? (
-              <p style={{ textAlign: "center", color: "#64748b" }}>
-                Take at least one test to see progress.
-              </p>
-            ) : (
-              subjects.map((s) => (
-                <div key={s.subject} style={{ marginBottom: 24 }}>
-                  <strong>{s.subject}</strong>
-                  <div
-                    style={{
-                      height: 14,
-                      background: "#e5e7eb",
-                      borderRadius: 8,
-                      overflow: "hidden",
-                      marginTop: 6,
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: `${s.latest}%`,
-                        height: "100%",
-                        background: s.color,
-                      }}
-                    />
-                  </div>
-                  <div style={{ fontSize: 14, marginTop: 4 }}>
-                    {s.latest}% · {s.band} · {s.trend}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* Summary */}
-          <div>
-            <h2 style={{ fontSize: 22, marginBottom: 12 }}>
-              Progress Summary
-            </h2>
-            {subjects.length === 0 ? (
-              <p style={{ color: "#475569" }}>
-                No exam data available yet.
-              </p>
-            ) : (
-              subjects.map((s) => (
-                <p key={s.subject} style={{ marginBottom: 16 }}>
-                  <strong>{s.subject}:</strong> Currently in the{" "}
-                  <b>{s.band}</b> range. Latest score is {s.latest}%
-                  with a trend of <b>{s.trend}</b>.
-                </p>
-              ))
-            )}
-          </div>
-        </div>
       </main>
     </div>
   );
