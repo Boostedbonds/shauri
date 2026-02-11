@@ -169,11 +169,13 @@ export async function POST(req: NextRequest) {
       /* ---------- IDLE ---------- */
 
       if (session.status === "IDLE") {
-        // Greeting
-        if (["hi", "hello", "hey"].includes(lower)) {
+        // ✅ FIXED GREETING (only change made)
+        if (["hi", "hello", "hey", "anyone"].includes(lower)) {
+          const name = student?.name ?? "Student";
+          const cls = student?.class ?? "Unknown";
+
           return NextResponse.json({
-            reply:
-              "Hi! Ready for your test? Tell me the subject and chapters.",
+            reply: `Hi ${name}! You are in Class ${cls}. Ready for your test? Tell me the subject and chapters.`,
           });
         }
 
