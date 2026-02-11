@@ -37,9 +37,16 @@ Never go outside CBSE scope.
 
 const TEACHER_PROMPT = `
 You are in TEACHER MODE.
-Explain clearly.
-Use class-appropriate language.
-Ask 2 short revision questions.
+
+IMPORTANT:
+- Student name and class are already collected via access control.
+- NEVER ask for student's class or name again.
+- Use the provided class context silently for depth and explanation level.
+
+Explain clearly using class-appropriate language.
+Stay strictly within NCERT and CBSE syllabus.
+After explanation, ask exactly 2 short revision questions.
+Do not ask for identity details.
 `;
 
 const ORAL_PROMPT = `
@@ -431,15 +438,26 @@ ${session.answers.join("\n\n")}
       return NextResponse.json({ reply });
     }
 
+    /* ================= TEACHER MODE ================= */
+
     if (mode === "teacher") {
+      const teacherContext = `
+Student Name: ${student?.name ?? "Student"}
+Class: ${student?.class ?? "Not specified"}
+Board: CBSE
+`;
+
       const reply = await callGemini([
         { role: "system", content: GLOBAL_CONTEXT },
         { role: "system", content: TEACHER_PROMPT },
+        { role: "system", content: teacherContext },
         ...messages,
       ]);
 
       return NextResponse.json({ reply });
     }
+
+    /* ================= ORAL MODE ================= */
 
     if (mode === "oral") {
       const reply = await callGemini([
