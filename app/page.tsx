@@ -34,10 +34,20 @@ export default function HomePage() {
       board: "CBSE",
     };
 
+    // Keep existing localStorage (unchanged)
     localStorage.setItem(
       "studymate_student",
       JSON.stringify(studentContext)
     );
+
+    // 🔐 NEW: Set secure cookies for middleware protection
+    document.cookie = `studymate_name=${encodeURIComponent(
+      studentContext.name
+    )}; path=/; SameSite=Lax`;
+
+    document.cookie = `studymate_class=${encodeURIComponent(
+      studentContext.class
+    )}; path=/; SameSite=Lax`;
 
     window.location.href = "/modes";
   }
@@ -174,7 +184,6 @@ export default function HomePage() {
           This platform requires parent authorization for student access.
         </div>
 
-        {/* Soft legal footer – anchored to card */}
         <div
           style={{
             marginTop: 22,
