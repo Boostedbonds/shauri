@@ -41,12 +41,10 @@ You are in TEACHER MODE.
 IMPORTANT:
 - Student name and class are already collected via access control.
 - NEVER ask for student's class or name again.
-- Use the provided class context silently for depth and explanation level.
 
 Explain clearly using class-appropriate language.
 Stay strictly within NCERT and CBSE syllabus.
 After explanation, ask exactly 2 short revision questions.
-Do not ask for identity details.
 `;
 
 const ORAL_PROMPT = `
@@ -57,27 +55,14 @@ Keep answers short and conversational.
 const PROGRESS_PROMPT = `
 You are generating a concise CBSE-style academic performance summary.
 
-STRICT RULES:
-- Maximum 6 lines.
-- Prefer 4–5 lines.
-- No bullet points.
-- No headings.
-- No markdown.
-- No asterisks.
-- Do NOT mention mode or system instructions.
-- Professional school report tone.
-
-Write a short paragraph covering:
-- Overall performance
-- Weakest subject (if any)
-- Trend (if available)
-- One clear improvement suggestion.
+Maximum 6 lines.
+Professional school report tone.
 `;
 
 const EXAMINER_PROMPT = `
 You are in EXAMINER MODE.
 
-When evaluating, return STRICT JSON ONLY in this format:
+Return STRICT JSON ONLY:
 
 {
   "marksObtained": number,
@@ -86,9 +71,9 @@ When evaluating, return STRICT JSON ONLY in this format:
   "detailedEvaluation": "Full explanation text"
 }
 
-Do NOT return markdown.
-Do NOT return extra commentary.
-Return pure JSON.
+No markdown.
+No commentary.
+Pure JSON only.
 `;
 
 /* ================= SESSION STORE ================= */
@@ -104,14 +89,9 @@ function getSessionKey(student?: StudentContext) {
 
 function safeParseEvaluationJSON(text: string) {
   try {
-    const cleaned = text
-      .replace(/```json/gi, "")
-      .replace(/```/g, "")
-      .trim();
-
+    const cleaned = text.replace(/```json/gi, "").replace(/```/g, "").trim();
     const match = cleaned.match(/\{[\s\S]*\}/);
     if (!match) return null;
-
     const parsed = JSON.parse(match[0]);
 
     if (
@@ -129,83 +109,45 @@ function safeParseEvaluationJSON(text: string) {
   }
 }
 
-/* ================= HELPERS ================= */
-
-function isGreeting(text: string) {
-  return ["hi", "hello", "hey"].includes(text);
-}
-
-function isIdentityQuery(text: string) {
-  return (
-    text.includes("class") ||
-    text.includes("name") ||
-    text.includes("do you know")
-  );
-}
-
-function looksLikeSubjectRequest(text: string) {
-  const keywords = [
-    "chapter",
-    "history",
-    "science",
-    "math",
-    "geography",
-    "civics",
-    "economics",
-    "english",
-    "test",
-    "exam"
-  ];
-  return keywords.some((k) => text.includes(k));
-}
-
 /* ================= GEMINI CALL ================= */
 
 async function callGemini(
   messages: ChatMessage[],
   temperature: number = 0.2
-) {
+): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("Missing GEMINI_API_KEY");
+  if (!apiKey) return "AI configuration error.";
 
-  const contents = messages.map((m) => ({
-    role: m.role === "assistant" ? "model" : "user",
-    parts: [{ text: m.content }],
-  }));
+  try {
+    const contents = messages.map((m) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content ?? "" }],
+    }));
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents,
-        generationConfig: { temperature },
-      }),
-    }
-  );
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents,
+          generationConfig: { temperature },
+        }),
+      }
+    );
 
-  const data = await res.json();
+    const data = await res.json();
 
-  return (
-    data?.candidates?.[0]?.content?.parts?.[0]?.text ??
-    "Unable to generate response."
-  );
+    return (
+      data?.candidates?.[0]?.content?.parts?.[0]?.text ??
+      "Unable to generate response."
+    );
+  } catch {
+    return "AI server error.";
+  }
 }
 
-/* ================= DURATION LOGIC ================= */
-
-function calculateDurationMinutes(request: string): number {
-  const chapterMatches = request.match(/chapter\s*\d+/gi);
-  const chapterCount = chapterMatches ? chapterMatches.length : 1;
-
-  if (chapterCount >= 4) return 150;
-  if (chapterCount === 3) return 120;
-  if (chapterCount === 2) return 90;
-  return 60;
-}
-
-/* ================= FORMAT BOARD STYLE ================= */
+/* ================= FORMAT EVALUATION ================= */
 
 function formatBoardStyleEvaluation(
   evaluationText: string,
@@ -218,7 +160,7 @@ function formatBoardStyleEvaluation(
   const seconds = timeTakenSeconds % 60;
 
   return `
-${evaluationText.trim()}
+${evaluationText?.trim() ?? ""}
 
 ---------------------------------------
 
@@ -233,13 +175,17 @@ Time Taken: ${minutes}m ${seconds}s
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const messages: ChatMessage[] = body?.messages ?? [];
+
+    const messages: ChatMessage[] = Array.isArray(body?.messages)
+      ? body.messages
+      : [];
+
     const mode: string = body?.mode ?? "";
     const student: StudentContext | undefined = body?.student;
-    const attempts = body?.attempts ?? [];
+    const attempts = Array.isArray(body?.attempts) ? body.attempts : [];
 
     const lastUserMessage =
-      messages.filter((m) => m.role === "user").pop()?.content?.trim() ?? "";
+      messages.filter((m) => m.role === "user").pop()?.content ?? "";
 
     const lower = lastUserMessage.toLowerCase().trim();
 
@@ -251,24 +197,61 @@ export async function POST(req: NextRequest) {
       const session: ExamSession =
         existing ?? { status: "IDLE", answers: [] };
 
-      /* 🔥 PRIORITY SUBMIT CHECK */
-      if (
-        session.status === "IN_EXAM" &&
-        ["submit", "done", "finished"].includes(lower)
-      ) {
+      const isSubmit = [
+        "submit",
+        "done",
+        "finished",
+        "finish",
+        "end test",
+      ].includes(lower);
+
+      if (isSubmit) {
+        let questionPaper = session.questionPaper ?? "";
+        let answers = session.answers ?? [];
+        let startedAt = session.startedAt ?? Date.now();
+
+        // Reconstruction fallback
+        if (!questionPaper) {
+          questionPaper = messages
+            .filter((m) => m.role === "assistant")
+            .map((m) => m.content ?? "")
+            .join("\n\n");
+
+          answers = messages
+            .filter((m) => m.role === "user")
+            .map((m) => m.content ?? "")
+            .filter(
+              (m) =>
+                ![
+                  "submit",
+                  "done",
+                  "finished",
+                  "finish",
+                  "end test",
+                ].includes(m.toLowerCase().trim())
+            );
+        }
+
+        if (!questionPaper || answers.length === 0) {
+          return NextResponse.json({
+            reply:
+              "Unable to locate question paper or answers. Please resend your answers.",
+          });
+        }
+
         const endTime = Date.now();
-        const timeTakenSeconds = session.startedAt
-          ? Math.floor((endTime - session.startedAt) / 1000)
-          : 0;
+        const timeTakenSeconds = Math.floor(
+          (endTime - startedAt) / 1000
+        );
 
         const evaluationPrompt = `
 Evaluate this answer sheet.
 
 QUESTION PAPER:
-${session.questionPaper ?? ""}
+${questionPaper}
 
 STUDENT ANSWERS:
-${session.answers.join("\n\n")}
+${answers.join("\n\n")}
 `;
 
         const resultText = await callGemini(
@@ -302,7 +285,7 @@ ${session.answers.join("\n\n")}
           reply: formatted,
           examEnded: true,
           timeTakenSeconds,
-          subject: session.subjectRequest,
+          subject: session.subjectRequest ?? "",
           chapters: [],
           marksObtained: parsed.marksObtained,
           totalMarks: parsed.totalMarks,
@@ -310,95 +293,16 @@ ${session.answers.join("\n\n")}
         });
       }
 
-      /* ================= IDLE ================= */
-
-      if (session.status === "IDLE") {
-
-        if (isGreeting(lower)) {
-          return NextResponse.json({
-            reply: `Hello ${student?.name ?? "Student"}! Tell me the subject and chapters for your test.`,
-          });
-        }
-
-        if (isIdentityQuery(lower)) {
-          return NextResponse.json({
-            reply: `You are ${student?.name ?? "Student"}, Class ${student?.class ?? "Unknown"}. Tell me the subject and chapters for your test.`,
-          });
-        }
-
-        if (lower === "start" && !session.subjectRequest) {
-          return NextResponse.json({
-            reply: "Please tell me the subject and chapters before starting the test.",
-          });
-        }
-
-        if (lower === "start" && session.subjectRequest) {
-          const duration = calculateDurationMinutes(
-            session.subjectRequest
-          );
-
-          const paperPrompt = `
-Generate a NEW and UNIQUE CBSE question paper.
-
-Class: ${student?.class ?? "Not specified"}
-User Request: ${session.subjectRequest}
-
-STRICT RULES:
-- Maintain CBSE formatting
-- Mention Total Marks clearly
-- Mention Time Allowed: ${duration} minutes
-`;
-
-          const paper = await callGemini(
-            [
-              { role: "system", content: GLOBAL_CONTEXT },
-              { role: "user", content: paperPrompt },
-            ],
-            0.7
-          );
-
-          const now = Date.now();
-
-          examSessions.set(key, {
-            status: "IN_EXAM",
-            subjectRequest: session.subjectRequest,
-            questionPaper: paper,
-            answers: [],
-            startedAt: now,
-          });
-
-          return NextResponse.json({
-            reply: paper,
-            startTime: now,
-            durationMinutes: duration,
-          });
-        }
-
-        if (looksLikeSubjectRequest(lower)) {
-          examSessions.set(key, {
-            status: "IDLE",
-            subjectRequest: lastUserMessage,
-            answers: [],
-          });
-
-          return NextResponse.json({
-            reply: "Test noted. Type START to begin.",
-          });
-        }
-
-        return NextResponse.json({
-          reply:
-            "Examiner Mode is for conducting tests. Please tell me the subject and chapters for your test.",
-        });
-      }
-
-      /* ================= IN_EXAM SILENT ================= */
-
       if (session.status === "IN_EXAM") {
-        session.answers.push(lastUserMessage);
+        session.answers.push(lastUserMessage ?? "");
         examSessions.set(key, session);
         return NextResponse.json({ reply: "" });
       }
+
+      return NextResponse.json({
+        reply:
+          "Examiner Mode is for conducting tests. Please tell me the subject and chapters for your test.",
+      });
     }
 
     /* ================= PROGRESS MODE ================= */
@@ -407,7 +311,9 @@ STRICT RULES:
       const summaryData = attempts
         .map(
           (a: any) =>
-            `Subject: ${a.subject}, Score: ${a.scorePercent}%, Time: ${a.timeTakenSeconds}s`
+            `Subject: ${a?.subject ?? ""}, Score: ${
+              a?.scorePercent ?? 0
+            }%, Time: ${a?.timeTakenSeconds ?? 0}s`
         )
         .join("\n");
 
