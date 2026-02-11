@@ -17,22 +17,19 @@ type ExamAttempt = {
   chapters: string[];
   marksObtained: number;
   totalMarks: number;
+  scorePercent?: number;
   timeTakenSeconds: number;
   rawAnswerText: string;
 };
 
 export default function ExaminerPage() {
   const [messages, setMessages] = useState<Message[]>([]);
-
   const [examStarted, setExamStarted] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimestampRef = useRef<number | null>(null);
-
   const bottomRef = useRef<HTMLDivElement | null>(null);
-
-  /* ================= AUTO SCROLL ================= */
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -90,7 +87,12 @@ export default function ExaminerPage() {
       .map((m) => m.content)
       .join("\n\n");
 
-    const attempt = {
+    const scorePercent =
+      totalMarks > 0
+        ? Math.round((marksObtained / totalMarks) * 100)
+        : 0;
+
+    const attempt: ExamAttempt = {
       id: crypto.randomUUID(),
       date: new Date().toISOString(),
       mode: "examiner",
@@ -98,13 +100,16 @@ export default function ExaminerPage() {
       chapters,
       marksObtained,
       totalMarks,
+      scorePercent,
       timeTakenSeconds: timeTaken,
       rawAnswerText: answerText,
     };
 
     try {
       const existing = localStorage.getItem("studymate_exam_attempts");
-      const parsed = existing ? JSON.parse(existing) : [];
+      const parsed: ExamAttempt[] = existing
+        ? JSON.parse(existing)
+        : [];
       parsed.push(attempt);
       localStorage.setItem(
         "studymate_exam_attempts",
@@ -160,13 +165,9 @@ ${uploadedText}
     const data = await res.json();
     const aiReply: string = typeof data?.reply === "string" ? data.reply : "";
 
-    /* ===== START TIMER ===== */
-
     if (typeof data?.startTime === "number" && !examStarted) {
       startTimer();
     }
-
-    /* ===== EXAM ENDED ===== */
 
     if (data?.examEnded === true) {
       stopTimer();
@@ -212,14 +213,7 @@ ${uploadedText}
   /* ================= UI ================= */
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        paddingTop: 24,
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
+    <div style={{ minHeight: "100vh", paddingTop: 24, display: "flex", flexDirection: "column" }}>
       <div style={{ paddingLeft: 24, marginBottom: 16 }}>
         <button
           onClick={() => (window.location.href = "/modes")}
@@ -265,14 +259,7 @@ ${uploadedText}
         <div ref={bottomRef} />
       </div>
 
-      <div
-        style={{
-          position: "sticky",
-          bottom: 0,
-          background: "#f8fafc",
-          paddingBottom: 16,
-        }}
-      >
+      <div style={{ position: "sticky", bottom: 0, background: "#f8fafc", paddingBottom: 16 }}>
         <ChatInput onSend={handleSend} />
       </div>
     </div>

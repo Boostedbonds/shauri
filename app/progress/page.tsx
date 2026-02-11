@@ -1,13 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import ChatUI from "../components/ChatUI";
-import ChatInput from "../components/ChatInput";
-
-type Message = {
-  role: "user" | "assistant";
-  content: string;
-};
+import { useEffect, useMemo, useRef, useState } from "react";
+import Header from "../components/Header";
 
 type ExamAttempt = {
   id: string;
@@ -15,253 +9,246 @@ type ExamAttempt = {
   mode: "examiner";
   subject: string;
   chapters: string[];
-  marksObtained: number;
-  totalMarks: number;
-  scorePercent?: number;
   timeTakenSeconds: number;
   rawAnswerText: string;
+  scorePercent?: number;
 };
 
-export default function ExaminerPage() {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [examStarted, setExamStarted] = useState(false);
-  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+function getBand(score: number) {
+  if (score >= 86) return "Excellent";
+  if (score >= 71) return "Good";
+  if (score >= 51) return "Average";
+  if (score >= 31) return "Weak";
+  return "Needs Work";
+}
 
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const startTimestampRef = useRef<number | null>(null);
-  const bottomRef = useRef<HTMLDivElement | null>(null);
+function getTrend(scores: number[]) {
+  if (scores.length < 2) return "—";
+  const diff = scores[scores.length - 1] - scores[scores.length - 2];
+  if (diff > 0) return "↑ Improving";
+  if (diff < 0) return "↓ Declining";
+  return "→ Stable";
+}
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+function getOverallReadiness(bands: string[]) {
+  if (bands.every((b) => b === "Good" || b === "Excellent"))
+    return "On Track";
+  if (bands.some((b) => b === "Needs Work" || b === "Weak"))
+    return "Needs Attention";
+  return "Developing";
+}
 
-  /* ================= STOPWATCH ================= */
+const SUBJECT_COLORS = [
+  "#2563eb",
+  "#0d9488",
+  "#7c3aed",
+  "#ea580c",
+  "#4f46e5",
+  "#059669",
+];
 
-  function startTimer() {
-    if (timerRef.current) return;
-
-    setExamStarted(true);
-    startTimestampRef.current = Date.now();
-
-    timerRef.current = setInterval(() => {
-      if (startTimestampRef.current) {
-        const diff = Math.floor(
-          (Date.now() - startTimestampRef.current) / 1000
-        );
-        setElapsedSeconds(diff);
-      }
-    }, 1000);
-  }
-
-  function stopTimer() {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    setExamStarted(false);
-  }
+export default function ProgressPage() {
+  const [attempts, setAttempts] = useState<ExamAttempt[]>([]);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    return () => stopTimer();
+    const stored = localStorage.getItem("studymate_exam_attempts");
+    if (stored) setAttempts(JSON.parse(stored));
   }, []);
 
-  function formatTime(seconds: number) {
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    return `${hrs}h ${mins}m ${secs}s`;
-  }
+  const subjects = useMemo(() => {
+    const map: Record<string, number[]> = {};
 
-  /* ================= SAVE ATTEMPT ================= */
-
-  function saveExamAttempt(
-    allMessages: Message[],
-    timeTaken: number,
-    subject: string,
-    chapters: string[],
-    marksObtained: number,
-    totalMarks: number
-  ) {
-    const answerText = allMessages
-      .filter((m) => m.role === "user")
-      .map((m) => m.content)
-      .join("\n\n");
-
-    const scorePercent =
-      totalMarks > 0
-        ? Math.round((marksObtained / totalMarks) * 100)
-        : 0;
-
-    const attempt: ExamAttempt = {
-      id: crypto.randomUUID(),
-      date: new Date().toISOString(),
-      mode: "examiner",
-      subject,
-      chapters,
-      marksObtained,
-      totalMarks,
-      scorePercent,
-      timeTakenSeconds: timeTaken,
-      rawAnswerText: answerText,
-    };
-
-    try {
-      const existing = localStorage.getItem("studymate_exam_attempts");
-      const parsed: ExamAttempt[] = existing
-        ? JSON.parse(existing)
-        : [];
-      parsed.push(attempt);
-      localStorage.setItem(
-        "studymate_exam_attempts",
-        JSON.stringify(parsed)
-      );
-    } catch {
-      // silent fail
-    }
-  }
-
-  /* ================= HANDLE SEND ================= */
-
-  async function handleSend(text: string, uploadedText?: string) {
-    if (!text.trim() && !uploadedText) return;
-
-    let userContent = "";
-
-    if (uploadedText) {
-      userContent += `
-[UPLOADED ANSWER SHEET]
-${uploadedText}
-`;
-    }
-
-    userContent += text.trim();
-
-    const userMessage: Message = {
-      role: "user",
-      content: userContent.trim(),
-    };
-
-    const updatedMessages = [...messages, userMessage];
-    setMessages(updatedMessages);
-
-    let student = null;
-    try {
-      const stored = localStorage.getItem("studymate_student");
-      if (stored) student = JSON.parse(stored);
-    } catch {
-      student = null;
-    }
-
-    const res = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        mode: "examiner",
-        messages: updatedMessages,
-        student,
-      }),
+    attempts.forEach((a) => {
+      if (typeof a.scorePercent === "number") {
+        map[a.subject] ??= [];
+        map[a.subject].push(a.scorePercent);
+      }
     });
 
-    const data = await res.json();
-    const aiReply: string = typeof data?.reply === "string" ? data.reply : "";
-
-    if (typeof data?.startTime === "number" && !examStarted) {
-      startTimer();
-    }
-
-    if (data?.examEnded === true) {
-      stopTimer();
-
-      const end = Date.now();
-      const start = startTimestampRef.current ?? end;
-      const usedSeconds = Math.floor((end - start) / 1000);
-
-      const subject = data?.subject ?? "Exam";
-      const chapters = data?.chapters ?? [];
-      const marksObtained = data?.marksObtained ?? 0;
-      const totalMarks = data?.totalMarks ?? 0;
-
-      const evaluationWithTime =
-        aiReply +
-        `\n\n⏱ Time Taken: ${formatTime(usedSeconds)}`;
-
-      setMessages([
-        ...updatedMessages,
-        { role: "assistant", content: evaluationWithTime },
-      ]);
-
-      saveExamAttempt(
-        updatedMessages,
-        usedSeconds,
+    return Object.entries(map).map(([subject, scores], index) => {
+      const latest = scores[scores.length - 1];
+      return {
         subject,
-        chapters,
-        marksObtained,
-        totalMarks
-      );
+        scores,
+        latest,
+        band: getBand(latest),
+        trend: getTrend(scores),
+        color: SUBJECT_COLORS[index % SUBJECT_COLORS.length],
+      };
+    });
+  }, [attempts]);
 
-      return;
-    }
+  const snapshot = useMemo(() => {
+    if (subjects.length === 0) return null;
 
-    if (aiReply) {
-      setMessages([
-        ...updatedMessages,
-        { role: "assistant", content: aiReply },
-      ]);
-    }
+    const priority = [...subjects].sort(
+      (a, b) => a.latest - b.latest
+    )[0];
+
+    const overall = getOverallReadiness(
+      subjects.map((s) => s.band)
+    );
+
+    return { overall, priority };
+  }, [subjects]);
+
+  function exportProgress() {
+    const blob = new Blob([JSON.stringify(attempts, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "studymate-progress.json";
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
-  /* ================= UI ================= */
+  function generatePDF() {
+    const content = `
+StudyMate Progress Report
+
+${subjects
+  .map(
+    (s) =>
+      `${s.subject}
+Latest Score: ${s.latest}%
+Performance Band: ${s.band}
+Trend: ${s.trend}
+`
+  )
+  .join("\n")}
+
+Overall Readiness: ${snapshot?.overall ?? "N/A"}
+Priority Focus: ${snapshot?.priority.subject ?? "N/A"}
+`;
+
+    const blob = new Blob([content], { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "studymate-progress-report.pdf";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function handleImportFile(file: File) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const parsed = JSON.parse(reader.result as string);
+      if (Array.isArray(parsed)) {
+        localStorage.setItem(
+          "studymate_exam_attempts",
+          JSON.stringify(parsed)
+        );
+        setAttempts(parsed);
+        alert("Progress imported successfully.");
+      }
+    };
+    reader.readAsText(file);
+  }
 
   return (
-    <div style={{ minHeight: "100vh", paddingTop: 24, display: "flex", flexDirection: "column" }}>
-      <div style={{ paddingLeft: 24, marginBottom: 16 }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        background:
+          "linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 40%, #e0e7ff 100%)",
+      }}
+    >
+      <Header onLogout={() => (window.location.href = "/")} />
+
+      {/* Top bar */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          padding: "24px 32px",
+          maxWidth: 1400,
+          margin: "0 auto",
+          width: "100%",
+        }}
+      >
         <button
           onClick={() => (window.location.href = "/modes")}
           style={{
             padding: "10px 16px",
             background: "#2563eb",
-            color: "#ffffff",
+            color: "#fff",
             borderRadius: 12,
             border: "none",
-            fontSize: 14,
-            cursor: "pointer",
           }}
         >
           ← Back
         </button>
-      </div>
 
-      {examStarted && (
-        <div
-          style={{
-            position: "fixed",
-            top: 16,
-            right: 24,
-            background: "#0f172a",
-            color: "#ffffff",
-            padding: "10px 18px",
-            borderRadius: 12,
-            fontSize: 18,
-            fontWeight: 600,
-            zIndex: 100,
-          }}
-        >
-          ⏱ {formatTime(elapsedSeconds)}
+        <div style={{ display: "flex", gap: 12 }}>
+          <button
+            onClick={exportProgress}
+            style={{
+              padding: "10px 16px",
+              background: "#0d9488",
+              color: "#fff",
+              borderRadius: 12,
+              border: "none",
+            }}
+          >
+            Export
+          </button>
+
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            style={{
+              padding: "10px 16px",
+              background: "#7c3aed",
+              color: "#fff",
+              borderRadius: 12,
+              border: "none",
+            }}
+          >
+            Import
+          </button>
+
+          {/* ✅ Corrected PDF Button */}
+          <button
+            onClick={generatePDF}
+            style={{
+              padding: "10px 16px",
+              background: "#ea580c",
+              color: "#fff",
+              borderRadius: 12,
+              border: "none",
+            }}
+          >
+            PDF
+          </button>
         </div>
-      )}
-
-      <h1 style={{ textAlign: "center", marginBottom: 16 }}>
-        Examiner Mode
-      </h1>
-
-      <div style={{ flex: 1, overflowY: "auto", paddingBottom: 96 }}>
-        <ChatUI messages={messages} />
-        <div ref={bottomRef} />
       </div>
 
-      <div style={{ position: "sticky", bottom: 0, background: "#f8fafc", paddingBottom: 16 }}>
-        <ChatInput onSend={handleSend} />
-      </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/json"
+        hidden
+        onChange={(e) =>
+          e.target.files && handleImportFile(e.target.files[0])
+        }
+      />
+
+      <main
+        style={{
+          flex: 1,
+          maxWidth: 1400,
+          margin: "0 auto",
+          padding: "24px 32px 64px",
+          width: "100%",
+        }}
+      >
+        <h1 style={{ fontSize: 36 }}>Progress Dashboard</h1>
+      </main>
     </div>
   );
 }
