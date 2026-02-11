@@ -163,7 +163,6 @@ ${aiSummary || "No AI summary available yet."}
     >
       <Header onLogout={() => (window.location.href = "/")} />
 
-      {/* Top Controls */}
       <div
         style={{
           display: "flex",
@@ -262,39 +261,45 @@ ${aiSummary || "No AI summary available yet."}
               gap: 40,
             }}
           >
-            {/* LEFT – Graph */}
+            {/* LEFT – Vertical Graph */}
             <div
               style={{
                 background: "#fff",
                 borderRadius: 24,
                 padding: 32,
                 boxShadow: "0 20px 40px rgba(0,0,0,0.08)",
+                display: "flex",
+                alignItems: "flex-end",
+                gap: 30,
+                height: 320,
               }}
             >
               {subjects.map((s) => (
-                <div key={s.subject} style={{ marginBottom: 24 }}>
-                  <strong>{s.subject}</strong>
-
+                <div
+                  key={s.subject}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    flex: 1,
+                  }}
+                >
                   <div
                     style={{
-                      height: 14,
-                      background: "#e5e7eb",
+                      height: `${s.latest}%`,
+                      width: 40,
+                      background: s.color,
                       borderRadius: 8,
-                      overflow: "hidden",
-                      marginTop: 6,
+                      transition: "all 0.4s ease",
                     }}
-                  >
-                    <div
-                      style={{
-                        width: `${s.latest}%`,
-                        height: "100%",
-                        background: s.color,
-                      }}
-                    />
+                  />
+
+                  <div style={{ marginTop: 10, fontSize: 13, textAlign: "center" }}>
+                    {s.subject}
                   </div>
 
-                  <div style={{ fontSize: 14, marginTop: 4 }}>
-                    {s.latest}% · {s.band} · {s.trend}
+                  <div style={{ fontSize: 12, marginTop: 4 }}>
+                    {s.latest}%
                   </div>
                 </div>
               ))}

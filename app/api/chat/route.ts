@@ -48,16 +48,23 @@ Keep answers short and conversational.
 `;
 
 const PROGRESS_PROMPT = `
-You are in PROGRESS MODE.
-Analyze structured student performance data.
-Provide:
-- Strength analysis
-- Weak subject detection
-- Score trend insight
-- Time efficiency analysis
-- Practical improvement strategy
-Do NOT teach topics.
-Do NOT generate questions.
+You are generating a concise CBSE-style academic performance summary.
+
+STRICT RULES:
+- Maximum 6 lines.
+- Prefer 4–5 lines.
+- No bullet points.
+- No headings.
+- No markdown.
+- No asterisks.
+- Do NOT mention mode or system instructions.
+- Professional school report tone.
+
+Write a short paragraph covering:
+- Overall performance
+- Weakest subject (if any)
+- Trend (if available)
+- One clear improvement suggestion.
 `;
 
 const EXAMINER_PROMPT = `
@@ -237,8 +244,6 @@ export async function POST(req: NextRequest) {
       const session: ExamSession =
         existing ?? { status: "IDLE", answers: [] };
 
-      /* ---------- IDLE STATE ---------- */
-
       if (session.status === "IDLE") {
 
         if (isGreeting(lower)) {
@@ -286,17 +291,13 @@ STRICT RULES:
 - Total marks between 40–60 depending on scope
 
 3) If FULL BOOK or entire syllabus requested:
-- Follow STRICT CBSE Board Pattern:
-  Section A: Objective (1 mark)
-  Section B: Short Answer (2–3 marks)
-  Section C: Long Answer (4–5 marks)
-  Include internal choices
-  Include case-based questions
+- Follow STRICT CBSE Board Pattern
+- Include internal choices
+- Include case-based questions
 
 GENERAL RULES:
 - Cover all mentioned chapters proportionally
 - Do NOT exceed 20 questions unless full syllabus
-- Vary internal wording each time
 - Maintain CBSE formatting structure
 - Clearly mention Total Marks
 - Clearly mention Time Allowed: ${duration} minutes
@@ -344,8 +345,6 @@ GENERAL RULES:
             "Examiner Mode is for conducting tests. Please tell me the subject and chapters for your test.",
         });
       }
-
-      /* ---------- IN EXAM ---------- */
 
       if (session.status === "IN_EXAM") {
         if (["submit", "done", "finished"].includes(lower)) {
@@ -410,7 +409,7 @@ ${session.answers.join("\n\n")}
       }
     }
 
-    /* ================= OTHER MODES ================= */
+    /* ================= PROGRESS MODE ================= */
 
     if (mode === "progress") {
       const summaryData = attempts
