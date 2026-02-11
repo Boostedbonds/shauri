@@ -35,31 +35,6 @@ Never go outside CBSE scope.
 
 /* ================= MODE PROMPTS ================= */
 
-const TEACHER_PROMPT = `
-You are in TEACHER MODE.
-Explain clearly.
-Use class-appropriate language.
-Ask 2 short revision questions.
-`;
-
-const ORAL_PROMPT = `
-You are in ORAL MODE.
-Keep answers short and conversational.
-`;
-
-const PROGRESS_PROMPT = `
-You are in PROGRESS MODE.
-Analyze structured student performance data.
-Provide:
-- Strength analysis
-- Weak subject detection
-- Score trend insight
-- Time efficiency analysis
-- Practical improvement strategy
-Do NOT teach topics.
-Do NOT generate questions.
-`;
-
 const EXAMINER_PROMPT = `
 You are a strict CBSE board examiner.
 
@@ -76,6 +51,7 @@ Rules:
 Return STRICT JSON ONLY in this format:
 
 {
+  "subject": "Clean subject name only (e.g., History, Science, Mathematics)",
   "marksObtained": number,
   "totalMarks": number,
   "percentage": number,
@@ -83,8 +59,20 @@ Return STRICT JSON ONLY in this format:
 }
 
 Do NOT return markdown.
-Do NOT return extra commentary.
 Return pure JSON.
+`;
+
+const PROGRESS_PROMPT = `
+You are in PROGRESS MODE.
+Analyze structured student performance data.
+Provide:
+- Strength analysis
+- Weak subject detection
+- Score trend insight
+- Time efficiency analysis
+- Practical improvement strategy
+Do NOT teach topics.
+Do NOT generate questions.
 `;
 
 /* ================= SESSION STORE ================= */
@@ -111,6 +99,7 @@ function safeParseEvaluationJSON(text: string) {
     const parsed = JSON.parse(match[0]);
 
     if (
+      typeof parsed.subject !== "string" ||
       typeof parsed.marksObtained !== "number" ||
       typeof parsed.totalMarks !== "number" ||
       typeof parsed.percentage !== "number" ||
@@ -123,36 +112,6 @@ function safeParseEvaluationJSON(text: string) {
   } catch {
     return null;
   }
-}
-
-/* ================= HELPERS ================= */
-
-function isGreeting(text: string) {
-  return ["hi", "hello", "hey"].includes(text);
-}
-
-function isIdentityQuery(text: string) {
-  return (
-    text.includes("class") ||
-    text.includes("name") ||
-    text.includes("do you know")
-  );
-}
-
-function looksLikeSubjectRequest(text: string) {
-  const keywords = [
-    "chapter",
-    "history",
-    "science",
-    "math",
-    "geography",
-    "civics",
-    "economics",
-    "english",
-    "test",
-    "exam"
-  ];
-  return keywords.some((k) => text.includes(k));
 }
 
 /* ================= GEMINI CALL ================= */
@@ -189,18 +148,6 @@ async function callGemini(
   );
 }
 
-/* ================= DURATION LOGIC ================= */
-
-function calculateDurationMinutes(request: string): number {
-  const chapterMatches = request.match(/chapter\s*\d+/gi);
-  const chapterCount = chapterMatches ? chapterMatches.length : 1;
-
-  if (chapterCount >= 4) return 150;
-  if (chapterCount === 3) return 120;
-  if (chapterCount === 2) return 90;
-  return 60;
-}
-
 /* ================= FORMAT EVALUATION ================= */
 
 function formatBoardStyleEvaluation(
@@ -232,7 +179,6 @@ export async function POST(req: NextRequest) {
     const messages: ChatMessage[] = body?.messages ?? [];
     const mode: string = body?.mode ?? "";
     const student: StudentContext | undefined = body?.student;
-    const attempts = body?.attempts ?? [];
 
     const lastUserMessage =
       messages.filter((m) => m.role === "user").pop()?.content?.trim() ?? "";
@@ -246,93 +192,6 @@ export async function POST(req: NextRequest) {
       const existing = examSessions.get(key);
       const session: ExamSession =
         existing ?? { status: "IDLE", answers: [] };
-
-      /* ---------- IDLE STATE ---------- */
-
-      if (session.status === "IDLE") {
-
-        if (isGreeting(lower)) {
-          return NextResponse.json({
-            reply: `Hello ${student?.name ?? "Student"}. Provide subject and chapters for the test.`,
-          });
-        }
-
-        if (isIdentityQuery(lower)) {
-          return NextResponse.json({
-            reply: `Student: ${student?.name ?? "Unknown"}, Class ${student?.class ?? "Unknown"}. Provide subject and chapters for the test.`,
-          });
-        }
-
-        if (lower === "start" && !session.subjectRequest) {
-          return NextResponse.json({
-            reply: "Specify subject and chapters before starting.",
-          });
-        }
-
-        if (lower === "start" && session.subjectRequest) {
-          const duration = calculateDurationMinutes(
-            session.subjectRequest
-          );
-
-          const paperPrompt = `
-Generate a NEW and UNIQUE CBSE question paper.
-
-Class: ${student?.class ?? "Not specified"}
-User Request: ${session.subjectRequest}
-
-Rules:
-- Use ONLY chapters mentioned.
-- Follow CBSE board format.
-- Vary internal questions.
-- Do NOT repeat standard template wording.
-- Mention total marks.
-- Mention time allowed: ${duration} minutes.
-`;
-
-          const paper = await callGemini(
-            [
-              { role: "system", content: GLOBAL_CONTEXT },
-              { role: "user", content: paperPrompt },
-            ],
-            0.75 // creative for variation
-          );
-
-          const now = Date.now();
-
-          examSessions.set(key, {
-            status: "IN_EXAM",
-            subjectRequest: session.subjectRequest,
-            questionPaper: paper,
-            answers: [],
-            startedAt: now,
-          });
-
-          return NextResponse.json({
-            reply: paper,
-            startTime: now,
-            durationMinutes: duration,
-          });
-        }
-
-        if (looksLikeSubjectRequest(lower)) {
-          examSessions.set(key, {
-            status: "IDLE",
-            subjectRequest: lastUserMessage,
-            answers: [],
-          });
-
-          return NextResponse.json({
-            reply: "Test noted. Type START to begin.",
-          });
-        }
-
-        return NextResponse.json({
-          reply:
-            "Examiner Mode conducts tests only. Provide subject and chapters.",
-        });
-      }
-
-      /* ---------- IN EXAM ---------- */
 
       if (session.status === "IN_EXAM") {
         if (["submit", "done", "finished"].includes(lower)) {
@@ -357,13 +216,14 @@ ${session.answers.join("\n\n")}
               { role: "system", content: EXAMINER_PROMPT },
               { role: "user", content: evaluationPrompt },
             ],
-            0.2 // strict evaluation
+            0.2
           );
 
           examSessions.delete(key);
 
           const parsed =
             safeParseEvaluationJSON(resultText) ?? {
+              subject: session.subjectRequest ?? "General",
               marksObtained: 0,
               totalMarks: 0,
               percentage: 0,
@@ -382,7 +242,7 @@ ${session.answers.join("\n\n")}
             reply: formatted,
             examEnded: true,
             timeTakenSeconds,
-            subject: session.subjectRequest,
+            subject: parsed.subject,
             chapters: [],
             marksObtained: parsed.marksObtained,
             totalMarks: parsed.totalMarks,
@@ -395,48 +255,6 @@ ${session.answers.join("\n\n")}
 
         return NextResponse.json({ reply: "" });
       }
-    }
-
-    /* ================= OTHER MODES UNCHANGED ================= */
-
-    if (mode === "progress") {
-      const summaryData = attempts
-        .map(
-          (a: any) =>
-            `Subject: ${a.subject}, Score: ${a.scorePercent}%, Time: ${a.timeTakenSeconds}s`
-        )
-        .join("\n");
-
-      const reply = await callGemini([
-        { role: "system", content: GLOBAL_CONTEXT },
-        { role: "system", content: PROGRESS_PROMPT },
-        {
-          role: "user",
-          content: `Analyze this student performance data:\n${summaryData}`,
-        },
-      ]);
-
-      return NextResponse.json({ reply });
-    }
-
-    if (mode === "teacher") {
-      const reply = await callGemini([
-        { role: "system", content: GLOBAL_CONTEXT },
-        { role: "system", content: TEACHER_PROMPT },
-        ...messages,
-      ]);
-
-      return NextResponse.json({ reply });
-    }
-
-    if (mode === "oral") {
-      const reply = await callGemini([
-        { role: "system", content: GLOBAL_CONTEXT },
-        { role: "system", content: ORAL_PROMPT },
-        ...messages,
-      ]);
-
-      return NextResponse.json({ reply });
     }
 
     return NextResponse.json({ reply: "Invalid mode." });
