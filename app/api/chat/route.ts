@@ -241,7 +241,7 @@ export async function POST(req: NextRequest) {
     const lastUserMessage =
       messages.filter((m) => m.role === "user").pop()?.content?.trim() ?? "";
 
-    const lower = lastUserMessage.toLowerCase();
+    const lower = lastUserMessage.toLowerCase().trim();
 
     /* ================= EXAMINER MODE ================= */
 
@@ -250,6 +250,67 @@ export async function POST(req: NextRequest) {
       const existing = examSessions.get(key);
       const session: ExamSession =
         existing ?? { status: "IDLE", answers: [] };
+
+      /* 🔥 PRIORITY SUBMIT CHECK */
+      if (
+        session.status === "IN_EXAM" &&
+        ["submit", "done", "finished"].includes(lower)
+      ) {
+        const endTime = Date.now();
+        const timeTakenSeconds = session.startedAt
+          ? Math.floor((endTime - session.startedAt) / 1000)
+          : 0;
+
+        const evaluationPrompt = `
+Evaluate this answer sheet.
+
+QUESTION PAPER:
+${session.questionPaper ?? ""}
+
+STUDENT ANSWERS:
+${session.answers.join("\n\n")}
+`;
+
+        const resultText = await callGemini(
+          [
+            { role: "system", content: GLOBAL_CONTEXT },
+            { role: "system", content: EXAMINER_PROMPT },
+            { role: "user", content: evaluationPrompt },
+          ],
+          0.2
+        );
+
+        examSessions.delete(key);
+
+        const parsed =
+          safeParseEvaluationJSON(resultText) ?? {
+            marksObtained: 0,
+            totalMarks: 0,
+            percentage: 0,
+            detailedEvaluation: resultText,
+          };
+
+        const formatted = formatBoardStyleEvaluation(
+          parsed.detailedEvaluation,
+          parsed.marksObtained,
+          parsed.totalMarks,
+          parsed.percentage,
+          timeTakenSeconds
+        );
+
+        return NextResponse.json({
+          reply: formatted,
+          examEnded: true,
+          timeTakenSeconds,
+          subject: session.subjectRequest,
+          chapters: [],
+          marksObtained: parsed.marksObtained,
+          totalMarks: parsed.totalMarks,
+          percentage: parsed.percentage,
+        });
+      }
+
+      /* ================= IDLE ================= */
 
       if (session.status === "IDLE") {
 
@@ -283,31 +344,9 @@ Class: ${student?.class ?? "Not specified"}
 User Request: ${session.subjectRequest}
 
 STRICT RULES:
-
-1) If SINGLE chapter requested:
-- Total Questions: 10
-- Section A: 3 questions × 1 mark each
-- Section B: 3 questions × 3 marks each
-- Section C: 4 questions × 5 marks each
-- Total Marks = 32
-
-2) If MULTIPLE chapters requested (2–4 chapters):
-- Maximum 20 questions total
-- Distribute questions almost equally across chapters
-- Mix 1, 3, and 5 mark questions
-- Total marks between 40–60 depending on scope
-
-3) If FULL BOOK or entire syllabus requested:
-- Follow STRICT CBSE Board Pattern
-- Include internal choices
-- Include case-based questions
-
-GENERAL RULES:
-- Cover all mentioned chapters proportionally
-- Do NOT exceed 20 questions unless full syllabus
-- Maintain CBSE formatting structure
-- Clearly mention Total Marks
-- Clearly mention Time Allowed: ${duration} minutes
+- Maintain CBSE formatting
+- Mention Total Marks clearly
+- Mention Time Allowed: ${duration} minutes
 `;
 
           const paper = await callGemini(
@@ -353,65 +392,11 @@ GENERAL RULES:
         });
       }
 
+      /* ================= IN_EXAM SILENT ================= */
+
       if (session.status === "IN_EXAM") {
-        if (["submit", "done", "finished"].includes(lower)) {
-          const endTime = Date.now();
-          const timeTakenSeconds = session.startedAt
-            ? Math.floor((endTime - session.startedAt) / 1000)
-            : 0;
-
-          const evaluationPrompt = `
-Evaluate this answer sheet.
-
-QUESTION PAPER:
-${session.questionPaper ?? ""}
-
-STUDENT ANSWERS:
-${session.answers.join("\n\n")}
-`;
-
-          const resultText = await callGemini(
-            [
-              { role: "system", content: GLOBAL_CONTEXT },
-              { role: "system", content: EXAMINER_PROMPT },
-              { role: "user", content: evaluationPrompt },
-            ],
-            0.2
-          );
-
-          examSessions.delete(key);
-
-          const parsed =
-            safeParseEvaluationJSON(resultText) ?? {
-              marksObtained: 0,
-              totalMarks: 0,
-              percentage: 0,
-              detailedEvaluation: resultText,
-            };
-
-          const formatted = formatBoardStyleEvaluation(
-            parsed.detailedEvaluation,
-            parsed.marksObtained,
-            parsed.totalMarks,
-            parsed.percentage,
-            timeTakenSeconds
-          );
-
-          return NextResponse.json({
-            reply: formatted,
-            examEnded: true,
-            timeTakenSeconds,
-            subject: session.subjectRequest,
-            chapters: [],
-            marksObtained: parsed.marksObtained,
-            totalMarks: parsed.totalMarks,
-            percentage: parsed.percentage,
-          });
-        }
-
         session.answers.push(lastUserMessage);
         examSessions.set(key, session);
-
         return NextResponse.json({ reply: "" });
       }
     }
