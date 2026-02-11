@@ -134,6 +134,15 @@ function looksLikeSubjectRequest(text: string) {
   return keywords.some((k) => text.includes(k));
 }
 
+function askingIdentity(text: string) {
+  return (
+    text.includes("class") ||
+    text.includes("name") ||
+    text.includes("board") ||
+    text.includes("do you know")
+  );
+}
+
 /* ================= API HANDLER ================= */
 
 export async function POST(req: NextRequest) {
@@ -157,12 +166,24 @@ export async function POST(req: NextRequest) {
       const session: ExamSession =
         existing ?? { status: "IDLE", answers: [] };
 
+      /* ---------- IDLE ---------- */
+
       if (session.status === "IDLE") {
         // Greeting
         if (["hi", "hello", "hey"].includes(lower)) {
           return NextResponse.json({
             reply:
               "Hi! Ready for your test? Tell me the subject and chapters.",
+          });
+        }
+
+        // Identity verification
+        if (askingIdentity(lower)) {
+          const name = student?.name ?? "Unknown";
+          const cls = student?.class ?? "Unknown";
+
+          return NextResponse.json({
+            reply: `Yes. You are ${name}, Class ${cls}. Ready for your test? Tell me the subject and chapters.`,
           });
         }
 
@@ -208,7 +229,7 @@ Mention total marks and time allowed.
           });
         }
 
-        // If looks like subject → store it
+        // Subject detection
         if (looksLikeSubjectRequest(lower)) {
           examSessions.set(key, {
             status: "IDLE",
@@ -221,12 +242,14 @@ Mention total marks and time allowed.
           });
         }
 
-        // Normal conversation (do NOT treat as subject)
+        // Default professional response
         return NextResponse.json({
           reply:
-            "Examiner Mode is only for conducting tests. Please tell me the subject and chapters when ready.",
+            "Examiner Mode is for conducting tests. Please tell me the subject and chapters when ready.",
         });
       }
+
+      /* ---------- IN EXAM ---------- */
 
       if (session.status === "IN_EXAM") {
         if (["submit", "done", "finished"].includes(lower)) {
