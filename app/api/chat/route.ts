@@ -113,12 +113,12 @@ function looksLikeSubjectRequest(text: string) {
 }
 
 function calculateDurationMinutes(request: string): number {
-  const chapterMatches = request.match(/\b\d+\b/g);
-  const chapterCount = chapterMatches ? chapterMatches.length : 1;
+  const nums = request.match(/\b\d+\b/g);
+  const count = nums ? nums.length : 1;
 
-  if (chapterCount >= 4) return 150;
-  if (chapterCount === 3) return 120;
-  if (chapterCount === 2) return 90;
+  if (count >= 4) return 150;
+  if (count === 3) return 120;
+  if (count === 2) return 90;
   return 60;
 }
 
@@ -226,14 +226,35 @@ Board: CBSE
       /* ===== SUBMIT ===== */
 
       if (isSubmit && session.status === "IN_EXAM") {
+        let questionPaper = session.questionPaper ?? "";
+        let answers = session.answers ?? [];
+
+        // 🔥 Long-exam reconstruction if memory lost
+        if (!questionPaper) {
+          questionPaper = fullConversation
+            .filter((m) => m.role === "assistant")
+            .map((m) => m.content)
+            .join("\n\n");
+
+          answers = fullConversation
+            .filter((m) => m.role === "user")
+            .map((m) => m.content)
+            .filter(
+              (m) =>
+                !["submit", "done", "finished", "finish", "end test"].includes(
+                  m.toLowerCase().trim()
+                )
+            );
+        }
+
         const evaluationPrompt = `
 Evaluate this answer sheet.
 
 QUESTION PAPER:
-${session.questionPaper ?? ""}
+${questionPaper}
 
 STUDENT ANSWERS:
-${session.answers.join("\n\n")}
+${answers.join("\n\n")}
 `;
 
         const resultText = await callGemini(
@@ -247,7 +268,10 @@ ${session.answers.join("\n\n")}
 
         examSessions.delete(key);
 
-        return NextResponse.json({ reply: resultText });
+        return NextResponse.json({
+          reply: resultText,
+          examEnded: true,
+        });
       }
 
       /* ===== COLLECT ANSWERS ===== */
@@ -258,9 +282,11 @@ ${session.answers.join("\n\n")}
         return NextResponse.json({ reply: "" });
       }
 
-      /* ===== START COMMAND ===== */
+      /* ===== START ===== */
 
       if (lower === "start" && session.status === "AWAITING_START") {
+        const now = Date.now();
+
         const paper = await callGemini(
           [
             { role: "system", content: GLOBAL_CONTEXT },
@@ -283,11 +309,15 @@ Mention Total Marks.
 
         session.status = "IN_EXAM";
         session.questionPaper = paper;
-        session.startedAt = Date.now();
+        session.startedAt = now;
 
         examSessions.set(key, session);
 
-        return NextResponse.json({ reply: paper });
+        return NextResponse.json({
+          reply: paper,
+          startTime: now,
+          durationMinutes: session.durationMinutes,
+        });
       }
 
       /* ===== SUBJECT INPUT ===== */
@@ -310,7 +340,7 @@ Mention Total Marks.
       return NextResponse.json({ reply: greetingLine });
     }
 
-    /* ================= TEACHER MODE ================= */
+    /* ================= TEACHER ================= */
 
     if (mode === "teacher") {
       const reply = await callGemini([
@@ -319,11 +349,10 @@ Mention Total Marks.
         { role: "system", content: studentContext },
         ...fullConversation,
       ]);
-
       return NextResponse.json({ reply });
     }
 
-    /* ================= ORAL MODE ================= */
+    /* ================= ORAL ================= */
 
     if (mode === "oral") {
       const reply = await callGemini([
@@ -332,11 +361,10 @@ Mention Total Marks.
         { role: "system", content: studentContext },
         ...fullConversation,
       ]);
-
       return NextResponse.json({ reply });
     }
 
-    /* ================= PROGRESS MODE ================= */
+    /* ================= PROGRESS ================= */
 
     if (mode === "progress") {
       const reply = await callGemini([
@@ -345,7 +373,6 @@ Mention Total Marks.
         { role: "system", content: studentContext },
         ...fullConversation,
       ]);
-
       return NextResponse.json({ reply });
     }
 
