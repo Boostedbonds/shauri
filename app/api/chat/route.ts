@@ -29,8 +29,6 @@ You are StudyMate, strictly aligned to:
 - NCERT textbooks
 - Official CBSE syllabus
 - CBSE board exam pattern
-
-You always adapt explanations strictly by the student's class.
 Never go outside CBSE scope.
 Never guess the class.
 `;
@@ -39,64 +37,41 @@ Never guess the class.
 
 const TEACHER_PROMPT = `
 You are in TEACHER MODE.
-
-Rules:
-- Student name and class are already provided in system context.
-- NEVER ask for class again.
-- NEVER guess class.
-- Answer clearly according to the student's exact class syllabus.
-- If question is NCERT/CBSE related → answer properly.
-- If question is not related to NCERT/CBSE curriculum → politely refuse.
-- Classroom tone.
-- After explanation, ask exactly 2 short revision questions.
+- Student name & class already provided.
+- NEVER ask class again.
+- Strictly NCERT/CBSE aligned.
+- If not academic → politely refuse.
+- Ask exactly 2 revision questions.
 `;
 
 const ORAL_PROMPT = `
 You are in ORAL MODE.
-- Student name and class already known.
-- Never ask class again.
-- Conversational classroom style.
-- Strictly NCERT/CBSE syllabus aligned.
-- Short, interactive responses.
+- Student name & class already known.
+- Short classroom interaction.
+- Strictly CBSE aligned.
 `;
 
 const PROGRESS_PROMPT = `
-You are generating a concise CBSE-style academic performance summary.
-Maximum 6 lines.
-Professional school report tone.
+Generate a concise CBSE performance summary.
+
+Rules:
+- Maximum 6–8 lines.
+- Mention overall performance level (Weak / Average / Good / Excellent).
+- Mention strengths.
+- Mention weaknesses.
+- Suggest one improvement.
+- Professional tone.
 `;
 
 const EXAMINER_PROMPT = `
 You are in EXAMINER MODE.
 
-Evaluate strictly like a real CBSE board examiner.
+Evaluate like a real CBSE board examiner.
 
 For EACH question:
-
-- If correct → use: ✔ Correct
-- If wrong → use: ✘ Wrong (Correct answer: ___)
-- If partially correct → mention marks awarded
-- If not attempted → ✘ Not Attempted (0 marks)
-
-Give question-wise marking clearly.
-
-Evaluation format inside "detailedEvaluation" must look like this:
-
-Question 1 (1 mark):
-✔ Correct — Full marks awarded.
-
-Question 2 (2 marks):
-✘ Wrong — Correct answer: C
-Marks Awarded: 0/2
-
-Question 3 (3 marks):
-✘ Not Attempted
-Marks Awarded: 0/3
-
-At the end provide:
-
-Total Marks: X/Y
-Percentage: Z%
+✔ Correct
+✘ Wrong (Correct answer: ___)
+✘ Not Attempted (0 marks)
 
 Return STRICT JSON ONLY:
 
@@ -108,7 +83,6 @@ Return STRICT JSON ONLY:
 }
 
 No markdown.
-No commentary.
 Pure JSON only.
 `;
 
@@ -125,18 +99,9 @@ function getSessionKey(student?: StudentContext) {
 
 function looksLikeSubjectRequest(text: string) {
   const keywords = [
-    "chapter",
-    "history",
-    "science",
-    "math",
-    "mathematics",
-    "geography",
-    "geo",
-    "civics",
-    "economics",
-    "eco",
-    "english",
-    "hindi",
+    "chapter","history","science","math","mathematics",
+    "geography","geo","civics","economics","eco",
+    "english","hindi"
   ];
   return keywords.some((k) => text.includes(k));
 }
@@ -164,40 +129,32 @@ function safeParseEvaluationJSON(text: string) {
 
 /* ================= GEMINI CALL ================= */
 
-async function callGemini(
-  messages: ChatMessage[],
-  temperature: number = 0.2
-): Promise<string> {
+async function callGemini(messages: ChatMessage[], temperature = 0.2) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return "AI configuration error.";
 
-  try {
-    const contents = messages.map((m) => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.content ?? "" }],
-    }));
+  const contents = messages.map((m) => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content ?? "" }],
+  }));
 
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents,
-          generationConfig: { temperature },
-        }),
-      }
-    );
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents,
+        generationConfig: { temperature },
+      }),
+    }
+  );
 
-    const data = await res.json();
-
-    return (
-      data?.candidates?.[0]?.content?.parts?.[0]?.text ??
-      "Unable to generate response."
-    );
-  } catch {
-    return "AI server error.";
-  }
+  const data = await res.json();
+  return (
+    data?.candidates?.[0]?.content?.parts?.[0]?.text ??
+    "Unable to generate response."
+  );
 }
 
 /* ================= API HANDLER ================= */
@@ -205,7 +162,6 @@ async function callGemini(
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-
     const mode: string = body?.mode ?? "";
     const student: StudentContext | undefined = body?.student;
 
@@ -234,7 +190,7 @@ Board: CBSE
       { role: "user", content: message },
     ];
 
-    /* ================= EXAMINER MODE ================= */
+    /* ================= EXAMINER ================= */
 
     if (mode === "examiner") {
       const key = getSessionKey(student);
@@ -245,11 +201,7 @@ Board: CBSE
       const greetingLine = `Hi ${student?.name ?? "Student"} of Class ${student?.class ?? "?"}. Please tell me the subject and chapters for your test.`;
 
       const isSubmit = [
-        "submit",
-        "done",
-        "finished",
-        "finish",
-        "end test",
+        "submit","done","finished","finish","end test"
       ].includes(lower);
 
       /* ===== SUBMIT ===== */
@@ -258,7 +210,6 @@ Board: CBSE
         let questionPaper = session.questionPaper ?? "";
         let answers = session.answers ?? [];
 
-        // 🔥 Long-exam reconstruction if memory lost
         if (!questionPaper) {
           questionPaper = fullConversation
             .filter((m) => m.role === "assistant")
@@ -270,9 +221,8 @@ Board: CBSE
             .map((m) => m.content)
             .filter(
               (m) =>
-                !["submit", "done", "finished", "finish", "end test"].includes(
-                  m.toLowerCase().trim()
-                )
+                !["submit","done","finished","finish","end test"]
+                  .includes(m.toLowerCase().trim())
             );
         }
 
@@ -295,15 +245,32 @@ ${answers.join("\n\n")}
           0.2
         );
 
+        const parsed = safeParseEvaluationJSON(resultText);
+
+        const marksObtained = parsed?.marksObtained ?? 0;
+        const totalMarks = parsed?.totalMarks ?? 0;
+        const percentage =
+          totalMarks > 0
+            ? Math.round((marksObtained / totalMarks) * 100)
+            : 0;
+
+        const subjectText = session.subjectRequest ?? "Exam";
+        const chapters = subjectText.match(/\b\d+\b/g) ?? [];
+
         examSessions.delete(key);
 
         return NextResponse.json({
-          reply: resultText,
+          reply: parsed?.detailedEvaluation ?? resultText,
           examEnded: true,
+          marksObtained,
+          totalMarks,
+          percentage,
+          subject: subjectText,
+          chapters,
         });
       }
 
-      /* ===== COLLECT ANSWERS ===== */
+      /* ===== IN EXAM ===== */
 
       if (session.status === "IN_EXAM") {
         session.answers.push(message);
@@ -327,7 +294,6 @@ Generate a NEW CBSE question paper.
 Class: ${student?.class ?? ""}
 Topic: ${session.subjectRequest}
 Time Allowed: ${session.durationMinutes} minutes
-
 Follow CBSE board pattern strictly.
 Mention Total Marks.
 `,
@@ -339,7 +305,6 @@ Mention Total Marks.
         session.status = "IN_EXAM";
         session.questionPaper = paper;
         session.startedAt = now;
-
         examSessions.set(key, session);
 
         return NextResponse.json({
@@ -349,7 +314,7 @@ Mention Total Marks.
         });
       }
 
-      /* ===== SUBJECT INPUT ===== */
+      /* ===== SUBJECT ===== */
 
       if (looksLikeSubjectRequest(lower)) {
         const duration = calculateDurationMinutes(message);
