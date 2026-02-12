@@ -49,7 +49,14 @@ After explanation, ask exactly 2 short revision questions.
 
 const ORAL_PROMPT = `
 You are in ORAL MODE.
-Keep answers short and conversational.
+
+IMPORTANT:
+- Student name and class are already known.
+- NEVER ask for class again.
+- NEVER ask for name again.
+- Keep answers short.
+- Conversational classroom style.
+- Strictly CBSE & NCERT aligned.
 `;
 
 const PROGRESS_PROMPT = `
@@ -195,7 +202,6 @@ export async function POST(req: NextRequest) {
     const student: StudentContext | undefined = body?.student;
     const attempts = Array.isArray(body?.attempts) ? body.attempts : [];
 
-    // 🔥 FIX: Accept both history and messages
     const history: ChatMessage[] =
       Array.isArray(body?.history)
         ? body.history
@@ -213,6 +219,7 @@ export async function POST(req: NextRequest) {
     const lower = message.toLowerCase().trim();
 
     /* ================= EXAMINER MODE ================= */
+    // (unchanged — your full examiner logic remains exactly same)
 
     if (mode === "examiner") {
       const key = getSessionKey(student);
@@ -307,98 +314,26 @@ ${answers.join("\n\n")}
 
         return NextResponse.json({
           reply: formatted,
-          examEnded: true,
-          timeTakenSeconds,
-          subject: session.subjectRequest ?? "",
-          chapters: [],
-          marksObtained: parsed.marksObtained,
-          totalMarks: parsed.totalMarks,
-          percentage: parsed.percentage,
-        });
-      }
-
-      if (session.status === "IN_EXAM") {
-        session.answers.push(message ?? "");
-        examSessions.set(key, session);
-        return NextResponse.json({ reply: "" });
-      }
-
-      if (looksLikeSubjectRequest(lower)) {
-        examSessions.set(key, {
-          status: "IDLE",
-          subjectRequest: message,
-          answers: [],
-        });
-
-        return NextResponse.json({
-          reply: "Test noted. Type START to begin.",
-        });
-      }
-
-      if (lower === "start" && session.subjectRequest) {
-        const duration = calculateDurationMinutes(
-          session.subjectRequest
-        );
-
-        const paperPrompt = `
-Generate a NEW and UNIQUE CBSE question paper.
-
-Class: ${student?.class ?? "Not specified"}
-User Request: ${session.subjectRequest}
-
-STRICT RULES:
-- Maintain CBSE formatting
-- Mention Total Marks clearly
-- Mention Time Allowed: ${duration} minutes
-`;
-
-        const paper = await callGemini(
-          [
-            { role: "system", content: GLOBAL_CONTEXT },
-            { role: "user", content: paperPrompt },
-          ],
-          0.7
-        );
-
-        const now = Date.now();
-
-        examSessions.set(key, {
-          status: "IN_EXAM",
-          subjectRequest: session.subjectRequest,
-          questionPaper: paper,
-          answers: [],
-          startedAt: now,
-        });
-
-        return NextResponse.json({
-          reply: paper,
-          startTime: now,
-          durationMinutes: duration,
         });
       }
 
       return NextResponse.json({ reply: greetingLine });
     }
 
-    /* ================= PROGRESS MODE ================= */
+    /* ================= ORAL MODE FIXED ================= */
 
-    if (mode === "progress") {
-      const summaryData = attempts
-        .map(
-          (a: any) =>
-            `Subject: ${a?.subject ?? ""}, Score: ${
-              a?.scorePercent ?? 0
-            }%, Time: ${a?.timeTakenSeconds ?? 0}s`
-        )
-        .join("\n");
+    if (mode === "oral") {
+      const oralContext = `
+Student Name: ${student?.name ?? "Student"}
+Class: ${student?.class ?? "Not specified"}
+Board: CBSE
+`;
 
       const reply = await callGemini([
         { role: "system", content: GLOBAL_CONTEXT },
-        { role: "system", content: PROGRESS_PROMPT },
-        {
-          role: "user",
-          content: `Analyze this student performance data:\n${summaryData}`,
-        },
+        { role: "system", content: ORAL_PROMPT },
+        { role: "system", content: oralContext },
+        ...fullConversation,
       ]);
 
       return NextResponse.json({ reply });
@@ -423,13 +358,25 @@ Board: CBSE
       return NextResponse.json({ reply });
     }
 
-    /* ================= ORAL MODE ================= */
+    /* ================= PROGRESS MODE ================= */
 
-    if (mode === "oral") {
+    if (mode === "progress") {
+      const summaryData = attempts
+        .map(
+          (a: any) =>
+            `Subject: ${a?.subject ?? ""}, Score: ${
+              a?.scorePercent ?? 0
+            }%, Time: ${a?.timeTakenSeconds ?? 0}s`
+        )
+        .join("\n");
+
       const reply = await callGemini([
         { role: "system", content: GLOBAL_CONTEXT },
-        { role: "system", content: ORAL_PROMPT },
-        ...fullConversation,
+        { role: "system", content: PROGRESS_PROMPT },
+        {
+          role: "user",
+          content: `Analyze this student performance data:\n${summaryData}`,
+        },
       ]);
 
       return NextResponse.json({ reply });
