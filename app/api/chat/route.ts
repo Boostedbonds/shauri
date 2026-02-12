@@ -169,29 +169,6 @@ async function callGemini(
   }
 }
 
-/* ================= FORMAT EVALUATION ================= */
-
-function formatBoardStyleEvaluation(
-  evaluationText: string,
-  marks: number,
-  total: number,
-  percentage: number,
-  timeTakenSeconds: number
-) {
-  const minutes = Math.floor(timeTakenSeconds / 60);
-  const seconds = timeTakenSeconds % 60;
-
-  return `
-${evaluationText?.trim() ?? ""}
-
----------------------------------------
-
-Total Marks: ${marks}/${total}
-Percentage: ${percentage.toFixed(2)}%
-Time Taken: ${minutes}m ${seconds}s
-`.trim();
-}
-
 /* ================= API HANDLER ================= */
 
 export async function POST(req: NextRequest) {
@@ -219,7 +196,6 @@ export async function POST(req: NextRequest) {
     const lower = message.toLowerCase().trim();
 
     /* ================= EXAMINER MODE ================= */
-    // (unchanged — your full examiner logic remains exactly same)
 
     if (mode === "examiner") {
       const key = getSessionKey(student);
@@ -240,7 +216,6 @@ export async function POST(req: NextRequest) {
       if (isSubmit) {
         let questionPaper = session.questionPaper ?? "";
         let answers = session.answers ?? [];
-        let startedAt = session.startedAt ?? Date.now();
 
         if (!questionPaper) {
           questionPaper = fullConversation
@@ -251,29 +226,8 @@ export async function POST(req: NextRequest) {
           answers = fullConversation
             .filter((m) => m.role === "user")
             .map((m) => m.content ?? "")
-            .filter(
-              (m) =>
-                ![
-                  "submit",
-                  "done",
-                  "finished",
-                  "finish",
-                  "end test",
-                ].includes(m.toLowerCase().trim())
-            );
+            .filter((m) => m.toLowerCase().trim() !== "submit");
         }
-
-        if (!questionPaper || answers.length === 0) {
-          return NextResponse.json({
-            reply:
-              "Unable to locate question paper or answers. Please resend your answers.",
-          });
-        }
-
-        const endTime = Date.now();
-        const timeTakenSeconds = Math.floor(
-          (endTime - startedAt) / 1000
-        );
 
         const evaluationPrompt = `
 Evaluate this answer sheet.
@@ -296,31 +250,47 @@ ${answers.join("\n\n")}
 
         examSessions.delete(key);
 
-        const parsed =
-          safeParseEvaluationJSON(resultText) ?? {
-            marksObtained: 0,
-            totalMarks: 0,
-            percentage: 0,
-            detailedEvaluation: resultText,
-          };
+        return NextResponse.json({ reply: resultText });
+      }
 
-        const formatted = formatBoardStyleEvaluation(
-          parsed.detailedEvaluation,
-          parsed.marksObtained,
-          parsed.totalMarks,
-          parsed.percentage,
-          timeTakenSeconds
+      if (session.status === "IN_EXAM") {
+        session.answers.push(message);
+        examSessions.set(key, session);
+        return NextResponse.json({ reply: "" });
+      }
+
+      if (looksLikeSubjectRequest(lower)) {
+        examSessions.set(key, {
+          status: "IN_EXAM",
+          subjectRequest: message,
+          questionPaper: "",
+          answers: [],
+          startedAt: Date.now(),
+        });
+
+        const duration = calculateDurationMinutes(message);
+
+        const paper = await callGemini(
+          [
+            { role: "system", content: GLOBAL_CONTEXT },
+            {
+              role: "user",
+              content: `Generate CBSE question paper for Class ${student?.class}. Topic: ${message}. Time: ${duration} minutes.`,
+            },
+          ],
+          0.7
         );
 
-        return NextResponse.json({
-          reply: formatted,
-        });
+        const updated = examSessions.get(key);
+        if (updated) updated.questionPaper = paper;
+
+        return NextResponse.json({ reply: paper });
       }
 
       return NextResponse.json({ reply: greetingLine });
     }
 
-    /* ================= ORAL MODE FIXED ================= */
+    /* ================= ORAL MODE ================= */
 
     if (mode === "oral") {
       const oralContext = `
