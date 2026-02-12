@@ -113,25 +113,12 @@ function calculateDurationMinutes(request: string): number {
   return 60;
 }
 
-/* ================= SAFE JSON PARSER ================= */
-
 function safeParseEvaluationJSON(text: string) {
   try {
     const cleaned = text.replace(/```json/gi, "").replace(/```/g, "").trim();
     const match = cleaned.match(/\{[\s\S]*\}/);
     if (!match) return null;
-    const parsed = JSON.parse(match[0]);
-
-    if (
-      typeof parsed.marksObtained !== "number" ||
-      typeof parsed.totalMarks !== "number" ||
-      typeof parsed.percentage !== "number" ||
-      typeof parsed.detailedEvaluation !== "string"
-    ) {
-      return null;
-    }
-
-    return parsed;
+    return JSON.parse(match[0]);
   } catch {
     return null;
   }
@@ -204,20 +191,19 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    const messages: ChatMessage[] = Array.isArray(body?.messages)
-      ? body.messages
-      : [];
-
     const mode: string = body?.mode ?? "";
     const student: StudentContext | undefined = body?.student;
-    const attempts = Array.isArray(body?.attempts) ? body.attempts : [];
 
-    const lastUserMessage =
-      body?.message ??
-      messages[messages.length - 1]?.content ??
-      "";
+    // 🔥 IMPORTANT FIX: Support history (frontend sends history, not messages)
+    const history = Array.isArray(body?.history) ? body.history : [];
+    const message = body?.message ?? "";
 
-    const lower = (lastUserMessage ?? "").toLowerCase().trim();
+    const fullConversation: ChatMessage[] = [
+      ...history,
+      { role: "user", content: message },
+    ];
+
+    const lower = message.toLowerCase().trim();
 
     /* ================= EXAMINER MODE ================= */
 
@@ -237,19 +223,20 @@ export async function POST(req: NextRequest) {
         "end test",
       ].includes(lower);
 
-      /* ---------- SUBMIT ---------- */
+      /* ---------- SUBMIT (Long Exam Safe) ---------- */
       if (isSubmit) {
         let questionPaper = session.questionPaper ?? "";
         let answers = session.answers ?? [];
         let startedAt = session.startedAt ?? Date.now();
 
+        // If memory lost, reconstruct from history
         if (!questionPaper) {
-          questionPaper = messages
+          questionPaper = fullConversation
             .filter((m) => m.role === "assistant")
             .map((m) => m.content ?? "")
             .join("\n\n");
 
-          answers = messages
+          answers = fullConversation
             .filter((m) => m.role === "user")
             .map((m) => m.content ?? "")
             .filter(
@@ -327,7 +314,7 @@ ${answers.join("\n\n")}
 
       /* ---------- IN EXAM ---------- */
       if (session.status === "IN_EXAM") {
-        session.answers.push(lastUserMessage ?? "");
+        session.answers.push(message ?? "");
         examSessions.set(key, session);
         return NextResponse.json({ reply: "" });
       }
@@ -336,7 +323,7 @@ ${answers.join("\n\n")}
       if (looksLikeSubjectRequest(lower)) {
         examSessions.set(key, {
           status: "IDLE",
-          subjectRequest: lastUserMessage,
+          subjectRequest: message,
           answers: [],
         });
 
@@ -394,6 +381,10 @@ STRICT RULES:
     /* ================= OTHER MODES UNCHANGED ================= */
 
     if (mode === "progress") {
+      const attempts = Array.isArray(body?.attempts)
+        ? body.attempts
+        : [];
+
       const summaryData = attempts
         .map(
           (a: any) =>
@@ -410,33 +401,6 @@ STRICT RULES:
           role: "user",
           content: `Analyze this student performance data:\n${summaryData}`,
         },
-      ]);
-
-      return NextResponse.json({ reply });
-    }
-
-    if (mode === "teacher") {
-      const teacherContext = `
-Student Name: ${student?.name ?? "Student"}
-Class: ${student?.class ?? "Not specified"}
-Board: CBSE
-`;
-
-      const reply = await callGemini([
-        { role: "system", content: GLOBAL_CONTEXT },
-        { role: "system", content: TEACHER_PROMPT },
-        { role: "system", content: teacherContext },
-        ...messages,
-      ]);
-
-      return NextResponse.json({ reply });
-    }
-
-    if (mode === "oral") {
-      const reply = await callGemini([
-        { role: "system", content: GLOBAL_CONTEXT },
-        { role: "system", content: ORAL_PROMPT },
-        ...messages,
       ]);
 
       return NextResponse.json({ reply });
