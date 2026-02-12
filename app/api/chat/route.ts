@@ -69,13 +69,42 @@ Professional school report tone.
 const EXAMINER_PROMPT = `
 You are in EXAMINER MODE.
 
+Evaluate strictly like a real CBSE board examiner.
+
+For EACH question:
+
+- If correct → use: ✔ Correct
+- If wrong → use: ✘ Wrong (Correct answer: ___)
+- If partially correct → mention marks awarded
+- If not attempted → ✘ Not Attempted (0 marks)
+
+Give question-wise marking clearly.
+
+Evaluation format inside "detailedEvaluation" must look like this:
+
+Question 1 (1 mark):
+✔ Correct — Full marks awarded.
+
+Question 2 (2 marks):
+✘ Wrong — Correct answer: C
+Marks Awarded: 0/2
+
+Question 3 (3 marks):
+✘ Not Attempted
+Marks Awarded: 0/3
+
+At the end provide:
+
+Total Marks: X/Y
+Percentage: Z%
+
 Return STRICT JSON ONLY:
 
 {
   "marksObtained": number,
   "totalMarks": number,
   "percentage": number,
-  "detailedEvaluation": "Full explanation text"
+  "detailedEvaluation": "Formatted evaluation text"
 }
 
 No markdown.
