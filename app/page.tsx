@@ -54,6 +54,7 @@ export default function HomePage() {
 
   return (
     <>
+      {/* ================= INTRO SCREEN ================= */}
       <AnimatePresence>
         {!entered && (
           <motion.div
@@ -88,6 +89,35 @@ export default function HomePage() {
               animate={{ opacity: [0.6, 1, 0.6] }}
               transition={{ duration: 8, repeat: Infinity }}
             />
+
+            <svg
+              viewBox="0 0 1440 800"
+              preserveAspectRatio="none"
+              style={{
+                position: "absolute",
+                bottom: 0,
+                width: "100%",
+                height: "75%",
+              }}
+            >
+              <path
+                d="M0,640 C200,600 350,580 550,560 C750,540 950,570 1440,620 L1440,800 L0,800 Z"
+                fill="#061a2d"
+              />
+              <path
+                d="M0,700 C200,650 400,620 600,600 C700,580 760,550 820,600 C1000,650 1200,680 1440,710 L1440,800 L0,800 Z"
+                fill="#04121f"
+              />
+              <path
+                d="M0,730 
+                   C200,690 400,660 620,620 
+                   C680,590 710,550 720,500
+                   C730,550 760,590 820,620
+                   C1000,660 1200,700 1440,720 
+                   L1440,800 L0,800 Z"
+                fill="#000000"
+              />
+            </svg>
 
             <motion.div
               style={{ textAlign: "center", position: "relative" }}
@@ -148,6 +178,7 @@ export default function HomePage() {
         )}
       </AnimatePresence>
 
+      {/* ================= ACCESS PAGE (Enhanced Only) ================= */}
       {entered && (
         <div
           style={{
@@ -156,53 +187,82 @@ export default function HomePage() {
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
-            background: "linear-gradient(to bottom, #0B1220, #111827)",
+            background:
+              "linear-gradient(to bottom, #0B1220 0%, #0F172A 60%, #111827 100%)",
             padding: "40px 20px",
             position: "relative",
             overflow: "hidden",
           }}
         >
-          {/* GOLD MOUNTAIN BACKGROUND */}
-          <div
+          {/* Gold Mountain Transparent Background */}
+          <motion.img
+            src="/shauri-hero.png"
+            alt="Shauri Background"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.12 }}
+            transition={{ duration: 2 }}
             style={{
               position: "absolute",
-              top: "35%",
+              top: "38%",
               left: "50%",
               transform: "translate(-50%, -50%)",
-              width: "800px",
-              opacity: 0.12,
+              width: "900px",
+              maxWidth: "90%",
               pointerEvents: "none",
-              zIndex: 0,
-            }}
-          >
-            <svg viewBox="0 0 600 300" width="100%">
-              <path
-                d="M50 250 L200 100 L300 180 L380 120 L550 250"
-                fill="none"
-                stroke="#D4AF37"
-                strokeWidth="4"
-                strokeLinejoin="round"
-              />
-              <circle cx="380" cy="120" r="6" fill="#FFD700" />
-            </svg>
-          </div>
-
-          {/* GOLD GLOW */}
-          <div
-            style={{
-              position: "absolute",
-              top: "35%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              width: "700px",
-              height: "400px",
-              background:
-                "radial-gradient(circle, rgba(212,175,55,0.2), transparent 70%)",
-              filter: "blur(120px)",
-              pointerEvents: "none",
-              zIndex: 0,
+              filter: "drop-shadow(0 0 40px rgba(212,175,55,0.4))",
             }}
           />
+
+          {/* Soft Gold Glow */}
+          <div
+            style={{
+              position: "absolute",
+              top: "38%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              width: "900px",
+              height: "600px",
+              background:
+                "radial-gradient(circle, rgba(212,175,55,0.15), transparent 70%)",
+              filter: "blur(120px)",
+              pointerEvents: "none",
+            }}
+          />
+
+          <div style={{ textAlign: "center", marginBottom: 50, zIndex: 2 }}>
+            <h1
+              style={{
+                fontSize: "46px",
+                letterSpacing: "0.35em",
+                fontWeight: 700,
+                color: "#D4AF37",
+                fontFamily: "Georgia, serif",
+              }}
+            >
+              SHAURI
+            </h1>
+
+            <p
+              style={{
+                marginTop: 14,
+                fontSize: "14px",
+                letterSpacing: "0.15em",
+                color: "#cbd5e1",
+              }}
+            >
+              Aligned. Adaptive. Guiding Excellence.
+            </p>
+
+            <p
+              style={{
+                marginTop: 18,
+                fontSize: "13px",
+                color: "#94a3b8",
+              }}
+            >
+              CBSE-Aligned Learning Platform.
+            </p>
+          </div>
 
           <motion.form
             onSubmit={handleSubmit}
@@ -215,8 +275,10 @@ export default function HomePage() {
               width: "380px",
               padding: 28,
               borderRadius: 18,
+              backdropFilter: "blur(16px)",
               background: "rgba(255,255,255,0.06)",
               border: "1px solid rgba(255,255,255,0.1)",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
               zIndex: 2,
             }}
           >
@@ -265,11 +327,24 @@ export default function HomePage() {
                 color: "#0f172a",
                 fontWeight: 600,
                 cursor: "pointer",
+                boxShadow: "0 8px 25px rgba(212,175,55,0.45)",
               }}
             >
               ENTER SHAURI
             </motion.button>
           </motion.form>
+
+          <p
+            style={{
+              marginTop: 28,
+              fontSize: 11,
+              letterSpacing: "0.2em",
+              color: "#64748b",
+              zIndex: 2,
+            }}
+          >
+            Crafted for Focused Minds.
+          </p>
         </div>
       )}
     </>
