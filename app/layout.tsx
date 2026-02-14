@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Shauri",
-  description: "CBSE Class 9 Learning Platform",
+  title: "SHAURI | Aligned. Adaptive. Guiding Excellence.",
+  description:
+    "SHAURI is an AI-powered CBSE learning system built to develop clarity, discipline, and exam excellence for students from Classes 6–12.",
 };
 
 export default function RootLayout({
@@ -12,17 +14,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body
-        style={{
-          margin: 0,
-          minHeight: "100vh",
-          background:
-            "linear-gradient(135deg, #e0f2fe 0%, #eef2ff 45%, #f0f9ff 100%)",
-          fontFamily:
-            'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-          color: "#0f172a",
-        }}
-      >
+      <body className="min-h-screen bg-white text-slate-900">
         {children}
       </body>
     </html>
