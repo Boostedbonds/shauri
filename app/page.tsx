@@ -12,6 +12,7 @@ export default function HomePage() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setError("");
 
     if (code !== ACCESS_CODE) {
       setError("Invalid access code");
@@ -28,28 +29,38 @@ export default function HomePage() {
       return;
     }
 
+    const cleanedName = name.trim();
+
     const studentContext = {
-      name: name.trim(),
+      name: cleanedName,
       class: studentClass,
       board: "CBSE",
     };
 
-    // Keep existing localStorage (unchanged)
-    localStorage.setItem(
-      "shauri_student",
-      JSON.stringify(studentContext)
-    );
+    try {
+      // ✅ Clear any previous stale student data
+      localStorage.removeItem("shauri_student");
 
-    // 🔐 NEW: Set secure cookies for middleware protection
-    document.cookie = `shauri_name=${encodeURIComponent(
-      studentContext.name
-    )}; path=/; SameSite=Lax`;
+      // ✅ Save fresh student data
+      localStorage.setItem(
+        "shauri_student",
+        JSON.stringify(studentContext)
+      );
 
-    document.cookie = `shauri_class=${encodeURIComponent(
-      studentContext.class
-    )}; path=/; SameSite=Lax`;
+      // ✅ Secure cookies for middleware protection
+      document.cookie = `shauri_name=${encodeURIComponent(
+        studentContext.name
+      )}; path=/; SameSite=Lax`;
 
-    window.location.href = "/modes";
+      document.cookie = `shauri_class=${encodeURIComponent(
+        studentContext.class
+      )}; path=/; SameSite=Lax`;
+
+      // 🚀 Redirect AFTER storage is set
+      window.location.href = "/modes";
+    } catch (err) {
+      setError("Something went wrong. Please try again.");
+    }
   }
 
   return (
