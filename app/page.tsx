@@ -54,7 +54,6 @@ export default function HomePage() {
 
   return (
     <>
-      {/* ================= INTRO SCREEN ================= */}
       <AnimatePresence>
         {!entered && (
           <motion.div
@@ -88,46 +87,6 @@ export default function HomePage() {
               }}
               animate={{ opacity: [0.6, 1, 0.6] }}
               transition={{ duration: 8, repeat: Infinity }}
-            />
-
-            <svg
-              viewBox="0 0 1440 800"
-              preserveAspectRatio="none"
-              style={{
-                position: "absolute",
-                bottom: 0,
-                width: "100%",
-                height: "75%",
-              }}
-            >
-              <path
-                d="M0,640 C200,600 350,580 550,560 C750,540 950,570 1440,620 L1440,800 L0,800 Z"
-                fill="#061a2d"
-              />
-              <path
-                d="M0,700 C200,650 400,620 600,600 C700,580 760,550 820,600 C1000,650 1200,680 1440,710 L1440,800 L0,800 Z"
-                fill="#04121f"
-              />
-              <path
-                d="M0,730 
-                   C200,690 400,660 620,620 
-                   C680,590 710,550 720,500
-                   C730,550 760,590 820,620
-                   C1000,660 1200,700 1440,720 
-                   L1440,800 L0,800 Z"
-                fill="#000000"
-              />
-            </svg>
-
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                backgroundImage:
-                  "url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"200\" height=\"200\"><filter id=\"noise\"><feTurbulence type=\"fractalNoise\" baseFrequency=\"0.8\" numOctaves=\"2\" stitchTiles=\"stitch\"/></filter><rect width=\"100%\" height=\"100%\" filter=\"url(%23noise)\" opacity=\"0.03\"/></svg>')",
-                mixBlendMode: "overlay",
-                pointerEvents: "none",
-              }}
             />
 
             <motion.div
@@ -189,7 +148,6 @@ export default function HomePage() {
         )}
       </AnimatePresence>
 
-      {/* ================= ACCESS PAGE (Enhanced Only) ================= */}
       {entered && (
         <div
           style={{
@@ -198,62 +156,10 @@ export default function HomePage() {
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
-            background:
-              "linear-gradient(to bottom, #FFF6DE 0%, #EDF4FF 55%, #F8FAFC 100%)",
+            background: "linear-gradient(to bottom, #0B1220, #111827)",
             padding: "40px 20px",
-            position: "relative",
-            overflow: "hidden",
           }}
         >
-          {/* Soft Morning Glow */}
-          <div
-            style={{
-              position: "absolute",
-              top: "15%",
-              width: "700px",
-              height: "400px",
-              background:
-                "radial-gradient(circle, rgba(255,220,150,0.35), transparent 70%)",
-              filter: "blur(120px)",
-              pointerEvents: "none",
-            }}
-          />
-
-          <div style={{ textAlign: "center", marginBottom: 50 }}>
-            <h1
-              style={{
-                fontSize: "46px",
-                letterSpacing: "0.35em",
-                fontWeight: 700,
-                color: "#1e293b",
-                fontFamily: "Georgia, serif",
-              }}
-            >
-              SHAURI
-            </h1>
-
-            <p
-              style={{
-                marginTop: 14,
-                fontSize: "14px",
-                letterSpacing: "0.15em",
-                color: "#475569",
-              }}
-            >
-              Aligned. Adaptive. Guiding Excellence.
-            </p>
-
-            <p
-              style={{
-                marginTop: 18,
-                fontSize: "13px",
-                color: "#64748b",
-              }}
-            >
-              CBSE-Aligned Learning Platform.
-            </p>
-          </div>
-
           <motion.form
             onSubmit={handleSubmit}
             initial={{ y: 20, opacity: 0 }}
@@ -265,9 +171,8 @@ export default function HomePage() {
               width: "380px",
               padding: 28,
               borderRadius: 18,
-              backdropFilter: "blur(10px)",
-              background: "rgba(255,255,255,0.75)",
-              boxShadow: "0 20px 60px rgba(0,0,0,0.08)",
+              background: "rgba(255,255,255,0.06)",
+              border: "1px solid rgba(255,255,255,0.1)",
             }}
           >
             <input
@@ -300,7 +205,7 @@ export default function HomePage() {
             />
 
             {error && (
-              <div style={{ color: "#dc2626", fontSize: 13 }}>{error}</div>
+              <div style={{ color: "#f87171", fontSize: 13 }}>{error}</div>
             )}
 
             <motion.button
@@ -312,26 +217,14 @@ export default function HomePage() {
                 borderRadius: 12,
                 border: "none",
                 background: "linear-gradient(to right, #D4AF37, #C89B2B)",
-                color: "#1e293b",
+                color: "#0f172a",
                 fontWeight: 600,
                 cursor: "pointer",
-                boxShadow: "0 8px 25px rgba(212,175,55,0.35)",
               }}
             >
               ENTER SHAURI
             </motion.button>
           </motion.form>
-
-          <p
-            style={{
-              marginTop: 28,
-              fontSize: 11,
-              letterSpacing: "0.2em",
-              color: "#94a3b8",
-            }}
-          >
-            Crafted for Focused Minds.
-          </p>
         </div>
       )}
     </>
@@ -341,7 +234,8 @@ export default function HomePage() {
 const inputStyle: React.CSSProperties = {
   padding: 14,
   borderRadius: 12,
-  border: "1px solid #e2e8f0",
-  background: "rgba(255,255,255,0.9)",
+  border: "1px solid rgba(255,255,255,0.2)",
+  background: "rgba(255,255,255,0.08)",
+  color: "#ffffff",
   fontSize: 14,
 };
