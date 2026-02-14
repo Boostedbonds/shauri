@@ -173,27 +173,43 @@ Board: CBSE
       { role: "user", content: message },
     ];
 
+    /* ================= AUTO REGISTER STUDENT ================= */
+
+    let studentId: string | null = null;
+
+    if (student?.name && student?.class) {
+      const { data: existing } = await supabase
+        .from("students")
+        .select("id")
+        .eq("name", student.name)
+        .eq("class", student.class)
+        .single();
+
+      if (!existing) {
+        const { data: inserted } = await supabase
+          .from("students")
+          .insert({
+            name: student.name,
+            class: student.class,
+            board: "CBSE",
+          })
+          .select("id")
+          .single();
+
+        studentId = inserted?.id ?? null;
+      } else {
+        studentId = existing.id;
+      }
+    }
+
     /* ================= EXAMINER ================= */
 
     if (mode === "examiner") {
 
-      // 1️⃣ Ensure student exists
-      const { data: studentRow } = await supabase
-        .from("students")
-        .select("id")
-        .eq("name", student?.name ?? "")
-        .eq("class", student?.class ?? "")
-        .single();
-
-      if (!studentRow) {
-        return NextResponse.json({
-          reply: "Student not registered."
-        });
+      if (!studentId) {
+        return NextResponse.json({ reply: "Student information missing." });
       }
 
-      const studentId = studentRow.id;
-
-      // 2️⃣ Get active session
       const { data: existingSession } = await supabase
         .from("exam_sessions")
         .select("*")
@@ -242,7 +258,6 @@ ${answers.join("\n\n")}
         const subjectText = existingSession.subject_request ?? "Exam";
         const chapters = subjectText.match(/\b\d+\b/g) ?? [];
 
-        // Save attempt
         await supabase.from("exam_attempts").insert([
           {
             student_id: studentId,
@@ -258,7 +273,6 @@ ${answers.join("\n\n")}
           },
         ]);
 
-        // Delete session
         await supabase
           .from("exam_sessions")
           .delete()
@@ -359,7 +373,7 @@ Mention Total Marks.
       });
     }
 
-    /* ================= OTHER MODES (UNCHANGED) ================= */
+    /* ================= OTHER MODES ================= */
 
     if (mode === "teacher") {
       const reply = await callGemini([
