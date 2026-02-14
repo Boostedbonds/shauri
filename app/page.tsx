@@ -73,92 +73,8 @@ export default function HomePage() {
             transition={{ duration: 1.2 }}
             onClick={handleEnter}
           >
-            {/* Dawn Glow Behind Summit */}
             <motion.div
-              style={{
-                position: "absolute",
-                bottom: "48%",
-                left: "50%",
-                transform: "translateX(-50%)",
-                width: "1000px",
-                height: "700px",
-                background:
-                  "radial-gradient(circle at center, rgba(255,210,120,0.45), transparent 70%)",
-                filter: "blur(120px)",
-              }}
-              animate={{ opacity: [0.7, 1, 0.7] }}
-              transition={{ duration: 9, repeat: Infinity }}
-            />
-
-            {/* Mountain Layers */}
-            <svg
-              viewBox="0 0 1440 800"
-              preserveAspectRatio="none"
-              style={{
-                position: "absolute",
-                bottom: 0,
-                width: "100%",
-                height: "80%",
-              }}
-            >
-              {/* Far Layer */}
-              <path
-                d="
-                  M0,640
-                  C200,600 350,580 550,570
-                  C750,560 950,580 1440,620
-                  L1440,800 L0,800 Z
-                "
-                fill="#061a2d"
-              />
-
-              {/* Mid Layer */}
-              <path
-                d="
-                  M0,690
-                  C200,640 350,610 550,600
-                  C650,590 720,570 820,590
-                  C1000,630 1200,660 1440,690
-                  L1440,800 L0,800 Z
-                "
-                fill="#04121f"
-              />
-
-              {/* Main Foreground Mountain (Reference-Based Structure) */}
-              <path
-                d="
-                  M0,730
-                  C150,690 300,660 450,640
-                  C600,620 660,580 700,520
-                  C710,500 715,490 720,480
-                  C725,490 735,510 760,540
-                  C820,600 920,640 1100,670
-                  C1250,695 1350,710 1440,720
-                  L1440,800 L0,800 Z
-                "
-                fill="#000000"
-              />
-            </svg>
-
-            {/* Cinematic Grain Overlay */}
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                backgroundImage:
-                  "url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"200\" height=\"200\"><filter id=\"noise\"><feTurbulence type=\"fractalNoise\" baseFrequency=\"0.8\" numOctaves=\"2\" stitchTiles=\"stitch\"/></filter><rect width=\"100%\" height=\"100%\" filter=\"url(%23noise)\" opacity=\"0.04\"/></svg>')",
-                mixBlendMode: "overlay",
-                pointerEvents: "none",
-              }}
-            />
-
-            {/* Brand */}
-            <motion.div
-              style={{
-                textAlign: "center",
-                position: "relative",
-                transform: "translateY(-30px)",
-              }}
+              style={{ textAlign: "center" }}
               initial={{ y: 40, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 1.6 }}
@@ -220,85 +136,154 @@ export default function HomePage() {
           style={{
             minHeight: "100vh",
             display: "flex",
+            flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
             background:
-              "linear-gradient(180deg, #f8fafc 0%, #e2f0ff 100%)",
+              "linear-gradient(to bottom, #FFF4D6 0%, #EAF3FF 55%, #F8FAFC 100%)",
+            position: "relative",
+            overflow: "hidden",
+            padding: "40px 20px",
           }}
         >
+          {/* Sun Rays */}
+          <motion.div
+            style={{
+              position: "absolute",
+              top: "-250px",
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: "1400px",
+              height: "800px",
+              background:
+                "radial-gradient(circle at center, rgba(255,210,120,0.4), transparent 70%)",
+              filter: "blur(140px)",
+            }}
+            animate={{ opacity: [0.7, 1, 0.7] }}
+            transition={{ duration: 10, repeat: Infinity }}
+          />
+
+          {/* Grain */}
           <div
             style={{
-              background: "rgba(255,255,255,0.95)",
-              padding: 48,
-              borderRadius: 24,
-              width: 480,
-              boxShadow: "0 20px 40px rgba(0,0,0,0.1)",
+              position: "absolute",
+              inset: 0,
+              backgroundImage:
+                "url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"200\" height=\"200\"><filter id=\"noise\"><feTurbulence type=\"fractalNoise\" baseFrequency=\"0.8\" numOctaves=\"2\" stitchTiles=\"stitch\"/></filter><rect width=\"100%\" height=\"100%\" filter=\"url(%23noise)\" opacity=\"0.03\"/></svg>')",
+              mixBlendMode: "overlay",
+              pointerEvents: "none",
+            }}
+          />
+
+          {/* Authoritative Branding */}
+          <div style={{ textAlign: "center", marginBottom: "60px", zIndex: 2 }}>
+            <h1
+              style={{
+                fontFamily: "Georgia, serif",
+                fontSize: "44px",
+                letterSpacing: "0.3em",
+                fontWeight: 700,
+                color: "#1e293b",
+              }}
+            >
+              SHAURI
+            </h1>
+
+            <p
+              style={{
+                marginTop: 14,
+                fontSize: "14px",
+                letterSpacing: "0.15em",
+                color: "#475569",
+              }}
+            >
+              Aligned. Adaptive. Guiding Excellence.
+            </p>
+
+            <p
+              style={{
+                marginTop: 18,
+                fontSize: "13px",
+                color: "#64748b",
+              }}
+            >
+              Secure academic access.
+            </p>
+          </div>
+
+          {/* Form */}
+          <form
+            onSubmit={handleSubmit}
+            style={{
+              display: "grid",
+              gap: 18,
+              width: "360px",
+              zIndex: 2,
             }}
           >
-            <div style={{ textAlign: "center", marginBottom: 32 }}>
-              <h2
-                style={{
-                  fontSize: 28,
-                  letterSpacing: "0.3em",
-                  fontWeight: 600,
-                }}
-              >
-                SHAURI
-              </h2>
-              <p style={{ marginTop: 10, fontSize: 13, color: "#64748b" }}>
-                Aligned. Adaptive. Guiding Excellence.
-              </p>
-            </div>
+            <input
+              type="text"
+              placeholder="Student Name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              style={{
+                padding: 14,
+                borderRadius: 10,
+                border: "1px solid #cbd5e1",
+                background: "rgba(255,255,255,0.75)",
+              }}
+            />
 
-            <form onSubmit={handleSubmit} style={{ display: "grid", gap: 16 }}>
-              <input
-                type="text"
-                placeholder="Student Name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                style={{ padding: 14, borderRadius: 10, border: "1px solid #ccc" }}
-              />
+            <select
+              value={studentClass}
+              onChange={(e) => setStudentClass(e.target.value)}
+              style={{
+                padding: 14,
+                borderRadius: 10,
+                border: "1px solid #cbd5e1",
+                background: "rgba(255,255,255,0.75)",
+              }}
+            >
+              <option value="">Select Class</option>
+              {[6, 7, 8, 9, 10, 11, 12].map((cls) => (
+                <option key={cls} value={cls}>
+                  Class {cls}
+                </option>
+              ))}
+            </select>
 
-              <select
-                value={studentClass}
-                onChange={(e) => setStudentClass(e.target.value)}
-                style={{ padding: 14, borderRadius: 10, border: "1px solid #ccc" }}
-              >
-                <option value="">Select Class</option>
-                {[6, 7, 8, 9, 10, 11, 12].map((cls) => (
-                  <option key={cls} value={cls}>
-                    Class {cls}
-                  </option>
-                ))}
-              </select>
+            <input
+              type="password"
+              placeholder="Access Code"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              style={{
+                padding: 14,
+                borderRadius: 10,
+                border: "1px solid #cbd5e1",
+                background: "rgba(255,255,255,0.75)",
+              }}
+            />
 
-              <input
-                type="password"
-                placeholder="Access Code"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                style={{ padding: 14, borderRadius: 10, border: "1px solid #ccc" }}
-              />
+            {error && (
+              <div style={{ color: "#dc2626", fontSize: 13 }}>{error}</div>
+            )}
 
-              {error && (
-                <div style={{ color: "red", fontSize: 13 }}>{error}</div>
-              )}
-
-              <button
-                type="submit"
-                style={{
-                  padding: 14,
-                  borderRadius: 10,
-                  border: "none",
-                  background: "#2563eb",
-                  color: "white",
-                  cursor: "pointer",
-                }}
-              >
-                Enter SHAURI
-              </button>
-            </form>
-          </div>
+            <button
+              type="submit"
+              style={{
+                padding: 14,
+                borderRadius: 10,
+                border: "none",
+                background: "linear-gradient(to right, #F6C56F, #E8A93B)",
+                color: "#1e293b",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Enter SHAURI
+            </button>
+          </form>
         </div>
       )}
     </>
