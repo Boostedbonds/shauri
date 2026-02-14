@@ -19,7 +19,7 @@ export default function StudentGate({ onDone }: { onDone: () => void }) {
   return (
     <div className="screen">
       <div className="card stack">
-        <h2>Welcome to StudyMate</h2>
+        <h2>Welcome to Shauri</h2>
 
         <input
           placeholder="Student name"

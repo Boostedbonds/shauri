@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "StudyMate",
+  title: "Shauri",
   description: "CBSE Class 9 Learning Platform",
 };
 

@@ -1,4 +1,4 @@
-const KEY = "studymate_parent_verified";
+const KEY = "shauri_parent_verified";
 
 const PARENT_CODE = "3333"; // parent reset / control code
 

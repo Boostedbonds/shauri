@@ -7,7 +7,7 @@ export type ExamRecord = {
   timeTaken?: string;
 };
 
-const KEY = "studymate_progress";
+const KEY = "shauri_progress";
 
 export function saveRecord(record: ExamRecord) {
   const existing = getRecords();

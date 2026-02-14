@@ -1,5 +1,5 @@
 /* 
-  StudyMate – Locked Syllabus Authority
+  Shauri – Locked Syllabus Authority
   Class: 9
   Source: User-provided NCERT books (PDFs + photos)
   Secondary Reference: Official NCERT / CBSE syllabus (clarification only)
@@ -158,7 +158,7 @@ export const syllabus = {
 };
 
 /*
-  STUDYMATE SYLLABUS ENFORCEMENT RULES (FINAL & STRICT):
+  Shauri SYLLABUS ENFORCEMENT RULES (FINAL & STRICT):
 
   1. syllabus.ts is the PRIMARY authority.
   2. AI MUST NOT introduce new chapters, lessons, or out-of-class topics.

@@ -14,7 +14,7 @@ export default function ModeSelector() {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem("studymate_student");
+      const raw = localStorage.getItem("shauri_student");
       if (!raw) {
         window.location.href = "/";
         return;
@@ -68,7 +68,7 @@ export default function ModeSelector() {
               fontWeight: 500,
             }}
           >
-            About StudyMate
+            About Shauri
           </a>
         </div>
 

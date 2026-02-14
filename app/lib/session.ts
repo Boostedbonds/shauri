@@ -1,4 +1,4 @@
-export const ACCESS_KEY = "studymate_access";
+export const ACCESS_KEY = "shauri_access";
 
 export function hasAccess() {
   if (typeof window === "undefined") return false;

@@ -3,8 +3,8 @@ export type ChildProfile = {
   name: string;
 };
 
-const KEY = "studymate_profiles";
-const ACTIVE = "studymate_active_profile";
+const KEY = "shauri_profiles";
+const ACTIVE = "shauri_active_profile";
 
 export function getProfiles(): ChildProfile[] {
   if (typeof window === "undefined") return [];

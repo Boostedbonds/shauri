@@ -53,7 +53,7 @@ ${uploadedText}
     // 🔹 Read student context from localStorage
     let student = null;
     try {
-      const stored = localStorage.getItem("studymate_student");
+      const stored = localStorage.getItem("shauri_student");
       if (stored) {
         student = JSON.parse(stored);
       }

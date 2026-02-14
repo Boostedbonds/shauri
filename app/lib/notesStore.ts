@@ -5,7 +5,7 @@ export type Note = {
   date: string;
 };
 
-const STORAGE_KEY = "studymate_notes";
+const STORAGE_KEY = "shauri_notes";
 
 export function saveNote(note: Note): void {
   if (typeof window === "undefined") return;

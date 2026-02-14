@@ -20,8 +20,8 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const name = request.cookies.get("studymate_name");
-  const studentClass = request.cookies.get("studymate_class");
+  const name = request.cookies.get("shauri_name");
+  const studentClass = request.cookies.get("shauri_class");
 
   if (!name || !studentClass) {
     return NextResponse.redirect(new URL("/", request.url));

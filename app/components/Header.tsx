@@ -21,7 +21,7 @@ export default function Header({ onLogout }: { onLogout?: () => void }) {
             fontWeight: 700,
           }}
         >
-          StudyMate
+          Shauri
         </h2>
         <small
           style={{

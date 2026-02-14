@@ -5,7 +5,7 @@ export async function POST(req: NextRequest) {
   const { topics } = body as { topics: string[] };
 
   const prompt = `
-You are StudyMate in PRACTICE MODE.
+You are Shauri in PRACTICE MODE.
 
 Generate PRACTICE QUESTIONS for CBSE Class 9 strictly from NCERT.
 

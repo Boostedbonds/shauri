@@ -5,7 +5,7 @@ export type OralInsight = {
   date: string;
 };
 
-const KEY = "studymate_oral_analytics";
+const KEY = "shauri_oral_analytics";
 
 export function saveInsight(insight: OralInsight) {
   const all = getInsights();

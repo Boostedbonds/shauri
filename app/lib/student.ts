@@ -1,4 +1,4 @@
-const KEY = "studymate_student";
+const KEY = "shauri_student";
 
 export type StudentProfile = {
   name: string;

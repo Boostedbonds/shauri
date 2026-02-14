@@ -30,7 +30,7 @@ export default function OralMode({ onBack }: OralModeProps) {
   const [level, setLevel] = useState<Level>("partial");
 
   useEffect(() => {
-    const raw = localStorage.getItem("studymate_profile");
+    const raw = localStorage.getItem("shauri_profile");
     if (!raw) return;
 
     try {

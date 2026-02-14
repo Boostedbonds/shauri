@@ -36,16 +36,16 @@ export default function HomePage() {
 
     // Keep existing localStorage (unchanged)
     localStorage.setItem(
-      "studymate_student",
+      "shauri_student",
       JSON.stringify(studentContext)
     );
 
     // 🔐 NEW: Set secure cookies for middleware protection
-    document.cookie = `studymate_name=${encodeURIComponent(
+    document.cookie = `shauri_name=${encodeURIComponent(
       studentContext.name
     )}; path=/; SameSite=Lax`;
 
-    document.cookie = `studymate_class=${encodeURIComponent(
+    document.cookie = `shauri_class=${encodeURIComponent(
       studentContext.class
     )}; path=/; SameSite=Lax`;
 
@@ -74,7 +74,7 @@ export default function HomePage() {
           boxShadow: "0 20px 40px rgba(0,0,0,0.08)",
         }}
       >
-        <h1 style={{ fontSize: 36, marginBottom: 6 }}>StudyMate</h1>
+        <h1 style={{ fontSize: 36, marginBottom: 6 }}>Shauri</h1>
 
         <p style={{ marginBottom: 4, color: "#475569", fontWeight: 600 }}>
           Your Learning Platform
@@ -169,7 +169,7 @@ export default function HomePage() {
             cursor: "pointer",
           }}
         >
-          Enter StudyMate
+          Enter Shauri
         </button>
 
         <div
@@ -192,7 +192,7 @@ export default function HomePage() {
             lineHeight: 1.4,
           }}
         >
-          © StudyMate. All rights reserved.
+          © Shauri. All rights reserved.
           <br />
           For educational use only.
         </div>

@@ -46,7 +46,7 @@ export default function ProgressPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    const stored = localStorage.getItem("studymate_exam_attempts");
+    const stored = localStorage.getItem("shauri_exam_attempts");
     if (stored) {
       const parsed = JSON.parse(stored);
       setAttempts(parsed);
@@ -102,14 +102,14 @@ export default function ProgressPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "studymate-progress.json";
+    a.download = "Shauri-progress.json";
     a.click();
     URL.revokeObjectURL(url);
   }
 
   function generatePDF() {
     const content = `
-StudyMate Progress Report
+Shauri Progress Report
 
 ${subjects
   .map(
@@ -130,7 +130,7 @@ ${aiSummary || "No AI summary available yet."}
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "studymate-progress-report.pdf";
+    a.download = "Shauri-progress-report.pdf";
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -141,7 +141,7 @@ ${aiSummary || "No AI summary available yet."}
       const parsed = JSON.parse(reader.result as string);
       if (Array.isArray(parsed)) {
         localStorage.setItem(
-          "studymate_exam_attempts",
+          "shauri_exam_attempts",
           JSON.stringify(parsed)
         );
         setAttempts(parsed);

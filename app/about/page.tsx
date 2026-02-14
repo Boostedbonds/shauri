@@ -9,12 +9,12 @@ type StudentContext = {
   board: string;
 };
 
-export default function AboutStudyMate() {
+export default function AboutShauri() {
   const [student, setStudent] = useState<StudentContext | null>(null);
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem("studymate_student");
+      const raw = localStorage.getItem("shauri_student");
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed?.name && parsed?.class) {
@@ -47,7 +47,7 @@ export default function AboutStudyMate() {
         }}
       >
         <h1 style={{ fontSize: 36, marginBottom: 12 }}>
-          About StudyMate
+          About Shauri
         </h1>
 
         <p
@@ -60,13 +60,13 @@ export default function AboutStudyMate() {
         >
           {student ? (
             <>
-              StudyMate is supporting <b>{student.name}</b> in Class{" "}
+              Shauri is supporting <b>{student.name}</b> in Class{" "}
               <b>{student.class}</b> following the{" "}
               <b>{student.board}</b> curriculum.
             </>
           ) : (
             <>
-              StudyMate is a CBSE-aligned learning platform designed for
+              Shauri is a CBSE-aligned learning platform designed for
               students and parents.
             </>
           )}
@@ -75,10 +75,10 @@ export default function AboutStudyMate() {
         {/* What */}
         <section style={{ marginBottom: 28 }}>
           <h2 style={{ fontSize: 22, marginBottom: 8 }}>
-            What is StudyMate?
+            What is Shauri?
           </h2>
           <p style={{ color: "#475569", lineHeight: 1.7 }}>
-            StudyMate is a structured learning platform built around the
+            Shauri is a structured learning platform built around the
             CBSE and NCERT syllabus. It helps students understand concepts
             clearly, practice real exam-style questions, and track progress
             in a meaningful way.
@@ -91,7 +91,7 @@ export default function AboutStudyMate() {
             Who is it for?
           </h2>
           <p style={{ color: "#475569", lineHeight: 1.7 }}>
-            StudyMate is designed for CBSE students and parents who want
+            Shauri is designed for CBSE students and parents who want
             clarity, exam readiness, and honest progress insights — without
             pressure, comparison, or unnecessary complexity.
           </p>
@@ -100,7 +100,7 @@ export default function AboutStudyMate() {
         {/* How */}
         <section style={{ marginBottom: 28 }}>
           <h2 style={{ fontSize: 22, marginBottom: 12 }}>
-            How does StudyMate help?
+            How does Shauri help?
           </h2>
           <ul
             style={{
@@ -149,7 +149,7 @@ export default function AboutStudyMate() {
             lineHeight: 1.6,
           }}
         >
-          © StudyMate. All rights reserved.
+          © Shauri. All rights reserved.
           <br />
           For educational use only.
         </div>

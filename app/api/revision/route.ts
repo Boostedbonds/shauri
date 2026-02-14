@@ -5,7 +5,7 @@ export async function POST(req: NextRequest) {
   const { topics } = body as { topics: string[] };
 
   const prompt = `
-You are StudyMate in REVISION MODE.
+You are Shauri in REVISION MODE.
 
 Generate revision notes for CBSE Class 9 strictly from NCERT.
 

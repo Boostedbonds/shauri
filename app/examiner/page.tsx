@@ -106,13 +106,13 @@ export default function ExaminerPage() {
     };
 
     try {
-      const existing = localStorage.getItem("studymate_exam_attempts");
+      const existing = localStorage.getItem("shauri_exam_attempts");
       const parsed: ExamAttempt[] = existing
         ? JSON.parse(existing)
         : [];
       parsed.push(attempt);
       localStorage.setItem(
-        "studymate_exam_attempts",
+        "shauri_exam_attempts",
         JSON.stringify(parsed)
       );
     } catch {}
@@ -144,7 +144,7 @@ ${uploadedText}
 
     let student = null;
     try {
-      const stored = localStorage.getItem("studymate_student");
+      const stored = localStorage.getItem("shauri_student");
       if (stored) student = JSON.parse(stored);
     } catch {}
 

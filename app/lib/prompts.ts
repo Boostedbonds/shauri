@@ -19,7 +19,7 @@ export function systemPrompt(mode: StudyMode) {
   const cls = student?.classLevel || syllabus.class;
 
   const globalRules = `
-You are StudyMate.
+You are Shauri.
 
 Student name: ${name}
 Class: ${cls}
