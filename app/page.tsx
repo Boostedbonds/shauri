@@ -29,38 +29,38 @@ export default function HomePage() {
       return;
     }
 
-    const cleanedName = name.trim();
-
     const studentContext = {
-      name: cleanedName,
+      name: name.trim(),
       class: studentClass,
       board: "CBSE",
     };
 
-    try {
-      // ✅ Clear any previous stale student data
-      localStorage.removeItem("shauri_student");
+    // ✅ Save to localStorage
+    localStorage.setItem(
+      "shauri_student",
+      JSON.stringify(studentContext)
+    );
 
-      // ✅ Save fresh student data
-      localStorage.setItem(
-        "shauri_student",
-        JSON.stringify(studentContext)
-      );
-
-      // ✅ Secure cookies for middleware protection
-      document.cookie = `shauri_name=${encodeURIComponent(
-        studentContext.name
-      )}; path=/; SameSite=Lax`;
-
-      document.cookie = `shauri_class=${encodeURIComponent(
-        studentContext.class
-      )}; path=/; SameSite=Lax`;
-
-      // 🚀 Redirect AFTER storage is set
-      window.location.href = "/modes";
-    } catch (err) {
-      setError("Something went wrong. Please try again.");
+    // ✅ Verify save (extra safety)
+    const verify = localStorage.getItem("shauri_student");
+    if (!verify) {
+      setError("Storage error. Please try again.");
+      return;
     }
+
+    // 🔐 Optional cookies (middleware support)
+    document.cookie = `shauri_name=${encodeURIComponent(
+      studentContext.name
+    )}; path=/; SameSite=Lax`;
+
+    document.cookie = `shauri_class=${encodeURIComponent(
+      studentContext.class
+    )}; path=/; SameSite=Lax`;
+
+    // ✅ Delay navigation to avoid race condition
+    setTimeout(() => {
+      window.location.href = "/modes";
+    }, 50);
   }
 
   return (
