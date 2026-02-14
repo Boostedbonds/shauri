@@ -73,24 +73,24 @@ export default function HomePage() {
             transition={{ duration: 1.2 }}
             onClick={handleEnter}
           >
-            {/* Breathing Dawn Glow */}
+            {/* Dawn Glow */}
             <motion.div
               style={{
                 position: "absolute",
-                bottom: "48%",
+                bottom: "50%",
                 left: "50%",
                 transform: "translateX(-50%)",
-                width: "900px",
-                height: "500px",
+                width: "1000px",
+                height: "600px",
                 background:
-                  "radial-gradient(circle at center, rgba(255,204,102,0.7), transparent 70%)",
-                filter: "blur(80px)",
+                  "radial-gradient(circle at center, rgba(255,210,120,0.6), transparent 70%)",
+                filter: "blur(90px)",
               }}
               animate={{ opacity: [0.6, 1, 0.6] }}
-              transition={{ duration: 6, repeat: Infinity }}
+              transition={{ duration: 7, repeat: Infinity }}
             />
 
-            {/* Mountain */}
+            {/* Realistic Mountain */}
             <svg
               viewBox="0 0 1440 800"
               preserveAspectRatio="none"
@@ -102,51 +102,45 @@ export default function HomePage() {
               }}
             >
               <defs>
-                <filter id="glow">
-                  <feGaussianBlur stdDeviation="3" result="coloredBlur" />
+                <filter id="ridgeGlow">
+                  <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
                   <feMerge>
                     <feMergeNode in="coloredBlur" />
                     <feMergeNode in="SourceGraphic" />
                   </feMerge>
                 </filter>
-
-                {/* Shimmer Gradient */}
-                <linearGradient id="shimmer" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#FFD166" stopOpacity="0" />
-                  <stop offset="50%" stopColor="#FFD166" stopOpacity="1" />
-                  <stop offset="100%" stopColor="#FFD166" stopOpacity="0" />
-                </linearGradient>
               </defs>
 
-              {/* Mountain Body */}
+              {/* Mountain Body (more organic) */}
               <path
-                d="M0,650 L300,500 L550,600 L720,380 L900,600 L1200,450 L1440,520 L1440,800 L0,800 Z"
+                d="
+                  M0,680 
+                  C150,630 250,600 360,580
+                  C480,560 560,540 640,500
+                  C690,470 710,430 720,400
+                  C730,430 750,470 800,510
+                  C880,560 950,580 1050,600
+                  C1150,620 1250,640 1440,660
+                  L1440,800 L0,800 Z
+                "
                 fill="#000000"
               />
 
               {/* Golden Ridge */}
               <path
-                d="M0,650 L300,500 L550,600 L720,380 L900,600 L1200,450 L1440,520"
+                d="
+                  M0,680 
+                  C150,630 250,600 360,580
+                  C480,560 560,540 640,500
+                  C690,470 710,430 720,400
+                  C730,430 750,470 800,510
+                  C880,560 950,580 1050,600
+                  C1150,620 1250,640 1440,660
+                "
                 fill="none"
                 stroke="#FFD166"
-                strokeWidth="2.5"
-                filter="url(#glow)"
-              />
-
-              {/* Slow Shimmer */}
-              <motion.rect
-                x="-400"
-                y="350"
-                width="400"
-                height="300"
-                fill="url(#shimmer)"
-                animate={{ x: ["-400", "1600"] }}
-                transition={{
-                  duration: 8,
-                  repeat: Infinity,
-                  ease: "linear",
-                }}
-                opacity={0.15}
+                strokeWidth="2"
+                filter="url(#ridgeGlow)"
               />
             </svg>
 
@@ -179,14 +173,15 @@ export default function HomePage() {
                 Aligned. Adaptive. Guiding Excellence.
               </p>
 
+              {/* Positioned exactly above summit */}
               <motion.p
                 style={{
-                  marginTop: 40,
+                  marginTop: 34,
                   fontSize: "12px",
                   letterSpacing: "0.3em",
                   color: "#FFD166",
                 }}
-                animate={{ opacity: [0.4, 1, 0.4] }}
+                animate={{ opacity: [0.5, 1, 0.5] }}
                 transition={{ repeat: Infinity, duration: 2 }}
               >
                 CLICK TO ENTER
@@ -209,6 +204,7 @@ export default function HomePage() {
         )}
       </AnimatePresence>
 
+      {/* Light World */}
       {entered && (
         <div
           style={{
