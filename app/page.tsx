@@ -54,7 +54,7 @@ export default function HomePage() {
 
   return (
     <>
-      {/* ================= INTRO SCREEN (LOCKED - UNTOUCHED) ================= */}
+      {/* ================= INTRO SCREEN (LOCKED) ================= */}
       <AnimatePresence>
         {!entered && (
           <motion.div
@@ -173,7 +173,7 @@ export default function HomePage() {
         )}
       </AnimatePresence>
 
-      {/* ================= ACCESS PAGE (DAWN + MOUNTAIN RESTORED) ================= */}
+      {/* ================= ACCESS PAGE ================= */}
       {entered && (
         <div
           style={{
@@ -189,7 +189,7 @@ export default function HomePage() {
             overflow: "hidden",
           }}
         >
-          {/* Dawn Sunlight Glow */}
+          {/* Dawn Glow */}
           <div
             style={{
               position: "absolute",
@@ -205,7 +205,7 @@ export default function HomePage() {
             }}
           />
 
-          {/* Mountain (RESTORED) */}
+          {/* Mountain */}
           <motion.img
             src="/shauri-hero.png"
             alt="Shauri Background"
@@ -326,7 +326,7 @@ export default function HomePage() {
                 cursor: "pointer",
               }}
             >
-              ENTER SHAURI
+              ENTER
             </motion.button>
           </motion.form>
 
