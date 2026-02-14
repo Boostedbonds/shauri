@@ -40,19 +40,8 @@ export default function HomePage() {
 
     localStorage.setItem("shauri_student", JSON.stringify(studentContext));
 
-    const verify = localStorage.getItem("shauri_student");
-    if (!verify) {
-      setError("Storage error. Please try again.");
-      return;
-    }
-
-    document.cookie = `shauri_name=${encodeURIComponent(
-      studentContext.name
-    )}; path=/; SameSite=Lax`;
-
-    document.cookie = `shauri_class=${encodeURIComponent(
-      studentContext.class
-    )}; path=/; SameSite=Lax`;
+    document.cookie = `shauri_name=${encodeURIComponent(studentContext.name)}; path=/; SameSite=Lax`;
+    document.cookie = `shauri_class=${encodeURIComponent(studentContext.class)}; path=/; SameSite=Lax`;
 
     setTimeout(() => {
       window.location.href = "/modes";
@@ -61,18 +50,27 @@ export default function HomePage() {
 
   const handleEnter = () => {
     setWarp(true);
-    setTimeout(() => {
-      setEntered(true);
-    }, 600);
+    setTimeout(() => setEntered(true), 700);
   };
 
   return (
     <>
-      {/* INTRO SCREEN */}
+      {/* ================= INTRO ================= */}
       <AnimatePresence>
         {!entered && (
           <motion.div
-            className="fixed inset-0 bg-[#0B0B0F] flex items-center justify-center cursor-pointer overflow-hidden"
+            style={{
+              position: "fixed",
+              inset: 0,
+              width: "100vw",
+              height: "100vh",
+              background: "#0B0B0F",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 9999,
+              cursor: "pointer",
+            }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -80,105 +78,129 @@ export default function HomePage() {
             onClick={handleEnter}
           >
             <motion.div
-              className="text-center"
-              initial={{ opacity: 0, y: 40 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 1.5 }}
+              style={{ textAlign: "center" }}
+              initial={{ y: 40, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 1.4 }}
             >
-              <h1 className="text-6xl tracking-[0.5em] text-[#C6A85A] font-semibold">
+              <h1
+                style={{
+                  fontSize: "64px",
+                  letterSpacing: "0.5em",
+                  color: "#C6A85A",
+                  fontWeight: 600,
+                }}
+              >
                 SHAURI
               </h1>
 
-              <p className="mt-6 text-sm tracking-widest text-gray-400">
-                The Courage to Master the Future
+              <p
+                style={{
+                  marginTop: 24,
+                  fontSize: "14px",
+                  letterSpacing: "0.2em",
+                  color: "#9ca3af",
+                }}
+              >
+                Aligned. Adaptive. Guiding Excellence.
               </p>
 
               <motion.p
-                className="mt-12 text-xs uppercase tracking-[0.3em] text-[#C6A85A]"
+                style={{
+                  marginTop: 40,
+                  fontSize: "12px",
+                  letterSpacing: "0.3em",
+                  color: "#C6A85A",
+                }}
                 animate={{ opacity: [0.3, 1, 0.3] }}
                 transition={{ repeat: Infinity, duration: 2 }}
               >
-                Click to Enter
+                CLICK TO ENTER
               </motion.p>
             </motion.div>
 
             {warp && (
               <motion.div
-                className="absolute inset-0 bg-white"
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  background: "white",
+                }}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ duration: 0.6 }}
+                transition={{ duration: 0.7 }}
               />
             )}
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ACCESS WORLD */}
+      {/* ================= LIGHT WORLD ================= */}
       {entered && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.8 }}
-          className="min-h-screen flex items-center justify-center relative"
+        <div
           style={{
+            minHeight: "100vh",
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
             background:
               "linear-gradient(180deg, #f8fafc 0%, #e2f0ff 100%)",
+            position: "relative",
           }}
         >
-          {/* Sunbeam */}
           <div
             style={{
               position: "absolute",
               top: 0,
               left: "50%",
               transform: "translateX(-50%)",
-              width: "900px",
-              height: "500px",
+              width: "1000px",
+              height: "600px",
               background:
-                "radial-gradient(circle at top, rgba(255,215,120,0.25), transparent 60%)",
+                "radial-gradient(circle at top, rgba(255,215,120,0.35), transparent 65%)",
               pointerEvents: "none",
             }}
           />
 
-          <motion.div
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.2, duration: 0.8 }}
-            className="relative bg-white/90 backdrop-blur-md rounded-2xl p-10 w-[460px] shadow-xl"
+          <div
+            style={{
+              background: "rgba(255,255,255,0.95)",
+              padding: 48,
+              borderRadius: 24,
+              width: 480,
+              boxShadow: "0 20px 40px rgba(0,0,0,0.1)",
+              position: "relative",
+            }}
           >
-            {/* Branding */}
-            <div className="text-center mb-8">
-              <h1 className="text-3xl tracking-[0.3em] font-semibold text-gray-900">
+            <div style={{ textAlign: "center", marginBottom: 32 }}>
+              <h2
+                style={{
+                  fontSize: 28,
+                  letterSpacing: "0.3em",
+                  fontWeight: 600,
+                }}
+              >
                 SHAURI
-              </h1>
-              <p className="mt-3 text-sm text-gray-500 tracking-wide">
-                The Courage to Master the Future
+              </h2>
+              <p style={{ marginTop: 10, fontSize: 13, color: "#64748b" }}>
+                Aligned. Adaptive. Guiding Excellence.
               </p>
             </div>
 
-            {/* Feature Row */}
-            <div className="flex justify-between text-xs text-gray-500 mb-8">
-              <span>AI Powered</span>
-              <span>CBSE Structured</span>
-              <span>Exam + Practice</span>
-              <span>Parent Secured</span>
-            </div>
-
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} style={{ display: "grid", gap: 16 }}>
               <input
                 type="text"
                 placeholder="Student Name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full p-4 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                style={{ padding: 14, borderRadius: 10, border: "1px solid #ccc" }}
               />
 
               <select
                 value={studentClass}
                 onChange={(e) => setStudentClass(e.target.value)}
-                className="w-full p-4 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                style={{ padding: 14, borderRadius: 10, border: "1px solid #ccc" }}
               >
                 <option value="">Select Class</option>
                 {[6, 7, 8, 9, 10, 11, 12].map((cls) => (
@@ -193,26 +215,29 @@ export default function HomePage() {
                 placeholder="Access Code"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
-                className="w-full p-4 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                style={{ padding: 14, borderRadius: 10, border: "1px solid #ccc" }}
               />
 
               {error && (
-                <div className="text-red-600 text-sm">{error}</div>
+                <div style={{ color: "red", fontSize: 13 }}>{error}</div>
               )}
 
               <button
                 type="submit"
-                className="w-full p-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium transition-all"
+                style={{
+                  padding: 14,
+                  borderRadius: 10,
+                  border: "none",
+                  background: "#2563eb",
+                  color: "white",
+                  cursor: "pointer",
+                }}
               >
-                Enter Shauri
+                Enter SHAURI
               </button>
             </form>
-
-            <div className="mt-6 text-xs text-gray-500 text-center">
-              Parent authorization required for student access.
-            </div>
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
       )}
     </>
   );
