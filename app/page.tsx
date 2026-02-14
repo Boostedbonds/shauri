@@ -74,6 +74,7 @@ export default function HomePage() {
             transition={{ duration: 1.2 }}
             onClick={handleEnter}
           >
+            {/* Intro untouched */}
             <motion.div
               style={{
                 position: "absolute",
@@ -89,30 +90,6 @@ export default function HomePage() {
               animate={{ opacity: [0.6, 1, 0.6] }}
               transition={{ duration: 8, repeat: Infinity }}
             />
-
-            <svg
-              viewBox="0 0 1440 800"
-              preserveAspectRatio="none"
-              style={{
-                position: "absolute",
-                bottom: 0,
-                width: "100%",
-                height: "75%",
-              }}
-            >
-              <path
-                d="M0,640 C200,600 350,580 550,560 C750,540 950,570 1440,620 L1440,800 L0,800 Z"
-                fill="#061a2d"
-              />
-              <path
-                d="M0,700 C200,650 400,620 600,600 C700,580 760,550 820,600 C1000,650 1200,680 1440,710 L1440,800 L0,800 Z"
-                fill="#04121f"
-              />
-              <path
-                d="M0,730 C200,690 400,660 620,620 C680,590 710,550 720,500 C730,550 760,590 820,620 C1000,660 1200,700 1440,720 L1440,800 L0,800 Z"
-                fill="#000000"
-              />
-            </svg>
 
             <motion.div
               style={{ textAlign: "center", position: "relative" }}
@@ -183,48 +160,65 @@ export default function HomePage() {
             alignItems: "center",
             justifyContent: "center",
             background:
-              "linear-gradient(to bottom, #FFF3D9 0%, #FFE5B8 35%, #E6F2FF 75%, #F8FAFC 100%)",
+              "linear-gradient(to bottom, #FFF3D9 0%, #FFE4B3 40%, #E6F2FF 80%, #F8FAFC 100%)",
             padding: "40px 20px",
             position: "relative",
             overflow: "hidden",
           }}
         >
-          {/* Morning Sun Glow */}
+          {/* Dawn Glow */}
           <div
             style={{
               position: "absolute",
-              top: "30%",
+              top: "28%",
               left: "50%",
               transform: "translate(-50%, -50%)",
-              width: "800px",
+              width: "900px",
               height: "500px",
               background:
-                "radial-gradient(circle, rgba(255,200,120,0.55) 0%, rgba(255,200,120,0.3) 40%, transparent 70%)",
+                "radial-gradient(circle, rgba(255,190,110,0.6) 0%, rgba(255,190,110,0.35) 40%, transparent 70%)",
               filter: "blur(120px)",
               pointerEvents: "none",
             }}
           />
 
-          {/* Mountain Image (unchanged) */}
-          <motion.img
-            src="/shauri-hero.png"
-            alt="Shauri Background"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 0.1 }}
-            transition={{ duration: 2 }}
-            style={{
-              position: "absolute",
-              top: "38%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              width: "900px",
-              maxWidth: "90%",
-              pointerEvents: "none",
-              filter: "drop-shadow(0 0 40px rgba(212,175,55,0.3))",
-            }}
-          />
+          {/* Brand Header Restored */}
+          <div style={{ textAlign: "center", marginBottom: 50, zIndex: 2 }}>
+            <h1
+              style={{
+                fontSize: "48px",
+                letterSpacing: "0.35em",
+                fontWeight: 700,
+                color: "#1e293b",
+                fontFamily: "Georgia, serif",
+              }}
+            >
+              SHAURI
+            </h1>
 
-          {/* Access Form (unchanged) */}
+            <p
+              style={{
+                marginTop: 14,
+                fontSize: "14px",
+                letterSpacing: "0.15em",
+                color: "#475569",
+              }}
+            >
+              Aligned. Adaptive. Guiding Excellence.
+            </p>
+
+            <p
+              style={{
+                marginTop: 16,
+                fontSize: "13px",
+                color: "#64748b",
+              }}
+            >
+              CBSE-Aligned Learning Platform.
+            </p>
+          </div>
+
+          {/* Form */}
           <motion.form
             onSubmit={handleSubmit}
             initial={{ y: 20, opacity: 0 }}
@@ -236,10 +230,10 @@ export default function HomePage() {
               width: "380px",
               padding: 28,
               borderRadius: 18,
-              backdropFilter: "blur(16px)",
-              background: "rgba(255,255,255,0.7)",
-              border: "1px solid rgba(255,255,255,0.4)",
-              boxShadow: "0 25px 60px rgba(255,180,80,0.25)",
+              backdropFilter: "blur(12px)",
+              background: "rgba(255,255,255,0.85)",
+              boxShadow: "0 25px 70px rgba(255,180,80,0.25)",
+              position: "relative",
               zIndex: 2,
             }}
           >
