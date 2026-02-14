@@ -39,7 +39,6 @@ export default function HomePage() {
     };
 
     localStorage.setItem("shauri_student", JSON.stringify(studentContext));
-
     document.cookie = `shauri_name=${encodeURIComponent(studentContext.name)}; path=/; SameSite=Lax`;
     document.cookie = `shauri_class=${encodeURIComponent(studentContext.class)}; path=/; SameSite=Lax`;
 
@@ -50,12 +49,12 @@ export default function HomePage() {
 
   const handleEnter = () => {
     setWarp(true);
-    setTimeout(() => setEntered(true), 700);
+    setTimeout(() => setEntered(true), 900);
   };
 
   return (
     <>
-      {/* ================= INTRO ================= */}
+      {/* ================= CINEMATIC INTRO ================= */}
       <AnimatePresence>
         {!entered && (
           <motion.div
@@ -64,7 +63,8 @@ export default function HomePage() {
               inset: 0,
               width: "100vw",
               height: "100vh",
-              background: "#0B0B0F",
+              overflow: "hidden",
+              background: "linear-gradient(to top, #000814 0%, #001d3d 100%)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -74,20 +74,53 @@ export default function HomePage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 1 }}
+            transition={{ duration: 1.2 }}
             onClick={handleEnter}
           >
+            {/* Golden Horizon Glow */}
+            <div
+              style={{
+                position: "absolute",
+                bottom: "35%",
+                left: "50%",
+                transform: "translateX(-50%)",
+                width: "800px",
+                height: "400px",
+                background:
+                  "radial-gradient(circle at center, rgba(255,204,102,0.6), transparent 70%)",
+                filter: "blur(60px)",
+              }}
+            />
+
+            {/* Mountain Silhouette */}
+            <svg
+              viewBox="0 0 1440 400"
+              preserveAspectRatio="none"
+              style={{
+                position: "absolute",
+                bottom: 0,
+                width: "100%",
+                height: "40%",
+              }}
+            >
+              <path
+                d="M0,300 L200,200 L350,260 L500,150 L650,280 L800,180 L950,260 L1100,150 L1250,220 L1440,180 L1440,400 L0,400 Z"
+                fill="#000000"
+              />
+            </svg>
+
+            {/* Brand Content */}
             <motion.div
-              style={{ textAlign: "center" }}
+              style={{ textAlign: "center", position: "relative" }}
               initial={{ y: 40, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              transition={{ duration: 1.4 }}
+              transition={{ duration: 1.6 }}
             >
               <h1
                 style={{
                   fontSize: "64px",
                   letterSpacing: "0.5em",
-                  color: "#C6A85A",
+                  color: "#FFD166",
                   fontWeight: 600,
                 }}
               >
@@ -99,7 +132,7 @@ export default function HomePage() {
                   marginTop: 24,
                   fontSize: "14px",
                   letterSpacing: "0.2em",
-                  color: "#9ca3af",
+                  color: "#cbd5e1",
                 }}
               >
                 Aligned. Adaptive. Guiding Excellence.
@@ -110,7 +143,7 @@ export default function HomePage() {
                   marginTop: 40,
                   fontSize: "12px",
                   letterSpacing: "0.3em",
-                  color: "#C6A85A",
+                  color: "#FFD166",
                 }}
                 animate={{ opacity: [0.3, 1, 0.3] }}
                 transition={{ repeat: Infinity, duration: 2 }}
@@ -128,7 +161,7 @@ export default function HomePage() {
                 }}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ duration: 0.7 }}
+                transition={{ duration: 0.9 }}
               />
             )}
           </motion.div>
@@ -140,7 +173,6 @@ export default function HomePage() {
         <div
           style={{
             minHeight: "100vh",
-            width: "100%",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
