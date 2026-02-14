@@ -54,19 +54,24 @@ export default function HomePage() {
 
   return (
     <>
-      {/* ================= INTRO SCREEN ================= */}
       <AnimatePresence>
         {!entered && (
           <motion.div
             style={{
               position: "fixed",
               inset: 0,
-              background: "radial-gradient(circle at 50% 35%, #0f2a4a 0%, #071628 55%, #030712 100%)",
-              overflow: "hidden",
+              backgroundImage: `
+                linear-gradient(rgba(0,10,25,0.85), rgba(0,15,40,0.9)),
+                url("/mountain.jpg")
+              `,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              backgroundBlendMode: "overlay",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               cursor: "pointer",
+              overflow: "hidden",
             }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -74,69 +79,48 @@ export default function HomePage() {
             transition={{ duration: 1.2 }}
             onClick={handleEnter}
           >
-            {/* Summit Glow */}
+            {/* Dawn Glow at Peak */}
             <motion.div
               style={{
                 position: "absolute",
-                bottom: "45%",
+                top: "38%",
                 left: "50%",
                 transform: "translateX(-50%)",
-                width: "900px",
-                height: "600px",
+                width: "700px",
+                height: "400px",
                 background:
-                  "radial-gradient(circle at center, rgba(255,210,120,0.35), transparent 70%)",
-                filter: "blur(120px)",
+                  "radial-gradient(circle at center, rgba(255,210,120,0.45), transparent 70%)",
+                filter: "blur(100px)",
               }}
-              animate={{ opacity: [0.8, 1, 0.8] }}
+              animate={{ opacity: [0.7, 1, 0.7] }}
               transition={{ duration: 8, repeat: Infinity }}
             />
 
-            {/* Mountain Outline */}
-            <svg
-              viewBox="0 0 1440 800"
-              preserveAspectRatio="none"
+            {/* Grain */}
+            <div
               style={{
                 position: "absolute",
-                bottom: 0,
-                width: "100%",
-                height: "75%",
+                inset: 0,
+                backgroundImage:
+                  "url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"200\" height=\"200\"><filter id=\"noise\"><feTurbulence type=\"fractalNoise\" baseFrequency=\"0.8\" numOctaves=\"2\" stitchTiles=\"stitch\"/></filter><rect width=\"100%\" height=\"100%\" filter=\"url(%23noise)\" opacity=\"0.04\"/></svg>')",
+                mixBlendMode: "overlay",
+                pointerEvents: "none",
               }}
-            >
-              <path
-                d="M0,760 
-                   C200,700 400,640 600,620
-                   C680,610 700,570 720,520
-                   C740,570 760,610 840,630
-                   C1040,670 1240,720 1440,760
-                   L1440,800 L0,800 Z"
-                fill="#000000"
-              />
+            />
 
-              <path
-                d="M500,640 L720,520 L940,650"
-                fill="none"
-                stroke="#FFD166"
-                strokeWidth="3"
-                strokeLinejoin="round"
-                style={{
-                  filter: "drop-shadow(0 0 8px rgba(255,209,102,0.8))",
-                }}
-              />
-            </svg>
-
-            {/* Brand */}
             <motion.div
-              style={{ textAlign: "center", position: "relative", zIndex: 2 }}
+              style={{ textAlign: "center", position: "relative" }}
               initial={{ y: 40, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 1.6 }}
             >
               <h1
                 style={{
-                  fontSize: "70px",
+                  fontFamily: "Georgia, serif",
+                  fontSize: "68px",
                   letterSpacing: "0.45em",
+                  color: "#D4AF37",
                   fontWeight: 700,
-                  color: "#FFD166",
                 }}
               >
                 SHAURI
@@ -144,7 +128,7 @@ export default function HomePage() {
 
               <p
                 style={{
-                  marginTop: 24,
+                  marginTop: 26,
                   fontSize: "14px",
                   letterSpacing: "0.25em",
                   color: "#cbd5e1",
@@ -155,15 +139,15 @@ export default function HomePage() {
 
               <motion.p
                 style={{
-                  marginTop: 30,
+                  marginTop: 32,
                   fontSize: "12px",
                   letterSpacing: "0.35em",
-                  color: "#FFD166",
+                  color: "#D4AF37",
                 }}
                 animate={{ opacity: [0.5, 1, 0.5] }}
                 transition={{ repeat: Infinity, duration: 2 }}
               >
-                BEGIN ASCENT
+                BEGIN THE ASCENT
               </motion.p>
             </motion.div>
 
@@ -183,7 +167,7 @@ export default function HomePage() {
         )}
       </AnimatePresence>
 
-      {/* ================= ACCESS PAGE ================= */}
+      {/* ACCESS PAGE UNCHANGED */}
       {entered && (
         <div
           style={{
@@ -193,17 +177,20 @@ export default function HomePage() {
             alignItems: "center",
             justifyContent: "center",
             background:
-              "linear-gradient(to bottom, #fdf6e3 0%, #eef2ff 50%, #f8fafc 100%)",
+              "linear-gradient(to bottom, #FFF4D6 0%, #EAF3FF 55%, #F8FAFC 100%)",
+            position: "relative",
+            overflow: "hidden",
             padding: "40px 20px",
           }}
         >
-          <div style={{ textAlign: "center", marginBottom: 50 }}>
+          <div style={{ textAlign: "center", marginBottom: "60px" }}>
             <h1
               style={{
+                fontFamily: "Georgia, serif",
                 fontSize: "44px",
                 letterSpacing: "0.3em",
                 fontWeight: 700,
-                color: "#0f172a",
+                color: "#1e293b",
               }}
             >
               SHAURI
@@ -219,16 +206,6 @@ export default function HomePage() {
             >
               Aligned. Adaptive. Guiding Excellence.
             </p>
-
-            <p
-              style={{
-                marginTop: 18,
-                fontSize: "13px",
-                color: "#64748b",
-              }}
-            >
-              CBSE-Aligned Learning Platform
-            </p>
           </div>
 
           <form
@@ -236,7 +213,7 @@ export default function HomePage() {
             style={{
               display: "grid",
               gap: 18,
-              width: 360,
+              width: "360px",
             }}
           >
             <input
@@ -246,8 +223,9 @@ export default function HomePage() {
               onChange={(e) => setName(e.target.value)}
               style={{
                 padding: 14,
-                borderRadius: 8,
+                borderRadius: 10,
                 border: "1px solid #cbd5e1",
+                background: "rgba(255,255,255,0.75)",
               }}
             />
 
@@ -256,8 +234,9 @@ export default function HomePage() {
               onChange={(e) => setStudentClass(e.target.value)}
               style={{
                 padding: 14,
-                borderRadius: 8,
+                borderRadius: 10,
                 border: "1px solid #cbd5e1",
+                background: "rgba(255,255,255,0.75)",
               }}
             >
               <option value="">Select Class</option>
@@ -275,8 +254,9 @@ export default function HomePage() {
               onChange={(e) => setCode(e.target.value)}
               style={{
                 padding: 14,
-                borderRadius: 8,
+                borderRadius: 10,
                 border: "1px solid #cbd5e1",
+                background: "rgba(255,255,255,0.75)",
               }}
             />
 
@@ -288,16 +268,15 @@ export default function HomePage() {
               type="submit"
               style={{
                 padding: 14,
-                borderRadius: 8,
+                borderRadius: 10,
                 border: "none",
                 background: "linear-gradient(to right, #F6C56F, #E8A93B)",
-                color: "#0f172a",
-                fontWeight: 700,
-                letterSpacing: "0.1em",
+                color: "#1e293b",
+                fontWeight: 600,
                 cursor: "pointer",
               }}
             >
-              ENTER SHAURI
+              Enter SHAURI
             </button>
           </form>
         </div>
