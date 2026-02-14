@@ -54,7 +54,7 @@ export default function HomePage() {
 
   return (
     <>
-      {/* ================= INTRO SCREEN (LOCKED) ================= */}
+      {/* ================= INTRO SCREEN (LOCKED - UNTOUCHED) ================= */}
       <AnimatePresence>
         {!entered && (
           <motion.div
@@ -74,7 +74,6 @@ export default function HomePage() {
             transition={{ duration: 1.2 }}
             onClick={handleEnter}
           >
-            {/* Intro untouched */}
             <motion.div
               style={{
                 position: "absolute",
@@ -90,6 +89,30 @@ export default function HomePage() {
               animate={{ opacity: [0.6, 1, 0.6] }}
               transition={{ duration: 8, repeat: Infinity }}
             />
+
+            <svg
+              viewBox="0 0 1440 800"
+              preserveAspectRatio="none"
+              style={{
+                position: "absolute",
+                bottom: 0,
+                width: "100%",
+                height: "75%",
+              }}
+            >
+              <path
+                d="M0,640 C200,600 350,580 550,560 C750,540 950,570 1440,620 L1440,800 L0,800 Z"
+                fill="#061a2d"
+              />
+              <path
+                d="M0,700 C200,650 400,620 600,600 C700,580 760,550 820,600 C1000,650 1200,680 1440,710 L1440,800 L0,800 Z"
+                fill="#04121f"
+              />
+              <path
+                d="M0,730 C200,690 400,660 620,620 C680,590 710,550 720,500 C730,550 760,590 820,620 C1000,660 1200,700 1440,720 L1440,800 L0,800 Z"
+                fill="#000000"
+              />
+            </svg>
 
             <motion.div
               style={{ textAlign: "center", position: "relative" }}
@@ -150,7 +173,7 @@ export default function HomePage() {
         )}
       </AnimatePresence>
 
-      {/* ================= ACCESS PAGE ================= */}
+      {/* ================= ACCESS PAGE (DAWN + MOUNTAIN RESTORED) ================= */}
       {entered && (
         <div
           style={{
@@ -160,17 +183,17 @@ export default function HomePage() {
             alignItems: "center",
             justifyContent: "center",
             background:
-              "linear-gradient(to bottom, #FFF3D9 0%, #FFE4B3 40%, #E6F2FF 80%, #F8FAFC 100%)",
+              "linear-gradient(to bottom, #FFF3D9 0%, #FFE4B3 40%, #E6F2FF 85%, #F8FAFC 100%)",
             padding: "40px 20px",
             position: "relative",
             overflow: "hidden",
           }}
         >
-          {/* Dawn Glow */}
+          {/* Dawn Sunlight Glow */}
           <div
             style={{
               position: "absolute",
-              top: "28%",
+              top: "30%",
               left: "50%",
               transform: "translate(-50%, -50%)",
               width: "900px",
@@ -182,7 +205,26 @@ export default function HomePage() {
             }}
           />
 
-          {/* Brand Header Restored */}
+          {/* Mountain (RESTORED) */}
+          <motion.img
+            src="/shauri-hero.png"
+            alt="Shauri Background"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.12 }}
+            transition={{ duration: 2 }}
+            style={{
+              position: "absolute",
+              top: "38%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              width: "900px",
+              maxWidth: "90%",
+              pointerEvents: "none",
+              filter: "drop-shadow(0 0 40px rgba(212,175,55,0.3))",
+            }}
+          />
+
+          {/* Header */}
           <div style={{ textAlign: "center", marginBottom: 50, zIndex: 2 }}>
             <h1
               style={{
@@ -230,7 +272,7 @@ export default function HomePage() {
               width: "380px",
               padding: 28,
               borderRadius: 18,
-              backdropFilter: "blur(12px)",
+              backdropFilter: "blur(14px)",
               background: "rgba(255,255,255,0.85)",
               boxShadow: "0 25px 70px rgba(255,180,80,0.25)",
               position: "relative",
