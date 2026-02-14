@@ -77,19 +77,20 @@ export default function HomePage() {
             <motion.div
               style={{
                 position: "absolute",
-                bottom: "52%",
+                bottom: "50%",
                 left: "50%",
                 transform: "translateX(-50%)",
-                width: "1100px",
-                height: "700px",
+                width: "1000px",
+                height: "600px",
                 background:
-                  "radial-gradient(circle at center, rgba(255,210,120,0.55), transparent 70%)",
-                filter: "blur(100px)",
+                  "radial-gradient(circle at center, rgba(255,210,120,0.6), transparent 70%)",
+                filter: "blur(90px)",
               }}
-              animate={{ opacity: [0.7, 1, 0.7] }}
-              transition={{ duration: 8, repeat: Infinity }}
+              animate={{ opacity: [0.6, 1, 0.6] }}
+              transition={{ duration: 7, repeat: Infinity }}
             />
 
+            {/* Realistic Mountain */}
             <svg
               viewBox="0 0 1440 800"
               preserveAspectRatio="none"
@@ -97,12 +98,12 @@ export default function HomePage() {
                 position: "absolute",
                 bottom: 0,
                 width: "100%",
-                height: "80%",
+                height: "75%",
               }}
             >
               <defs>
                 <filter id="ridgeGlow">
-                  <feGaussianBlur stdDeviation="2" result="coloredBlur" />
+                  <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
                   <feMerge>
                     <feMergeNode in="coloredBlur" />
                     <feMergeNode in="SourceGraphic" />
@@ -110,63 +111,42 @@ export default function HomePage() {
                 </filter>
               </defs>
 
-              {/* Background Layer (faint far mountains) */}
+              {/* Mountain Body (more organic) */}
               <path
                 d="
-                  M0,620 
-                  C200,580 400,560 600,540
-                  C800,520 1000,540 1440,580
-                  L1440,800 L0,800 Z
-                "
-                fill="rgba(0,0,0,0.35)"
-              />
-
-              {/* Mid Layer */}
-              <path
-                d="
-                  M0,660
-                  C180,610 340,590 480,580
-                  C650,560 820,580 1000,610
-                  C1150,630 1300,640 1440,660
-                  L1440,800 L0,800 Z
-                "
-                fill="rgba(0,0,0,0.55)"
-              />
-
-              {/* Foreground Main Mountain */}
-              <path
-                d="
-                  M0,700
-                  C180,650 340,620 480,600
-                  C600,580 670,540 720,480
-                  C770,540 840,580 980,610
-                  C1120,640 1250,660 1440,690
+                  M0,680 
+                  C150,630 250,600 360,580
+                  C480,560 560,540 640,500
+                  C690,470 710,430 720,400
+                  C730,430 750,470 800,510
+                  C880,560 950,580 1050,600
+                  C1150,620 1250,640 1440,660
                   L1440,800 L0,800 Z
                 "
                 fill="#000000"
               />
 
-              {/* Golden Ridge on Main Peak */}
+              {/* Golden Ridge */}
               <path
                 d="
-                  M480,600
-                  C600,580 670,540 720,480
-                  C770,540 840,580 980,610
+                  M0,680 
+                  C150,630 250,600 360,580
+                  C480,560 560,540 640,500
+                  C690,470 710,430 720,400
+                  C730,430 750,470 800,510
+                  C880,560 950,580 1050,600
+                  C1150,620 1250,640 1440,660
                 "
                 fill="none"
                 stroke="#FFD166"
-                strokeWidth="2.5"
+                strokeWidth="2"
                 filter="url(#ridgeGlow)"
               />
             </svg>
 
             {/* Brand */}
             <motion.div
-              style={{
-                textAlign: "center",
-                position: "relative",
-                transform: "translateY(-20px)",
-              }}
+              style={{ textAlign: "center", position: "relative" }}
               initial={{ y: 40, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 1.6 }}
@@ -193,10 +173,10 @@ export default function HomePage() {
                 Aligned. Adaptive. Guiding Excellence.
               </p>
 
-              {/* Summit Alignment */}
+              {/* Positioned exactly above summit */}
               <motion.p
                 style={{
-                  marginTop: 30,
+                  marginTop: 34,
                   fontSize: "12px",
                   letterSpacing: "0.3em",
                   color: "#FFD166",
@@ -224,6 +204,7 @@ export default function HomePage() {
         )}
       </AnimatePresence>
 
+      {/* Light World */}
       {entered && (
         <div
           style={{
