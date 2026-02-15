@@ -75,14 +75,10 @@ export default function HomePage() {
               background:
                 "linear-gradient(to top, #000814 0%, #001d3d 60%, #0a2540 100%)",
               overflow: "hidden",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
             }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 1 }}
           >
             {/* Dawn glow */}
             <motion.div
@@ -131,7 +127,7 @@ export default function HomePage() {
               onClick={handleEnter}
               style={{
                 position: "absolute",
-                bottom: "50%",
+                bottom: "48%",
                 left: "50%",
                 transform: "translateX(-50%)",
                 width: "140px",
@@ -141,6 +137,7 @@ export default function HomePage() {
                 filter: "blur(18px)",
                 borderRadius: "80px",
                 cursor: "pointer",
+                zIndex: 5,
               }}
               animate={{
                 opacity: [0.6, 1, 0.6],
@@ -149,29 +146,46 @@ export default function HomePage() {
               transition={{ duration: 4, repeat: Infinity }}
             />
 
-            {/* BEGIN THE ASCENT */}
-            <motion.p
-              onClick={handleEnter}
+            {/* BEGIN THE ASCENT — FIXED POSITION */}
+            <motion.div
               style={{
                 position: "absolute",
-                bottom: "54%",
+                bottom: "44%",
                 left: "50%",
                 transform: "translateX(-50%)",
-                fontSize: "12px",
-                letterSpacing: "0.32em",
-                color: "rgba(255,215,120,0.9)",
-                cursor: "pointer",
+                zIndex: 6,
               }}
-              animate={{
-                opacity: [0.5, 1, 0.5],
-              }}
-              transition={{ duration: 3, repeat: Infinity }}
             >
-              BEGIN THE ASCENT
-            </motion.p>
+              <motion.p
+                onClick={handleEnter}
+                style={{
+                  fontSize: "12px",
+                  letterSpacing: "0.32em",
+                  color: "rgba(255,215,120,0.95)",
+                  cursor: "pointer",
+                  textAlign: "center",
+                }}
+                animate={{
+                  opacity: [0.4, 1, 0.4],
+                }}
+                transition={{
+                  duration: 2.5,
+                  repeat: Infinity,
+                }}
+              >
+                BEGIN THE ASCENT
+              </motion.p>
+            </motion.div>
 
-            {/* Intro text */}
-            <div style={{ textAlign: "center", position: "relative" }}>
+            {/* Title block */}
+            <div
+              style={{
+                position: "absolute",
+                top: "32%",
+                width: "100%",
+                textAlign: "center",
+              }}
+            >
               <h1
                 style={{
                   fontSize: "64px",
@@ -234,7 +248,6 @@ export default function HomePage() {
             justifyContent: "center",
             background:
               "linear-gradient(to bottom, #FFF3D9, #FFE4B3, #E6F2FF, #F8FAFC)",
-            padding: "40px",
           }}
         >
           <h1
@@ -247,14 +260,6 @@ export default function HomePage() {
           >
             SHAURI
           </h1>
-
-          <p style={{ marginTop: 12, letterSpacing: "0.28em", fontSize: 14 }}>
-            Aligned. Adaptive. Guiding Excellence.
-          </p>
-
-          <p style={{ marginTop: 8, letterSpacing: "0.22em", fontSize: 12 }}>
-            CBSE-Aligned Adaptive Learning Platform
-          </p>
 
           <form
             onSubmit={handleSubmit}
