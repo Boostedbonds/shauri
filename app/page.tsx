@@ -5,6 +5,9 @@ import { motion, AnimatePresence } from "framer-motion";
 
 const ACCESS_CODE = "0330";
 
+const futuristicFont =
+  "'Space Grotesk', 'Inter', 'Segoe UI', system-ui, sans-serif";
+
 export default function HomePage() {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
@@ -60,7 +63,7 @@ export default function HomePage() {
 
   return (
     <>
-      {/* ================= INTRO SCREEN (LOCKED) ================= */}
+      {/* ================= INTRO SCREEN ================= */}
       <AnimatePresence>
         {!entered && (
           <motion.div
@@ -122,32 +125,33 @@ export default function HomePage() {
             </svg>
 
             <motion.div
-              style={{
-                textAlign: "center",
-                position: "relative",
-              }}
+              style={{ textAlign: "center", position: "relative" }}
               initial={{ y: 40, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 1.6 }}
             >
+              {/* FUTURISTIC SHAURI TITLE */}
               <h1
                 style={{
                   fontSize: "64px",
-                  letterSpacing: "0.5em",
-                  fontWeight: 700,
+                  letterSpacing: "0.55em",
+                  fontWeight: 600,
                   color: "#D4AF37",
-                  fontFamily: "Georgia, serif",
+                  fontFamily: futuristicFont,
+                  textRendering: "optimizeLegibility",
                 }}
               >
                 SHAURI
               </h1>
 
+              {/* TAGLINE */}
               <p
                 style={{
                   marginTop: 24,
                   fontSize: "14px",
-                  letterSpacing: "0.2em",
-                  color: "#cbd5e1",
+                  letterSpacing: "0.22em",
+                  color: "rgba(203,213,225,0.85)",
+                  fontFamily: futuristicFont,
                 }}
               >
                 Aligned. Adaptive. Guiding Excellence.
@@ -159,6 +163,7 @@ export default function HomePage() {
                   fontSize: "12px",
                   letterSpacing: "0.3em",
                   color: "#D4AF37",
+                  fontFamily: futuristicFont,
                 }}
                 animate={{ opacity: [0.5, 1, 0.5] }}
                 transition={{ repeat: Infinity, duration: 2 }}
@@ -196,54 +201,17 @@ export default function HomePage() {
               "linear-gradient(to bottom, #FFF3D9 0%, #FFE4B3 40%, #E6F2FF 85%, #F8FAFC 100%)",
             padding: "40px 20px",
             position: "relative",
-            overflow: "hidden",
           }}
         >
-          {/* Dawn Glow */}
-          <div
-            style={{
-              position: "absolute",
-              top: "30%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              width: "900px",
-              height: "500px",
-              background:
-                "radial-gradient(circle, rgba(255,190,110,0.6) 0%, rgba(255,190,110,0.35) 40%, transparent 70%)",
-              filter: "blur(120px)",
-              pointerEvents: "none",
-            }}
-          />
-
-          {/* Mountain */}
-          <motion.img
-            src="/shauri-hero.png"
-            alt="Shauri Background"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 0.12 }}
-            transition={{ duration: 2 }}
-            style={{
-              position: "absolute",
-              top: "38%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              width: "900px",
-              maxWidth: "90%",
-              pointerEvents: "none",
-              filter:
-                "drop-shadow(0 0 40px rgba(212,175,55,0.3))",
-            }}
-          />
-
-          {/* Header */}
-          <div style={{ textAlign: "center", marginBottom: 50, zIndex: 2 }}>
+          {/* HEADER */}
+          <div style={{ textAlign: "center", marginBottom: 50 }}>
             <h1
               style={{
                 fontSize: "48px",
-                letterSpacing: "0.35em",
-                fontWeight: 700,
+                letterSpacing: "0.55em",
+                fontWeight: 600,
                 color: "#1e293b",
-                fontFamily: "Georgia, serif",
+                fontFamily: futuristicFont,
               }}
             >
               SHAURI
@@ -251,10 +219,11 @@ export default function HomePage() {
 
             <p
               style={{
-                marginTop: 14,
-                fontSize: "14px",
-                letterSpacing: "0.15em",
-                color: "#475569",
+                marginTop: 16,
+                fontSize: "15px",
+                letterSpacing: "0.22em",
+                color: "rgba(30,41,59,0.75)",
+                fontFamily: futuristicFont,
               }}
             >
               Aligned. Adaptive. Guiding Excellence.
@@ -262,21 +231,21 @@ export default function HomePage() {
 
             <p
               style={{
-                marginTop: 16,
+                marginTop: 12,
                 fontSize: "13px",
-                color: "#64748b",
+                color: "rgba(30,41,59,0.6)",
+                fontFamily: futuristicFont,
               }}
             >
-              CBSE-Aligned Learning Platform.
+              CBSE-Aligned Learning Platform
             </p>
           </div>
 
-          {/* Form */}
+          {/* FORM */}
           <motion.form
             onSubmit={handleSubmit}
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.8 }}
             style={{
               display: "grid",
               gap: 18,
@@ -286,8 +255,6 @@ export default function HomePage() {
               backdropFilter: "blur(14px)",
               background: "rgba(255,255,255,0.85)",
               boxShadow: "0 25px 70px rgba(255,180,80,0.25)",
-              position: "relative",
-              zIndex: 2,
             }}
           >
             <input
@@ -325,29 +292,27 @@ export default function HomePage() {
               </div>
             )}
 
-            {/* Presence Touch Pad */}
+            {/* TOUCH PAD */}
             <motion.button
               type="submit"
-              initial={{ boxShadow: "0 0 12px rgba(212,175,55,0.15)" }}
               animate={{
                 boxShadow: [
-                  "0 0 12px rgba(212,175,55,0.15)",
-                  "0 0 28px rgba(212,175,55,0.45)",
-                  "0 0 12px rgba(212,175,55,0.15)",
+                  "0 0 12px rgba(212,175,55,0.2)",
+                  "0 0 28px rgba(212,175,55,0.5)",
+                  "0 0 12px rgba(212,175,55,0.2)",
                 ],
               }}
               transition={{
                 duration: 3,
                 repeat: Infinity,
-                ease: "easeInOut",
               }}
               whileHover={{
                 scale: 1.08,
-                boxShadow: "0 0 45px rgba(212,175,55,0.75)",
+                boxShadow: "0 0 50px rgba(212,175,55,0.8)",
               }}
               whileTap={{
                 scale: 0.94,
-                boxShadow: "0 0 60px rgba(212,175,55,0.95)",
+                boxShadow: "0 0 70px rgba(212,175,55,1)",
               }}
               style={{
                 padding: "16px 34px",
@@ -357,8 +322,8 @@ export default function HomePage() {
                 color: "#1e293b",
                 fontWeight: 600,
                 letterSpacing: "0.28em",
+                fontFamily: futuristicFont,
                 cursor: "pointer",
-                backdropFilter: "blur(14px)",
               }}
             >
               STEP IN
@@ -371,7 +336,7 @@ export default function HomePage() {
               fontSize: 11,
               letterSpacing: "0.2em",
               color: "#64748b",
-              zIndex: 2,
+              fontFamily: futuristicFont,
             }}
           >
             Crafted for Focused Minds.
