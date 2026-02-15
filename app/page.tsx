@@ -12,12 +12,18 @@ const spaceGrotesk = Space_Grotesk({
 const ACCESS_CODE = "0330";
 
 export default function HomePage() {
-  const [code, setCode] = useState("");
-  const [name, setName] = useState("");
-  const [studentClass, setStudentClass] = useState("");
-  const [error, setError] = useState("");
   const [entered, setEntered] = useState(false);
   const [warp, setWarp] = useState(false);
+
+  const [name, setName] = useState("");
+  const [studentClass, setStudentClass] = useState("");
+  const [code, setCode] = useState("");
+  const [error, setError] = useState("");
+
+  function handleEnter() {
+    setWarp(true);
+    setTimeout(() => setEntered(true), 900);
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -57,11 +63,6 @@ export default function HomePage() {
     window.location.href = "/modes";
   }
 
-  const handleEnter = () => {
-    setWarp(true);
-    setTimeout(() => setEntered(true), 900);
-  };
-
   return (
     <div className={spaceGrotesk.className}>
       {/* ================= INTRO SCREEN ================= */}
@@ -77,13 +78,11 @@ export default function HomePage() {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              cursor: "pointer",
             }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 1 }}
-            onClick={handleEnter}
           >
             {/* Dawn glow */}
             <motion.div
@@ -92,17 +91,17 @@ export default function HomePage() {
                 bottom: "42%",
                 left: "50%",
                 transform: "translateX(-50%)",
-                width: "800px",
+                width: "900px",
                 height: "500px",
                 background:
-                  "radial-gradient(circle at center, rgba(255,210,120,0.4), transparent 70%)",
+                  "radial-gradient(circle at center, rgba(255,210,120,0.35), transparent 70%)",
                 filter: "blur(120px)",
               }}
-              animate={{ opacity: [0.6, 1, 0.6] }}
-              transition={{ duration: 8, repeat: Infinity }}
+              animate={{ opacity: [0.5, 1, 0.5] }}
+              transition={{ duration: 6, repeat: Infinity }}
             />
 
-            {/* Mountain silhouette (RESTORED) */}
+            {/* Mountain silhouette */}
             <svg
               viewBox="0 0 1440 800"
               preserveAspectRatio="none"
@@ -127,13 +126,52 @@ export default function HomePage() {
               />
             </svg>
 
-            {/* Intro text */}
+            {/* Sunlight beam */}
             <motion.div
-              style={{ textAlign: "center", position: "relative" }}
-              initial={{ y: 40, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ duration: 1.6 }}
+              onClick={handleEnter}
+              style={{
+                position: "absolute",
+                bottom: "50%",
+                left: "50%",
+                transform: "translateX(-50%)",
+                width: "140px",
+                height: "300px",
+                background:
+                  "linear-gradient(to top, rgba(255,215,120,0), rgba(255,215,120,0.6))",
+                filter: "blur(18px)",
+                borderRadius: "80px",
+                cursor: "pointer",
+              }}
+              animate={{
+                opacity: [0.6, 1, 0.6],
+                scaleY: [0.9, 1.05, 0.9],
+              }}
+              transition={{ duration: 4, repeat: Infinity }}
+            />
+
+            {/* BEGIN THE ASCENT */}
+            <motion.p
+              onClick={handleEnter}
+              style={{
+                position: "absolute",
+                bottom: "54%",
+                left: "50%",
+                transform: "translateX(-50%)",
+                fontSize: "12px",
+                letterSpacing: "0.32em",
+                color: "rgba(255,215,120,0.9)",
+                cursor: "pointer",
+              }}
+              animate={{
+                opacity: [0.5, 1, 0.5],
+              }}
+              transition={{ duration: 3, repeat: Infinity }}
             >
+              BEGIN THE ASCENT
+            </motion.p>
+
+            {/* Intro text */}
+            <div style={{ textAlign: "center", position: "relative" }}>
               <h1
                 style={{
                   fontSize: "64px",
@@ -147,9 +185,9 @@ export default function HomePage() {
 
               <p
                 style={{
-                  marginTop: 24,
-                  fontSize: "14px",
+                  marginTop: 20,
                   letterSpacing: "0.28em",
+                  fontSize: "14px",
                   color: "rgba(255,255,255,0.85)",
                 }}
               >
@@ -158,16 +196,17 @@ export default function HomePage() {
 
               <p
                 style={{
-                  marginTop: 14,
-                  fontSize: "12px",
+                  marginTop: 10,
                   letterSpacing: "0.22em",
-                  color: "rgba(212,175,55,0.75)",
+                  fontSize: "12px",
+                  color: "rgba(212,175,55,0.8)",
                 }}
               >
                 CBSE-Aligned Adaptive Learning Platform
               </p>
-            </motion.div>
+            </div>
 
+            {/* Warp transition */}
             {warp && (
               <motion.div
                 style={{
@@ -184,7 +223,7 @@ export default function HomePage() {
         )}
       </AnimatePresence>
 
-      {/* ================= ACCESS CONTROL PAGE ================= */}
+      {/* ================= ACCESS PAGE ================= */}
       {entered && (
         <div
           style={{
@@ -194,8 +233,8 @@ export default function HomePage() {
             alignItems: "center",
             justifyContent: "center",
             background:
-              "linear-gradient(to bottom, #FFF3D9 0%, #FFE4B3 40%, #E6F2FF 85%, #F8FAFC 100%)",
-            padding: "40px 20px",
+              "linear-gradient(to bottom, #FFF3D9, #FFE4B3, #E6F2FF, #F8FAFC)",
+            padding: "40px",
           }}
         >
           <h1
@@ -209,41 +248,21 @@ export default function HomePage() {
             SHAURI
           </h1>
 
-          <p
-            style={{
-              marginTop: 16,
-              fontSize: "14px",
-              letterSpacing: "0.28em",
-              color: "rgba(30,41,59,0.8)",
-            }}
-          >
+          <p style={{ marginTop: 12, letterSpacing: "0.28em", fontSize: 14 }}>
             Aligned. Adaptive. Guiding Excellence.
           </p>
 
-          <p
-            style={{
-              marginTop: 10,
-              fontSize: "12px",
-              letterSpacing: "0.22em",
-              color: "rgba(30,41,59,0.6)",
-            }}
-          >
+          <p style={{ marginTop: 8, letterSpacing: "0.22em", fontSize: 12 }}>
             CBSE-Aligned Adaptive Learning Platform
           </p>
 
-          {/* ACCESS FORM */}
-          <motion.form
+          <form
             onSubmit={handleSubmit}
             style={{
-              marginTop: 40,
+              marginTop: 30,
               display: "grid",
-              gap: 18,
-              width: "380px",
-              padding: 28,
-              borderRadius: 18,
-              background: "rgba(255,255,255,0.85)",
-              backdropFilter: "blur(14px)",
-              boxShadow: "0 25px 70px rgba(255,180,80,0.25)",
+              gap: 16,
+              width: 320,
             }}
           >
             <input
@@ -260,7 +279,7 @@ export default function HomePage() {
             >
               <option value="">Select Class</option>
               {[6, 7, 8, 9, 10, 11, 12].map((c) => (
-                <option key={c} value={c}>
+                <option key={c} value={`Class ${c}`}>
                   Class {c}
                 </option>
               ))}
@@ -274,53 +293,12 @@ export default function HomePage() {
               style={inputStyle}
             />
 
-            {error && (
-              <div style={{ color: "#dc2626", fontSize: 13 }}>{error}</div>
-            )}
+            {error && <div style={{ color: "red" }}>{error}</div>}
 
-            {/* WORKING STEP IN BUTTON */}
-            <motion.button
-              type="submit"
-              animate={{
-                boxShadow: [
-                  "0 0 12px rgba(212,175,55,0.2)",
-                  "0 0 28px rgba(212,175,55,0.5)",
-                  "0 0 12px rgba(212,175,55,0.2)",
-                ],
-              }}
-              transition={{ duration: 3, repeat: Infinity }}
-              whileHover={{
-                scale: 1.08,
-                boxShadow: "0 0 50px rgba(212,175,55,0.8)",
-              }}
-              whileTap={{
-                scale: 0.94,
-                boxShadow: "0 0 70px rgba(212,175,55,1)",
-              }}
-              style={{
-                padding: "16px",
-                borderRadius: "999px",
-                border: "1px solid rgba(212,175,55,0.7)",
-                background: "rgba(255,255,255,0.75)",
-                fontWeight: 600,
-                letterSpacing: "0.28em",
-                cursor: "pointer",
-              }}
-            >
+            <button type="submit" style={buttonStyle}>
               STEP IN
-            </motion.button>
-          </motion.form>
-
-          <p
-            style={{
-              marginTop: 30,
-              fontSize: 11,
-              letterSpacing: "0.24em",
-              color: "#64748b",
-            }}
-          >
-            Crafted for Focused Minds.
-          </p>
+            </button>
+          </form>
         </div>
       )}
     </div>
@@ -328,9 +306,16 @@ export default function HomePage() {
 }
 
 const inputStyle: React.CSSProperties = {
+  padding: 12,
+  borderRadius: 10,
+  border: "1px solid #ccc",
+};
+
+const buttonStyle: React.CSSProperties = {
   padding: 14,
-  borderRadius: 12,
-  border: "1px solid #e2e8f0",
-  background: "rgba(255,255,255,0.9)",
-  fontSize: 14,
+  borderRadius: 999,
+  border: "1px solid #D4AF37",
+  background: "white",
+  letterSpacing: "0.25em",
+  cursor: "pointer",
 };
