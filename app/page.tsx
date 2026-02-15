@@ -44,31 +44,30 @@ export default function HomePage() {
       return;
     }
 
-    const studentContext = {
+    const ctx = {
       name: name.trim(),
       class: studentClass,
       board: "CBSE",
     };
 
-    localStorage.setItem("shauri_student", JSON.stringify(studentContext));
+    localStorage.setItem("shauri_student", JSON.stringify(ctx));
 
-    document.cookie = `shauri_name=${encodeURIComponent(
-      studentContext.name
-    )}; path=/; SameSite=Lax`;
-
-    document.cookie = `shauri_class=${encodeURIComponent(
-      studentContext.class
-    )}; path=/; SameSite=Lax`;
+    document.cookie = `shauri_name=${encodeURIComponent(ctx.name)}; path=/; SameSite=Lax`;
+    document.cookie = `shauri_class=${encodeURIComponent(ctx.class)}; path=/; SameSite=Lax`;
 
     window.location.href = "/modes";
   }
 
   return (
     <div className={spaceGrotesk.className}>
-      {/* ================= INTRO SCREEN ================= */}
+
+      {/* ================= INTRO ================= */}
       <AnimatePresence>
         {!entered && (
           <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             style={{
               position: "fixed",
               inset: 0,
@@ -76,28 +75,37 @@ export default function HomePage() {
                 "linear-gradient(to top, #000814 0%, #001d3d 60%, #0a2540 100%)",
               overflow: "hidden",
             }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
           >
-            {/* Dawn glow */}
+
+            {/* SUN — perfectly aligned with summit tip */}
             <motion.div
+              onClick={handleEnter}
               style={{
                 position: "absolute",
-                bottom: "42%",
                 left: "50%",
-                transform: "translateX(-50%)",
-                width: "900px",
-                height: "500px",
+                bottom: "50%",
+                transform: "translate(-50%, 50%)",
+                width: "480px",
+                height: "480px",
+                borderRadius: "50%",
                 background:
-                  "radial-gradient(circle at center, rgba(255,210,120,0.35), transparent 70%)",
-                filter: "blur(120px)",
+                  "radial-gradient(circle, rgba(255,230,150,0.95) 0%, rgba(255,220,140,0.65) 20%, rgba(255,220,140,0.35) 40%, rgba(255,220,140,0.15) 55%, rgba(255,220,140,0.06) 65%, transparent 75%)",
+                filter: "blur(6px)",
+                cursor: "pointer",
+                zIndex: 1,
               }}
-              animate={{ opacity: [0.5, 1, 0.5] }}
-              transition={{ duration: 6, repeat: Infinity }}
+              animate={{
+                opacity: [0.7, 1, 0.7],
+                scale: [0.97, 1.06, 0.97],
+              }}
+              transition={{
+                duration: 6,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }}
             />
 
-            {/* Mountain silhouette */}
+            {/* MOUNTAIN */}
             <svg
               viewBox="0 0 1440 800"
               preserveAspectRatio="none"
@@ -106,6 +114,7 @@ export default function HomePage() {
                 bottom: 0,
                 width: "100%",
                 height: "75%",
+                zIndex: 2,
               }}
             >
               <path
@@ -122,68 +131,51 @@ export default function HomePage() {
               />
             </svg>
 
-            {/* Sunlight beam */}
+            {/* BEGIN THE ASCENT — summit tip */}
             <motion.div
               onClick={handleEnter}
               style={{
                 position: "absolute",
-                bottom: "48%",
                 left: "50%",
-                transform: "translateX(-50%)",
-                width: "140px",
-                height: "300px",
-                background:
-                  "linear-gradient(to top, rgba(255,215,120,0), rgba(255,215,120,0.6))",
-                filter: "blur(18px)",
-                borderRadius: "80px",
+                bottom: "50%",
+                transform: "translate(-50%, 140%)",
+                zIndex: 3,
                 cursor: "pointer",
-                zIndex: 5,
               }}
               animate={{
-                opacity: [0.6, 1, 0.6],
-                scaleY: [0.9, 1.05, 0.9],
+                opacity: [0.5, 1, 0.5],
+                textShadow: [
+                  "0 0 8px rgba(255,215,120,0.5)",
+                  "0 0 20px rgba(255,215,120,1)",
+                  "0 0 8px rgba(255,215,120,0.5)",
+                ],
               }}
-              transition={{ duration: 4, repeat: Infinity }}
-            />
-
-            {/* BEGIN THE ASCENT — FIXED POSITION */}
-            <motion.div
-              style={{
-                position: "absolute",
-                bottom: "44%",
-                left: "50%",
-                transform: "translateX(-50%)",
-                zIndex: 6,
+              transition={{
+                duration: 3,
+                repeat: Infinity,
               }}
             >
-              <motion.p
-                onClick={handleEnter}
+              <div
                 style={{
                   fontSize: "12px",
                   letterSpacing: "0.32em",
                   color: "rgba(255,215,120,0.95)",
-                  cursor: "pointer",
                   textAlign: "center",
-                }}
-                animate={{
-                  opacity: [0.4, 1, 0.4],
-                }}
-                transition={{
-                  duration: 2.5,
-                  repeat: Infinity,
+                  whiteSpace: "nowrap",
                 }}
               >
                 BEGIN THE ASCENT
-              </motion.p>
+              </div>
             </motion.div>
 
-            {/* Title block */}
+            {/* TITLE */}
             <div
               style={{
                 position: "absolute",
                 top: "32%",
                 width: "100%",
                 textAlign: "center",
+                zIndex: 3,
               }}
             >
               <h1
@@ -213,20 +205,21 @@ export default function HomePage() {
                   marginTop: 10,
                   letterSpacing: "0.22em",
                   fontSize: "12px",
-                  color: "rgba(212,175,55,0.8)",
+                  color: "rgba(212,175,55,0.85)",
                 }}
               >
                 CBSE-Aligned Adaptive Learning Platform
               </p>
             </div>
 
-            {/* Warp transition */}
+            {/* TRANSITION */}
             {warp && (
               <motion.div
                 style={{
                   position: "absolute",
                   inset: 0,
                   background: "white",
+                  zIndex: 10,
                 }}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -237,7 +230,7 @@ export default function HomePage() {
         )}
       </AnimatePresence>
 
-      {/* ================= ACCESS PAGE ================= */}
+      {/* ================= ACCESS ================= */}
       {entered && (
         <div
           style={{
@@ -283,10 +276,8 @@ export default function HomePage() {
               style={inputStyle}
             >
               <option value="">Select Class</option>
-              {[6, 7, 8, 9, 10, 11, 12].map((c) => (
-                <option key={c} value={`Class ${c}`}>
-                  Class {c}
-                </option>
+              {[6,7,8,9,10,11,12].map(c => (
+                <option key={c} value={`Class ${c}`}>Class {c}</option>
               ))}
             </select>
 
@@ -298,7 +289,7 @@ export default function HomePage() {
               style={inputStyle}
             />
 
-            {error && <div style={{ color: "red" }}>{error}</div>}
+            {error && <div style={{color:"red"}}>{error}</div>}
 
             <button type="submit" style={buttonStyle}>
               STEP IN
@@ -306,6 +297,7 @@ export default function HomePage() {
           </form>
         </div>
       )}
+
     </div>
   );
 }
