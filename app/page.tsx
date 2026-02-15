@@ -52,8 +52,13 @@ export default function HomePage() {
 
     localStorage.setItem("shauri_student", JSON.stringify(studentContext));
 
-    document.cookie = `shauri_name=${encodeURIComponent(studentContext.name)}; path=/; SameSite=Lax`;
-    document.cookie = `shauri_class=${encodeURIComponent(studentContext.class)}; path=/; SameSite=Lax`;
+    document.cookie = `shauri_name=${encodeURIComponent(
+      studentContext.name
+    )}; path=/; SameSite=Lax`;
+
+    document.cookie = `shauri_class=${encodeURIComponent(
+      studentContext.class
+    )}; path=/; SameSite=Lax`;
 
     window.location.href = "/modes";
   }
@@ -74,19 +79,21 @@ export default function HomePage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            {/* SUN GLOW — perfectly centered behind SHAURI */}
+
+            {/* LARGE ROUND SUN BEHIND SHAURI */}
             <motion.div
               style={{
                 position: "absolute",
-                top: "28%",
+                top: "32%",
                 left: "50%",
                 transform: "translateX(-50%)",
-                width: "900px",
-                height: "900px",
+                width: "520px",
+                height: "520px",
+                borderRadius: "50%",
                 background:
-                  "radial-gradient(circle, rgba(255,215,120,0.35) 0%, rgba(255,215,120,0.18) 35%, rgba(255,215,120,0.08) 55%, transparent 70%)",
-                filter: "blur(40px)",
-                zIndex: 1,
+                  "radial-gradient(circle, rgba(255,215,120,0.45) 0%, rgba(255,215,120,0.25) 35%, rgba(255,215,120,0.12) 55%, rgba(255,215,120,0.04) 70%, transparent 85%)",
+                filter: "blur(20px)",
+                pointerEvents: "none",
               }}
               animate={{
                 opacity: [0.7, 1, 0.7],
@@ -98,18 +105,17 @@ export default function HomePage() {
               }}
             />
 
-            {/* SUN BEAM aligned to summit tip */}
+            {/* BEAM FROM SUN TO SUMMIT */}
             <motion.div
-              onClick={handleEnter}
               style={{
                 position: "absolute",
-                top: "42%",
+                top: "40%",
+                bottom: "28%",
                 left: "50%",
                 transform: "translateX(-50%)",
                 width: "140px",
-                height: "380px",
                 background:
-                  "linear-gradient(to bottom, rgba(255,215,120,0.55), rgba(255,215,120,0.25), rgba(255,215,120,0.08), transparent)",
+                  "linear-gradient(to bottom, rgba(255,215,120,0.35), rgba(255,215,120,0.15), rgba(255,215,120,0.05), transparent)",
                 filter: "blur(14px)",
                 borderRadius: "80px",
                 cursor: "pointer",
@@ -117,12 +123,12 @@ export default function HomePage() {
               }}
               animate={{
                 opacity: [0.6, 1, 0.6],
-                scaleY: [1, 1.08, 1],
               }}
               transition={{
                 duration: 4,
                 repeat: Infinity,
               }}
+              onClick={handleEnter}
             />
 
             {/* MOUNTAIN */}
@@ -134,7 +140,6 @@ export default function HomePage() {
                 bottom: 0,
                 width: "100%",
                 height: "75%",
-                zIndex: 2,
               }}
             >
               <path
@@ -151,45 +156,38 @@ export default function HomePage() {
               />
             </svg>
 
-            {/* BEGIN THE ASCENT — EXACT summit tip alignment */}
+            {/* BEGIN THE ASCENT — AT SUMMIT TIP */}
             <motion.div
               onClick={handleEnter}
               style={{
                 position: "absolute",
-                bottom: "37%",
+                bottom: "27%",
                 left: "50%",
                 transform: "translateX(-50%)",
-                zIndex: 5,
+                fontSize: "13px",
+                letterSpacing: "0.35em",
+                color: "#D4AF37",
                 cursor: "pointer",
+                zIndex: 5,
               }}
               animate={{
                 opacity: [0.5, 1, 0.5],
               }}
               transition={{
-                duration: 2.5,
+                duration: 2,
                 repeat: Infinity,
               }}
             >
-              <p
-                style={{
-                  fontSize: "12px",
-                  letterSpacing: "0.35em",
-                  color: "#D4AF37",
-                  textAlign: "center",
-                }}
-              >
-                BEGIN THE ASCENT
-              </p>
+              BEGIN THE ASCENT
             </motion.div>
 
-            {/* TITLE BLOCK — uplifted above beam */}
+            {/* TITLE BLOCK */}
             <div
               style={{
                 position: "absolute",
-                top: "30%",
+                top: "38%",
                 width: "100%",
                 textAlign: "center",
-                zIndex: 4,
               }}
             >
               <h1
@@ -205,9 +203,9 @@ export default function HomePage() {
 
               <p
                 style={{
-                  marginTop: 24,
-                  letterSpacing: "0.32em",
-                  fontSize: "14px",
+                  marginTop: "18px",
+                  fontSize: "15px",
+                  letterSpacing: "0.28em",
                   color: "rgba(255,255,255,0.85)",
                 }}
               >
@@ -216,24 +214,23 @@ export default function HomePage() {
 
               <p
                 style={{
-                  marginTop: 12,
-                  letterSpacing: "0.28em",
-                  fontSize: "12px",
-                  color: "#D4AF37",
+                  marginTop: "10px",
+                  fontSize: "13px",
+                  letterSpacing: "0.25em",
+                  color: "rgba(212,175,55,0.9)",
                 }}
               >
                 CBSE-ALIGNED ADAPTIVE LEARNING PLATFORM
               </p>
             </div>
 
-            {/* WARP */}
+            {/* WARP TRANSITION */}
             {warp && (
               <motion.div
                 style={{
                   position: "absolute",
                   inset: 0,
                   background: "white",
-                  zIndex: 10,
                 }}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -244,37 +241,24 @@ export default function HomePage() {
         )}
       </AnimatePresence>
 
-      {/* ACCESS PAGE — FULLY RESTORED */}
+      {/* ACCESS PAGE */}
       {entered && (
         <div
           style={{
             minHeight: "100vh",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
             background:
               "linear-gradient(to bottom, #FFF3D9, #FFE4B3, #E6F2FF, #F8FAFC)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
           }}
         >
-          <h1
-            style={{
-              fontSize: "48px",
-              letterSpacing: "0.55em",
-              fontWeight: 700,
-              color: "#1e293b",
-            }}
-          >
-            SHAURI
-          </h1>
-
           <form
             onSubmit={handleSubmit}
             style={{
-              marginTop: 30,
               display: "grid",
-              gap: 16,
-              width: 320,
+              gap: "16px",
+              width: "320px",
             }}
           >
             <input
@@ -290,10 +274,8 @@ export default function HomePage() {
               style={inputStyle}
             >
               <option value="">Select Class</option>
-              {[6, 7, 8, 9, 10, 11, 12].map((c) => (
-                <option key={c} value={`Class ${c}`}>
-                  Class {c}
-                </option>
+              {[6,7,8,9,10,11,12].map((c)=>(
+                <option key={c}>Class {c}</option>
               ))}
             </select>
 
@@ -305,11 +287,9 @@ export default function HomePage() {
               style={inputStyle}
             />
 
-            {error && <div style={{ color: "red" }}>{error}</div>}
+            {error && <div style={{color:"red"}}>{error}</div>}
 
-            <button type="submit" style={buttonStyle}>
-              STEP IN
-            </button>
+            <button style={buttonStyle}>STEP IN</button>
           </form>
         </div>
       )}
@@ -318,14 +298,14 @@ export default function HomePage() {
 }
 
 const inputStyle: React.CSSProperties = {
-  padding: 12,
-  borderRadius: 10,
+  padding: "12px",
+  borderRadius: "10px",
   border: "1px solid #ccc",
 };
 
 const buttonStyle: React.CSSProperties = {
-  padding: 14,
-  borderRadius: 999,
+  padding: "14px",
+  borderRadius: "999px",
   border: "1px solid #D4AF37",
   background: "white",
   letterSpacing: "0.25em",
