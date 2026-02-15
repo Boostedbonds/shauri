@@ -12,6 +12,7 @@ const spaceGrotesk = Space_Grotesk({
 const ACCESS_CODE = "0330";
 
 export default function HomePage() {
+
   const [entered, setEntered] = useState(false);
   const [warp, setWarp] = useState(false);
 
@@ -44,16 +45,19 @@ export default function HomePage() {
       return;
     }
 
-    const ctx = {
+    const studentContext = {
       name: name.trim(),
       class: studentClass,
       board: "CBSE",
     };
 
-    localStorage.setItem("shauri_student", JSON.stringify(ctx));
+    localStorage.setItem("shauri_student", JSON.stringify(studentContext));
 
-    document.cookie = `shauri_name=${encodeURIComponent(ctx.name)}; path=/; SameSite=Lax`;
-    document.cookie = `shauri_class=${encodeURIComponent(ctx.class)}; path=/; SameSite=Lax`;
+    document.cookie =
+      `shauri_name=${encodeURIComponent(studentContext.name)}; path=/; SameSite=Lax`;
+
+    document.cookie =
+      `shauri_class=${encodeURIComponent(studentContext.class)}; path=/; SameSite=Lax`;
 
     window.location.href = "/modes";
   }
@@ -61,9 +65,11 @@ export default function HomePage() {
   return (
     <div className={spaceGrotesk.className}>
 
-      {/* ================= INTRO ================= */}
+      {/* ================= INTRO SCREEN ================= */}
+
       <AnimatePresence>
         {!entered && (
+
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -77,13 +83,13 @@ export default function HomePage() {
             }}
           >
 
-            {/* SUN — perfectly aligned with summit tip */}
+            {/* Dawn circular sun */}
             <motion.div
               onClick={handleEnter}
               style={{
                 position: "absolute",
                 left: "50%",
-                bottom: "50%",
+                bottom: "37%",
                 transform: "translate(-50%, 50%)",
                 width: "480px",
                 height: "480px",
@@ -105,7 +111,7 @@ export default function HomePage() {
               }}
             />
 
-            {/* MOUNTAIN */}
+            {/* Mountain silhouette — pointerEvents NONE so clicks pass through */}
             <svg
               viewBox="0 0 1440 800"
               preserveAspectRatio="none"
@@ -115,43 +121,46 @@ export default function HomePage() {
                 width: "100%",
                 height: "75%",
                 zIndex: 2,
+                pointerEvents: "none",
               }}
             >
               <path
                 d="M0,640 C200,600 350,580 550,560 C750,540 950,570 1440,620 L1440,800 L0,800 Z"
                 fill="#061a2d"
               />
+
               <path
                 d="M0,700 C200,650 400,620 600,600 C700,580 760,550 820,600 C1000,650 1200,680 1440,710 L1440,800 L0,800 Z"
                 fill="#04121f"
               />
+
               <path
                 d="M0,730 C200,690 400,660 620,620 C680,590 710,550 720,500 C730,550 760,590 820,620 C1000,660 1200,700 1440,720 L1440,800 L0,800 Z"
                 fill="#000000"
               />
             </svg>
 
-            {/* BEGIN THE ASCENT — summit tip */}
+            {/* BEGIN THE ASCENT — EXACT summit tip, clickable */}
             <motion.div
               onClick={handleEnter}
               style={{
                 position: "absolute",
                 left: "50%",
-                bottom: "50%",
+                bottom: "37%",
                 transform: "translate(-50%, 140%)",
-                zIndex: 3,
+                zIndex: 5,
                 cursor: "pointer",
               }}
               animate={{
                 opacity: [0.5, 1, 0.5],
                 textShadow: [
-                  "0 0 8px rgba(255,215,120,0.5)",
-                  "0 0 20px rgba(255,215,120,1)",
-                  "0 0 8px rgba(255,215,120,0.5)",
+                  "0 0 6px rgba(255,215,120,0.4)",
+                  "0 0 18px rgba(255,215,120,1)",
+                  "0 0 6px rgba(255,215,120,0.4)",
                 ],
               }}
               transition={{
-                duration: 3,
+                duration: 2.5,
                 repeat: Infinity,
               }}
             >
@@ -160,7 +169,6 @@ export default function HomePage() {
                   fontSize: "12px",
                   letterSpacing: "0.32em",
                   color: "rgba(255,215,120,0.95)",
-                  textAlign: "center",
                   whiteSpace: "nowrap",
                 }}
               >
@@ -168,14 +176,14 @@ export default function HomePage() {
               </div>
             </motion.div>
 
-            {/* TITLE */}
+            {/* Title block */}
             <div
               style={{
                 position: "absolute",
                 top: "32%",
                 width: "100%",
                 textAlign: "center",
-                zIndex: 3,
+                zIndex: 4,
               }}
             >
               <h1
@@ -212,7 +220,7 @@ export default function HomePage() {
               </p>
             </div>
 
-            {/* TRANSITION */}
+            {/* Warp transition */}
             {warp && (
               <motion.div
                 style={{
@@ -226,12 +234,17 @@ export default function HomePage() {
                 transition={{ duration: 0.9 }}
               />
             )}
+
           </motion.div>
+
         )}
       </AnimatePresence>
 
-      {/* ================= ACCESS ================= */}
+
+      {/* ================= ACCESS PAGE ================= */}
+
       {entered && (
+
         <div
           style={{
             minHeight: "100vh",
@@ -243,6 +256,7 @@ export default function HomePage() {
               "linear-gradient(to bottom, #FFF3D9, #FFE4B3, #E6F2FF, #F8FAFC)",
           }}
         >
+
           <h1
             style={{
               fontSize: "48px",
@@ -263,6 +277,7 @@ export default function HomePage() {
               width: 320,
             }}
           >
+
             <input
               placeholder="Student Name"
               value={name}
@@ -276,8 +291,11 @@ export default function HomePage() {
               style={inputStyle}
             >
               <option value="">Select Class</option>
+
               {[6,7,8,9,10,11,12].map(c => (
-                <option key={c} value={`Class ${c}`}>Class {c}</option>
+                <option key={c} value={`Class ${c}`}>
+                  Class {c}
+                </option>
               ))}
             </select>
 
@@ -289,13 +307,23 @@ export default function HomePage() {
               style={inputStyle}
             />
 
-            {error && <div style={{color:"red"}}>{error}</div>}
+            {error && (
+              <div style={{ color: "red" }}>
+                {error}
+              </div>
+            )}
 
-            <button type="submit" style={buttonStyle}>
+            <button
+              type="submit"
+              style={buttonStyle}
+            >
               STEP IN
             </button>
+
           </form>
+
         </div>
+
       )}
 
     </div>
