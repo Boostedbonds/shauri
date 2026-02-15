@@ -39,8 +39,14 @@ export default function HomePage() {
     };
 
     localStorage.setItem("shauri_student", JSON.stringify(studentContext));
-    document.cookie = `shauri_name=${encodeURIComponent(studentContext.name)}; path=/; SameSite=Lax`;
-    document.cookie = `shauri_class=${encodeURIComponent(studentContext.class)}; path=/; SameSite=Lax`;
+
+    document.cookie = `shauri_name=${encodeURIComponent(
+      studentContext.name
+    )}; path=/; SameSite=Lax`;
+
+    document.cookie = `shauri_class=${encodeURIComponent(
+      studentContext.class
+    )}; path=/; SameSite=Lax`;
 
     setTimeout(() => {
       window.location.href = "/modes";
@@ -61,7 +67,8 @@ export default function HomePage() {
             style={{
               position: "fixed",
               inset: 0,
-              background: "linear-gradient(to top, #000814 0%, #001d3d 60%, #0a2540 100%)",
+              background:
+                "linear-gradient(to top, #000814 0%, #001d3d 60%, #0a2540 100%)",
               overflow: "hidden",
               display: "flex",
               alignItems: "center",
@@ -115,7 +122,10 @@ export default function HomePage() {
             </svg>
 
             <motion.div
-              style={{ textAlign: "center", position: "relative" }}
+              style={{
+                textAlign: "center",
+                position: "relative",
+              }}
               initial={{ y: 40, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 1.6 }}
@@ -220,7 +230,8 @@ export default function HomePage() {
               width: "900px",
               maxWidth: "90%",
               pointerEvents: "none",
-              filter: "drop-shadow(0 0 40px rgba(212,175,55,0.3))",
+              filter:
+                "drop-shadow(0 0 40px rgba(212,175,55,0.3))",
             }}
           />
 
@@ -309,24 +320,48 @@ export default function HomePage() {
             />
 
             {error && (
-              <div style={{ color: "#dc2626", fontSize: 13 }}>{error}</div>
+              <div style={{ color: "#dc2626", fontSize: 13 }}>
+                {error}
+              </div>
             )}
 
+            {/* Presence Touch Pad */}
             <motion.button
               type="submit"
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
+              initial={{ boxShadow: "0 0 12px rgba(212,175,55,0.15)" }}
+              animate={{
+                boxShadow: [
+                  "0 0 12px rgba(212,175,55,0.15)",
+                  "0 0 28px rgba(212,175,55,0.45)",
+                  "0 0 12px rgba(212,175,55,0.15)",
+                ],
+              }}
+              transition={{
+                duration: 3,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }}
+              whileHover={{
+                scale: 1.08,
+                boxShadow: "0 0 45px rgba(212,175,55,0.75)",
+              }}
+              whileTap={{
+                scale: 0.94,
+                boxShadow: "0 0 60px rgba(212,175,55,0.95)",
+              }}
               style={{
-                padding: 14,
-                borderRadius: 12,
-                border: "none",
-                background: "linear-gradient(to right, #D4AF37, #C89B2B)",
+                padding: "16px 34px",
+                borderRadius: "999px",
+                border: "1px solid rgba(212,175,55,0.7)",
+                background: "rgba(255,255,255,0.75)",
                 color: "#1e293b",
                 fontWeight: 600,
+                letterSpacing: "0.28em",
                 cursor: "pointer",
+                backdropFilter: "blur(14px)",
               }}
             >
-              ENTER
+              STEP IN
             </motion.button>
           </motion.form>
 
