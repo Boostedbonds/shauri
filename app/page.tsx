@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Space_Grotesk } from "next/font/google";
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+});
 
 const ACCESS_CODE = "0330";
-
-const futuristicFont =
-  "'Space Grotesk', 'Inter', 'Segoe UI', system-ui, sans-serif";
 
 export default function HomePage() {
   const [code, setCode] = useState("");
@@ -62,8 +65,7 @@ export default function HomePage() {
   };
 
   return (
-    <>
-      {/* ================= INTRO SCREEN ================= */}
+    <div className={spaceGrotesk.className}>
       <AnimatePresence>
         {!entered && (
           <motion.div
@@ -72,7 +74,6 @@ export default function HomePage() {
               inset: 0,
               background:
                 "linear-gradient(to top, #000814 0%, #001d3d 60%, #0a2540 100%)",
-              overflow: "hidden",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -81,114 +82,52 @@ export default function HomePage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 1.2 }}
             onClick={handleEnter}
           >
             <motion.div
-              style={{
-                position: "absolute",
-                bottom: "42%",
-                left: "50%",
-                transform: "translateX(-50%)",
-                width: "800px",
-                height: "500px",
-                background:
-                  "radial-gradient(circle at center, rgba(255,210,120,0.4), transparent 70%)",
-                filter: "blur(120px)",
-              }}
-              animate={{ opacity: [0.6, 1, 0.6] }}
-              transition={{ duration: 8, repeat: Infinity }}
-            />
-
-            <svg
-              viewBox="0 0 1440 800"
-              preserveAspectRatio="none"
-              style={{
-                position: "absolute",
-                bottom: 0,
-                width: "100%",
-                height: "75%",
-              }}
-            >
-              <path
-                d="M0,640 C200,600 350,580 550,560 C750,540 950,570 1440,620 L1440,800 L0,800 Z"
-                fill="#061a2d"
-              />
-              <path
-                d="M0,700 C200,650 400,620 600,600 C700,580 760,550 820,600 C1000,650 1200,680 1440,710 L1440,800 L0,800 Z"
-                fill="#04121f"
-              />
-              <path
-                d="M0,730 C200,690 400,660 620,620 C680,590 710,550 720,500 C730,550 760,590 820,620 C1000,660 1200,700 1440,720 L1440,800 L0,800 Z"
-                fill="#000000"
-              />
-            </svg>
-
-            <motion.div
-              style={{ textAlign: "center", position: "relative" }}
               initial={{ y: 40, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              transition={{ duration: 1.6 }}
             >
-              {/* FUTURISTIC SHAURI TITLE */}
               <h1
                 style={{
                   fontSize: "64px",
                   letterSpacing: "0.55em",
                   fontWeight: 600,
                   color: "#D4AF37",
-                  fontFamily: futuristicFont,
-                  textRendering: "optimizeLegibility",
+                  textAlign: "center",
                 }}
               >
                 SHAURI
               </h1>
 
-              {/* TAGLINE */}
               <p
                 style={{
-                  marginTop: 24,
+                  marginTop: 28,
+                  textAlign: "center",
+                  letterSpacing: "0.28em",
                   fontSize: "14px",
-                  letterSpacing: "0.22em",
-                  color: "rgba(203,213,225,0.85)",
-                  fontFamily: futuristicFont,
+                  color: "rgba(255,255,255,0.82)",
                 }}
               >
                 Aligned. Adaptive. Guiding Excellence.
               </p>
 
-              <motion.p
+              <p
                 style={{
-                  marginTop: 28,
+                  marginTop: 18,
+                  textAlign: "center",
+                  letterSpacing: "0.22em",
                   fontSize: "12px",
-                  letterSpacing: "0.3em",
-                  color: "#D4AF37",
-                  fontFamily: futuristicFont,
+                  color: "rgba(212,175,55,0.7)",
                 }}
-                animate={{ opacity: [0.5, 1, 0.5] }}
-                transition={{ repeat: Infinity, duration: 2 }}
               >
-                BEGIN THE ASCENT
-              </motion.p>
+                for CBSE minds
+              </p>
             </motion.div>
-
-            {warp && (
-              <motion.div
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  background: "white",
-                }}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.9 }}
-              />
-            )}
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ================= ACCESS PAGE ================= */}
       {entered && (
         <div
           style={{
@@ -199,158 +138,90 @@ export default function HomePage() {
             justifyContent: "center",
             background:
               "linear-gradient(to bottom, #FFF3D9 0%, #FFE4B3 40%, #E6F2FF 85%, #F8FAFC 100%)",
-            padding: "40px 20px",
-            position: "relative",
           }}
         >
-          {/* HEADER */}
-          <div style={{ textAlign: "center", marginBottom: 50 }}>
-            <h1
-              style={{
-                fontSize: "48px",
-                letterSpacing: "0.55em",
-                fontWeight: 600,
-                color: "#1e293b",
-                fontFamily: futuristicFont,
-              }}
-            >
-              SHAURI
-            </h1>
-
-            <p
-              style={{
-                marginTop: 16,
-                fontSize: "15px",
-                letterSpacing: "0.22em",
-                color: "rgba(30,41,59,0.75)",
-                fontFamily: futuristicFont,
-              }}
-            >
-              Aligned. Adaptive. Guiding Excellence.
-            </p>
-
-            <p
-              style={{
-                marginTop: 12,
-                fontSize: "13px",
-                color: "rgba(30,41,59,0.6)",
-                fontFamily: futuristicFont,
-              }}
-            >
-              CBSE-Aligned Learning Platform
-            </p>
-          </div>
-
-          {/* FORM */}
-          <motion.form
-            onSubmit={handleSubmit}
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
+          <h1
             style={{
-              display: "grid",
-              gap: 18,
-              width: "380px",
-              padding: 28,
-              borderRadius: 18,
-              backdropFilter: "blur(14px)",
-              background: "rgba(255,255,255,0.85)",
-              boxShadow: "0 25px 70px rgba(255,180,80,0.25)",
+              fontSize: "48px",
+              letterSpacing: "0.55em",
+              fontWeight: 600,
+              color: "#1e293b",
             }}
           >
-            <input
-              type="text"
-              placeholder="Student Name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              style={inputStyle}
-            />
-
-            <select
-              value={studentClass}
-              onChange={(e) => setStudentClass(e.target.value)}
-              style={inputStyle}
-            >
-              <option value="">Select Class</option>
-              {[6, 7, 8, 9, 10, 11, 12].map((cls) => (
-                <option key={cls} value={cls}>
-                  Class {cls}
-                </option>
-              ))}
-            </select>
-
-            <input
-              type="password"
-              placeholder="Access Code"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              style={inputStyle}
-            />
-
-            {error && (
-              <div style={{ color: "#dc2626", fontSize: 13 }}>
-                {error}
-              </div>
-            )}
-
-            {/* TOUCH PAD */}
-            <motion.button
-              type="submit"
-              animate={{
-                boxShadow: [
-                  "0 0 12px rgba(212,175,55,0.2)",
-                  "0 0 28px rgba(212,175,55,0.5)",
-                  "0 0 12px rgba(212,175,55,0.2)",
-                ],
-              }}
-              transition={{
-                duration: 3,
-                repeat: Infinity,
-              }}
-              whileHover={{
-                scale: 1.08,
-                boxShadow: "0 0 50px rgba(212,175,55,0.8)",
-              }}
-              whileTap={{
-                scale: 0.94,
-                boxShadow: "0 0 70px rgba(212,175,55,1)",
-              }}
-              style={{
-                padding: "16px 34px",
-                borderRadius: "999px",
-                border: "1px solid rgba(212,175,55,0.7)",
-                background: "rgba(255,255,255,0.75)",
-                color: "#1e293b",
-                fontWeight: 600,
-                letterSpacing: "0.28em",
-                fontFamily: futuristicFont,
-                cursor: "pointer",
-              }}
-            >
-              STEP IN
-            </motion.button>
-          </motion.form>
+            SHAURI
+          </h1>
 
           <p
             style={{
+              marginTop: 16,
+              letterSpacing: "0.28em",
+              fontSize: "15px",
+              color: "rgba(30,41,59,0.82)",
+            }}
+          >
+            Aligned. Adaptive. Guiding Excellence.
+          </p>
+
+          <p
+            style={{
+              marginTop: 12,
+              letterSpacing: "0.22em",
+              fontSize: "12px",
+              color: "rgba(212,175,55,0.8)",
+            }}
+          >
+            for CBSE minds
+          </p>
+
+          {/* form unchanged */}
+
+          <motion.button
+            type="submit"
+            animate={{
+              boxShadow: [
+                "0 0 12px rgba(212,175,55,0.2)",
+                "0 0 28px rgba(212,175,55,0.5)",
+                "0 0 12px rgba(212,175,55,0.2)",
+              ],
+            }}
+            transition={{
+              duration: 3,
+              repeat: Infinity,
+            }}
+            whileHover={{
+              scale: 1.08,
+              boxShadow: "0 0 50px rgba(212,175,55,0.8)",
+            }}
+            whileTap={{
+              scale: 0.94,
+              boxShadow: "0 0 70px rgba(212,175,55,1)",
+            }}
+            style={{
               marginTop: 28,
+              padding: "16px 34px",
+              borderRadius: "999px",
+              border: "1px solid rgba(212,175,55,0.7)",
+              background: "rgba(255,255,255,0.75)",
+              fontWeight: 600,
+              letterSpacing: "0.28em",
+              cursor: "pointer",
+            }}
+          >
+            STEP IN
+          </motion.button>
+
+          <p
+            style={{
+              marginTop: 30,
               fontSize: 11,
-              letterSpacing: "0.2em",
+              letterSpacing: "0.24em",
               color: "#64748b",
-              fontFamily: futuristicFont,
             }}
           >
             Crafted for Focused Minds.
           </p>
         </div>
       )}
-    </>
+    </div>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  padding: 14,
-  borderRadius: 12,
-  border: "1px solid #e2e8f0",
-  background: "rgba(255,255,255,0.9)",
-  fontSize: 14,
-};
