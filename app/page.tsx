@@ -80,56 +80,11 @@ export default function HomePage() {
             exit={{ opacity: 0 }}
           >
 
-            {/* TITLE BLOCK (ANCHOR REFERENCE) */}
-            <div
-              style={{
-                position: "absolute",
-                top: "26%", // lifted up for proper separation
-                width: "100%",
-                textAlign: "center",
-                zIndex: 4,
-              }}
-            >
-              <h1
-                style={{
-                  fontSize: "72px",
-                  letterSpacing: "0.55em",
-                  fontWeight: 700,
-                  color: "#D4AF37",
-                }}
-              >
-                SHAURI
-              </h1>
-
-              <p
-                style={{
-                  marginTop: "26px",
-                  fontSize: "15px",
-                  letterSpacing: "0.30em",
-                  color: "rgba(255,255,255,0.88)",
-                }}
-              >
-                THE COURAGE TO MASTER THE FUTURE
-              </p>
-
-              <p
-                style={{
-                  marginTop: "16px",
-                  fontSize: "13px",
-                  letterSpacing: "0.28em",
-                  color: "rgba(212,175,55,0.95)",
-                }}
-              >
-                CBSE-ALIGNED ADAPTIVE LEARNING PLATFORM
-              </p>
-            </div>
-
-
-            {/* SUN PERFECTLY CENTERED BEHIND TITLE */}
+            {/* SUN (UNCHANGED) */}
             <motion.div
               style={{
                 position: "absolute",
-                top: "26%", // EXACT SAME AS TITLE BLOCK
+                top: "26%",
                 left: "50%",
                 transform: "translate(-50%, -40%)",
                 width: "720px",
@@ -150,6 +105,52 @@ export default function HomePage() {
                 repeat: Infinity,
               }}
             />
+
+
+            {/* TITLE BLOCK */}
+            <div
+              style={{
+                position: "absolute",
+                top: "26%",
+                width: "100%",
+                textAlign: "center",
+                zIndex: 4,
+              }}
+            >
+              <h1
+                style={{
+                  fontSize: "72px",
+                  letterSpacing: "0.55em",
+                  fontWeight: 700,
+                  color: "#D4AF37",
+                }}
+              >
+                SHAURI
+              </h1>
+
+              {/* Subtitle closer */}
+              <p
+                style={{
+                  marginTop: "14px",
+                  fontSize: "15px",
+                  letterSpacing: "0.30em",
+                  color: "rgba(255,255,255,0.88)",
+                }}
+              >
+                THE COURAGE TO MASTER THE FUTURE
+              </p>
+
+              <p
+                style={{
+                  marginTop: "6px",
+                  fontSize: "13px",
+                  letterSpacing: "0.28em",
+                  color: "rgba(212,175,55,0.95)",
+                }}
+              >
+                CBSE-ALIGNED ADAPTIVE LEARNING PLATFORM
+              </p>
+            </div>
 
 
             {/* LIGHT BEAM */}
@@ -206,28 +207,22 @@ export default function HomePage() {
             </svg>
 
 
-            {/* BEGIN THE ASCENT — EXACT SUMMIT TIP */}
+            {/* BEGIN THE ASCENT — CLEAN TEXT ONLY */}
             <motion.div
               onClick={handleEnter}
               style={{
                 position: "absolute",
-                bottom: "27.2%", // summit tip anchor
+                bottom: "27.4%",
                 left: "50%",
                 transform: "translateX(-50%)",
-                padding: "14px 34px",
-                borderRadius: "999px",
-                background:
-                  "linear-gradient(180deg, #FFE27A 0%, #D4AF37 100%)",
-                color: "#04121f",
                 fontSize: "13px",
-                letterSpacing: "0.34em",
+                letterSpacing: "0.38em",
+                color: "#D4AF37",
                 cursor: "pointer",
                 zIndex: 5,
-                boxShadow:
-                  "0 0 24px rgba(212,175,55,0.65), 0 0 60px rgba(212,175,55,0.35)",
               }}
               animate={{
-                scale: [1, 1.05, 1],
+                opacity: [0.6, 1, 0.6],
               }}
               transition={{
                 duration: 2,
@@ -252,6 +247,7 @@ export default function HomePage() {
                 transition={{ duration: 0.9 }}
               />
             )}
+
           </motion.div>
         )}
       </AnimatePresence>
@@ -306,6 +302,7 @@ export default function HomePage() {
             {error && <div style={{color:"red"}}>{error}</div>}
 
             <button style={buttonStyle}>STEP IN</button>
+
           </form>
         </div>
       )}
