@@ -64,7 +64,14 @@ export default function HomePage() {
   }
 
   return (
-    <div className={orbitron.className}>
+    <div
+      className={orbitron.className}
+      style={{
+        width: "100%",
+        minHeight: "100vh",
+        overflowX: "hidden",
+      }}
+    >
       {/* ================= INTRO (FROZEN — UNTOUCHED) ================= */}
       <AnimatePresence>
         {!entered && (
@@ -88,8 +95,8 @@ export default function HomePage() {
                 top: "26%",
                 left: "50%",
                 transform: "translate(-50%, -40%)",
-                width: "720px",
-                height: "720px",
+                width: "min(720px, 140vw)",
+                height: "min(720px, 140vw)",
                 borderRadius: "50%",
                 background:
                   "radial-gradient(circle, rgba(255,215,120,0.55) 0%, rgba(255,215,120,0.32) 30%, rgba(255,215,120,0.18) 50%, rgba(255,215,120,0.08) 70%, transparent 90%)",
@@ -115,12 +122,13 @@ export default function HomePage() {
                 width: "100%",
                 textAlign: "center",
                 zIndex: 4,
+                padding: "0 20px",
               }}
             >
               <h1
                 style={{
-                  fontSize: "72px",
-                  letterSpacing: "0.55em",
+                  fontSize: "clamp(42px, 8vw, 72px)",
+                  letterSpacing: "clamp(0.25em, 0.55em, 0.55em)",
                   fontWeight: 700,
                   color: "#D4AF37",
                 }}
@@ -131,7 +139,7 @@ export default function HomePage() {
               <p
                 style={{
                   marginTop: "14px",
-                  fontSize: "15px",
+                  fontSize: "clamp(11px, 2.5vw, 15px)",
                   letterSpacing: "0.30em",
                   color: "rgba(255,255,255,0.88)",
                 }}
@@ -142,7 +150,7 @@ export default function HomePage() {
               <p
                 style={{
                   marginTop: "6px",
-                  fontSize: "13px",
+                  fontSize: "clamp(10px, 2.3vw, 13px)",
                   letterSpacing: "0.28em",
                   color: "rgba(212,175,55,0.95)",
                 }}
@@ -159,7 +167,7 @@ export default function HomePage() {
                 bottom: "27%",
                 left: "50%",
                 transform: "translateX(-50%)",
-                width: "160px",
+                width: "min(160px, 20vw)",
                 background:
                   "linear-gradient(to bottom, rgba(255,215,120,0.35), rgba(255,215,120,0.18), rgba(255,215,120,0.08), transparent)",
                 filter: "blur(14px)",
@@ -211,11 +219,13 @@ export default function HomePage() {
                 bottom: "27.4%",
                 left: "50%",
                 transform: "translateX(-50%)",
-                fontSize: "13px",
+                fontSize: "clamp(10px, 2.2vw, 13px)",
                 letterSpacing: "0.38em",
                 color: "#D4AF37",
                 cursor: "pointer",
                 zIndex: 5,
+                textAlign: "center",
+                padding: "0 20px",
               }}
               animate={{
                 opacity: [0.6, 1, 0.6],
@@ -245,7 +255,7 @@ export default function HomePage() {
         )}
       </AnimatePresence>
 
-      {/* ================= ACCESS PAGE (UPDATED ONLY HERE) ================= */}
+      {/* ================= ACCESS PAGE ================= */}
       {entered && (
         <div
           style={{
@@ -256,26 +266,25 @@ export default function HomePage() {
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
+            padding: "20px",
           }}
         >
-
-          {/* TITLE */}
           <h1
             style={{
-              fontSize: "42px",
+              fontSize: "clamp(28px, 6vw, 42px)",
               letterSpacing: "0.45em",
               fontWeight: 700,
               color: "#1e293b",
               marginBottom: "10px",
+              textAlign: "center",
             }}
           >
             SHAURI
           </h1>
 
-          {/* TAGLINE */}
           <p
             style={{
-              fontSize: "13px",
+              fontSize: "clamp(10px, 2.5vw, 13px)",
               letterSpacing: "0.30em",
               color: "#334155",
               marginBottom: "4px",
@@ -285,10 +294,9 @@ export default function HomePage() {
             THE COURAGE TO MASTER THE FUTURE
           </p>
 
-          {/* SYSTEM LINE */}
           <p
             style={{
-              fontSize: "11px",
+              fontSize: "clamp(9px, 2.3vw, 11px)",
               letterSpacing: "0.26em",
               color: "#64748b",
               marginBottom: "28px",
@@ -298,13 +306,13 @@ export default function HomePage() {
             CBSE-ALIGNED ADAPTIVE LEARNING PLATFORM
           </p>
 
-          {/* FORM */}
           <form
             onSubmit={handleSubmit}
             style={{
               display: "grid",
               gap: "16px",
-              width: "320px",
+              width: "100%",
+              maxWidth: "340px",
             }}
           >
             <input
@@ -320,7 +328,7 @@ export default function HomePage() {
               style={inputStyle}
             >
               <option value="">Select Class</option>
-              {[6,7,8,9,10,11,12].map((c)=>(
+              {[6, 7, 8, 9, 10, 11, 12].map((c) => (
                 <option key={c}>Class {c}</option>
               ))}
             </select>
@@ -333,25 +341,26 @@ export default function HomePage() {
               style={inputStyle}
             />
 
-            {error && <div style={{color:"red"}}>{error}</div>}
+            {error && (
+              <div style={{ color: "red", fontSize: "13px" }}>{error}</div>
+            )}
 
             <button style={buttonStyle}>STEP IN</button>
           </form>
 
-          {/* PRIVACY LINE */}
           <p
             style={{
               marginTop: "22px",
-              fontSize: "10px",
+              fontSize: "clamp(9px, 2vw, 10px)",
               letterSpacing: "0.18em",
               color: "#64748b",
               textAlign: "center",
               maxWidth: "420px",
             }}
           >
-            Private. Secure. Used only to guide your learning journey. Never shared.
+            Private. Secure. Used only to guide your learning journey. Never
+            shared.
           </p>
-
         </div>
       )}
     </div>
@@ -362,6 +371,8 @@ const inputStyle: React.CSSProperties = {
   padding: "12px",
   borderRadius: "10px",
   border: "1px solid #ccc",
+  width: "100%",
+  fontSize: "16px",
 };
 
 const buttonStyle: React.CSSProperties = {
@@ -371,4 +382,6 @@ const buttonStyle: React.CSSProperties = {
   background: "white",
   letterSpacing: "0.25em",
   cursor: "pointer",
+  fontSize: "14px",
+  width: "100%",
 };
