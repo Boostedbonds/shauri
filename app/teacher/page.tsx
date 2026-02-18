@@ -18,12 +18,17 @@ export default function TeacherPage() {
     },
   ]);
 
-  // 🔽 Auto-scroll anchor
-  const bottomRef = useRef<HTMLDivElement | null>(null);
+  // 🔽 Scroll container ref (FIXED)
+  const chatContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // 🔁 Scroll to bottom whenever messages update
+  // 🔁 Scroll to bottom whenever messages update (CLEAN FIX)
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
   }, [messages]);
 
   async function handleSend(text: string, uploadedText?: string) {
@@ -50,7 +55,6 @@ ${uploadedText}
     const updatedMessages: Message[] = [...messages, userMessage];
     setMessages(updatedMessages);
 
-    // 🔹 Read student context from localStorage
     let student = null;
     try {
       const stored = localStorage.getItem("shauri_student");
@@ -67,7 +71,7 @@ ${uploadedText}
       body: JSON.stringify({
         mode: "teacher",
         messages: updatedMessages,
-        student, // ✅ PASS STUDENT CONTEXT
+        student,
         uploadedText: uploadedText ?? null,
       }),
     });
@@ -118,14 +122,14 @@ ${uploadedText}
 
       {/* 💬 Chat area */}
       <div
+        ref={chatContainerRef}
         style={{
           flex: 1,
           overflowY: "auto",
-          paddingBottom: 96, // ⬅ prevents last message hiding
+          paddingBottom: 96,
         }}
       >
         <ChatUI messages={messages} />
-        <div ref={bottomRef} />
       </div>
 
       {/* ⌨️ Input fixed at bottom */}

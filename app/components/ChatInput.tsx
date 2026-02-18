@@ -78,7 +78,6 @@ export default function ChatInput({ onSend }: Props) {
     const names = files.map((file) => file.name);
     setFileNames(names);
 
-    // Combine file descriptions
     const combinedText = files
       .map((file, index) => {
         if (file.type === "application/pdf") {
@@ -236,6 +235,18 @@ export default function ChatInput({ onSend }: Props) {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 handleSend();
+              }
+
+              // ✅ FIX: allow arrow keys to scroll page when input is empty
+              if (
+                (e.key === "ArrowUp" || e.key === "ArrowDown") &&
+                value.trim() === ""
+              ) {
+                e.currentTarget.blur();
+                window.scrollBy({
+                  top: e.key === "ArrowDown" ? 120 : -120,
+                  behavior: "smooth",
+                });
               }
             }}
           />

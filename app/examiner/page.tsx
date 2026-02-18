@@ -29,10 +29,18 @@ export default function ExaminerPage() {
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimestampRef = useRef<number | null>(null);
-  const bottomRef = useRef<HTMLDivElement | null>(null);
 
+  // ✅ NEW: scroll container ref
+  const chatContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // ✅ CLEAN scroll fix
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
   }, [messages]);
 
   /* ================= STOPWATCH ================= */
@@ -162,17 +170,14 @@ ${uploadedText}
     const aiReply: string =
       typeof data?.reply === "string" ? data.reply : "";
 
-    /* ✅ START TIMER FROM SERVER TIME */
     if (typeof data?.startTime === "number") {
       startTimer(data.startTime);
     }
 
-    /* ✅ STOP TIMER ON SUBMIT */
     if (data?.examEnded === true) {
       stopTimer();
 
       const usedSeconds = elapsedSeconds;
-
       const subject = data?.subject ?? "Exam";
       const chapters = data?.chapters ?? [];
       const marksObtained = data?.marksObtained ?? 0;
@@ -210,7 +215,14 @@ ${uploadedText}
   /* ================= UI ================= */
 
   return (
-    <div style={{ minHeight: "100vh", paddingTop: 24, display: "flex", flexDirection: "column" }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        paddingTop: 24,
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
       <div style={{ paddingLeft: 24, marginBottom: 16 }}>
         <button
           onClick={() => (window.location.href = "/modes")}
@@ -251,12 +263,25 @@ ${uploadedText}
         Examiner Mode
       </h1>
 
-      <div style={{ flex: 1, overflowY: "auto", paddingBottom: 96 }}>
+      <div
+        ref={chatContainerRef}
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          paddingBottom: 96,
+        }}
+      >
         <ChatUI messages={messages} />
-        <div ref={bottomRef} />
       </div>
 
-      <div style={{ position: "sticky", bottom: 0, background: "#f8fafc", paddingBottom: 16 }}>
+      <div
+        style={{
+          position: "sticky",
+          bottom: 0,
+          background: "#f8fafc",
+          paddingBottom: 16,
+        }}
+      >
         <ChatInput onSend={handleSend} />
       </div>
     </div>
