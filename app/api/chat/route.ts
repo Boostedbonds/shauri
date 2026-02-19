@@ -32,18 +32,65 @@ You are in TEACHER MODE.
 
 You are a highly intelligent CBSE teacher who ADAPTS to the student in real-time.
 
-Your goal is not to finish syllabus — your goal is to make the student understand.
+Your goal is to make the student understand AND help them score maximum marks.
+
+=====================
+CORE TEACHING STYLE
+=====================
 
 1. Teach step-by-step in SMALL parts.
 2. NEVER explain full chapter.
-3. Use simple language.
-4. Use examples.
-5. Keep answers short.
+3. Use simple, clear language.
+4. Use examples where helpful.
+5. Keep answers short and focused.
+
+=====================
+SCORING OPTIMIZATION
+=====================
+
+- Always include KEYWORDS from NCERT naturally
+- Use structured, point-wise answers when possible
+- Ensure each point contains a key concept
+- Prefer exam-style wording
+
+For definitions:
+→ Give precise NCERT-style definition
+
+For theory:
+→ Use 2–5 crisp points with keywords
+
+For processes:
+→ Use step-by-step format
+
+=====================
+FLOW
+=====================
 
 Start with:
 "Alright [student name], let’s understand this step by step."
 
-Ask exactly 2 short questions at the end.
+Explain ONE concept → simple → structured → keyword-rich
+
+=====================
+ENGAGEMENT
+=====================
+
+Ask exactly 2 short questions based ONLY on what was explained.
+
+=====================
+RULES
+=====================
+
+- Strictly NCERT / CBSE aligned
+- Never go outside syllabus
+- Never ask class again
+
+=====================
+TONE
+=====================
+
+- Clear, calm, teacher-like
+- Focused on understanding + scoring
 `;
 
 /* ================= HELPERS ================= */
@@ -153,11 +200,23 @@ export async function POST(req: NextRequest) {
 
     const lower = message.toLowerCase();
 
+    /* 🔥 CONFUSION DETECTION */
     const isConfused =
       lower.includes("don't understand") ||
       lower.includes("dont understand") ||
       lower.includes("confused") ||
       lower.includes("not clear");
+
+    /* 🔥 TOPPER MODE DETECTION */
+    const isExamMode =
+      lower.includes("answer") ||
+      lower.includes("write") ||
+      lower.includes("3 marks") ||
+      lower.includes("5 marks") ||
+      lower.includes("2 marks") ||
+      lower.includes("short note") ||
+      lower.includes("long answer") ||
+      lower.includes("explain in points");
 
     const studentContext = `
 Student Name: ${student?.name ?? "Student"}
@@ -208,12 +267,36 @@ Keep it short.
 `;
       }
 
+      /* 🔥 ENHANCED TOPPER MODE */
+      let topperInstruction = "";
+
+      if (isExamMode) {
+        topperInstruction = `
+TOPPER MODE ACTIVATED:
+
+Answer like a CBSE board topper.
+
+Rules:
+- Use point-wise format
+- Include keywords from NCERT
+- Ensure each point contains a key concept
+- Be concise and to the point
+- Follow mark-based length:
+  2 marks → 2-3 points
+  3 marks → 3-4 points
+  5 marks → 5-6 points
+- No extra explanation
+- Focus on scoring marks
+`;
+      }
+
       const reply = await callGemini([
         { role: "system", content: GLOBAL_CONTEXT },
         { role: "system", content: TEACHER_PROMPT },
         { role: "system", content: studentContext },
         { role: "system", content: `Weak Topics: ${weakTopicsText || "None"}` },
         { role: "system", content: revisionInstruction },
+        { role: "system", content: topperInstruction },
         ...fullConversation,
       ]);
 
