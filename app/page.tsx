@@ -72,7 +72,6 @@ export default function HomePage() {
         overflowX: "hidden",
       }}
     >
-      {/* ================= INTRO ================= */}
       <AnimatePresence>
         {!entered && (
           <motion.div
@@ -87,7 +86,6 @@ export default function HomePage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            {/* SUN */}
             <motion.div
               style={{
                 position: "absolute",
@@ -113,7 +111,6 @@ export default function HomePage() {
               }}
             />
 
-            {/* TITLE */}
             <div
               style={{
                 position: "absolute",
@@ -158,7 +155,6 @@ export default function HomePage() {
               </p>
             </div>
 
-            {/* LIGHT BEAM */}
             <motion.div
               style={{
                 position: "absolute",
@@ -184,7 +180,6 @@ export default function HomePage() {
               onClick={handleEnter}
             />
 
-            {/* 🔥 MOUNTAIN RESTORED (UNCHANGED DESIGN) */}
             <svg
               viewBox="0 0 1440 800"
               preserveAspectRatio="none"
@@ -192,7 +187,7 @@ export default function HomePage() {
                 position: "absolute",
                 bottom: 0,
                 width: "100%",
-                height: "100%", // ✅ ONLY FIX APPLIED
+                height: "100%",
                 zIndex: 2,
               }}
             >
@@ -210,12 +205,12 @@ export default function HomePage() {
               />
             </svg>
 
-            {/* CTA */}
+            {/* ✅ FIXED CTA POSITION */}
             <motion.div
               onClick={handleEnter}
               style={{
                 position: "absolute",
-                bottom: "27.4%",
+                bottom: "18%", // 🔥 FIXED (was 27.4%)
                 left: "50%",
                 transform: "translateX(-50%)",
                 fontSize: "clamp(10px, 2.2vw, 13px)",
@@ -254,7 +249,6 @@ export default function HomePage() {
         )}
       </AnimatePresence>
 
-      {/* ================= ACCESS PAGE ================= */}
       {entered && (
         <div
           style={{
