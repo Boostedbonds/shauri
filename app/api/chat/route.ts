@@ -29,14 +29,7 @@ Never guess the class.
 
 const TEACHER_PROMPT = `
 You are in TEACHER MODE.
-
-Teaching Rules:
-- Explain step-by-step
-- Use NCERT language
-- Keep answers exam-focused
-- Use keywords, headings, and points
-- Give definitions where needed
-- End with 2-3 quick revision questions
+Teach step-by-step, use keywords, keep answers short, and help student score marks.
 `;
 
 /* ================= EXAMINER PROMPT ================= */
@@ -90,43 +83,6 @@ async function callGemini(messages: ChatMessage[], temperature = 0.3) {
   );
 }
 
-/* ================= SMART CONTEXT HELPERS ================= */
-
-function detectChapter(message: string) {
-  const msg = message.toLowerCase();
-
-  const keywords = [
-    "democracy",
-    "constitution",
-    "nazism",
-    "french revolution",
-    "resources",
-    "poverty",
-    "development",
-    "socialism",
-    "population",
-    "climate",
-  ];
-
-  for (const key of keywords) {
-    if (msg.includes(key)) return key;
-  }
-
-  return "general topic";
-}
-
-function getNcertInstruction(chapter: string) {
-  return `
-NCERT Focus Instructions:
-- Topic: ${chapter}
-- Include definitions (as per NCERT)
-- Highlight important keywords
-- Use CBSE answer writing format
-- Keep answers structured (points, headings)
-- Avoid extra/out-of-syllabus content
-`;
-}
-
 /* ================= API ================= */
 
 export async function POST(req: NextRequest) {
@@ -141,10 +97,14 @@ export async function POST(req: NextRequest) {
 
     if (mode === "examiner") {
 
+      // STEP 1: GENERATE PAPER
       if (message.toLowerCase().includes("start")) {
 
         const paper = await callGemini([
-          { role: "system", content: GLOBAL_CONTEXT },
+          {
+            role: "system",
+            content: GLOBAL_CONTEXT,
+          },
           {
             role: "user",
             content: `
@@ -174,6 +134,7 @@ NO ANSWERS.
         return NextResponse.json({ reply: paper });
       }
 
+      // STEP 2: EVALUATE ANSWERS
       if (message.toLowerCase().includes("submit")) {
 
         const evaluation = await callGemini([
@@ -201,52 +162,9 @@ ${message}
     /* ================= TEACHER MODE ================= */
 
     if (mode === "teacher") {
-
-      const msg = message.toLowerCase().trim();
-
-      // ✅ FIX: stop backend from generating unwanted lecture
-      if (
-        msg === "hi" ||
-        msg === "hello" ||
-        msg === "hey" ||
-        msg.length < 3
-      ) {
-        return NextResponse.json({
-          reply: "Which chapter or topic would you like to study?",
-        });
-      }
-
-      const chapter = detectChapter(message);
-      const ncertInstruction = getNcertInstruction(chapter);
-
       const reply = await callGemini([
         { role: "system", content: GLOBAL_CONTEXT },
         { role: "system", content: TEACHER_PROMPT },
-
-        {
-          role: "system",
-          content: `
-Student Context:
-Name: ${student.name || "Unknown"}
-Class: ${student.class || "Unknown"}
-Board: ${student.board || "CBSE"}
-
-Instructions:
-- Adapt explanation strictly based on class level
-- Do NOT mention missing context
-`,
-        },
-
-        {
-          role: "system",
-          content: `Detected Topic: ${chapter}`,
-        },
-
-        {
-          role: "system",
-          content: ncertInstruction,
-        },
-
         { role: "user", content: message },
       ]);
 
