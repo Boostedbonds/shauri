@@ -92,7 +92,6 @@ async function callGemini(messages: ChatMessage[], temperature = 0.3) {
 
 /* ================= SMART CONTEXT HELPERS ================= */
 
-// 🔍 Chapter Detection (lightweight but effective)
 function detectChapter(message: string) {
   const msg = message.toLowerCase();
 
@@ -116,7 +115,6 @@ function detectChapter(message: string) {
   return "general topic";
 }
 
-// 🎯 NCERT Keyword Injection
 function getNcertInstruction(chapter: string) {
   return `
 NCERT Focus Instructions:
@@ -204,6 +202,20 @@ ${message}
 
     if (mode === "teacher") {
 
+      const msg = message.toLowerCase().trim();
+
+      // ✅ FIX: stop backend from generating unwanted lecture
+      if (
+        msg === "hi" ||
+        msg === "hello" ||
+        msg === "hey" ||
+        msg.length < 3
+      ) {
+        return NextResponse.json({
+          reply: "Which chapter or topic would you like to study?",
+        });
+      }
+
       const chapter = detectChapter(message);
       const ncertInstruction = getNcertInstruction(chapter);
 
@@ -211,7 +223,6 @@ ${message}
         { role: "system", content: GLOBAL_CONTEXT },
         { role: "system", content: TEACHER_PROMPT },
 
-        // ✅ Student Context (restored)
         {
           role: "system",
           content: `
@@ -226,13 +237,11 @@ Instructions:
 `,
         },
 
-        // ✅ Chapter Awareness
         {
           role: "system",
           content: `Detected Topic: ${chapter}`,
         },
 
-        // ✅ NCERT Injection
         {
           role: "system",
           content: ncertInstruction,
