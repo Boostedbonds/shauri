@@ -210,7 +210,7 @@ export default function HomePage() {
               onClick={handleEnter}
               style={{
                 position: "absolute",
-                bottom: "21%", // 🔥 FIXED (was 27.4%)
+                bottom: "27.4%", // 🔥 FIXED (was 27.4%)
                 left: "50%",
                 transform: "translateX(-50%)",
                 fontSize: "clamp(10px, 2.2vw, 13px)",

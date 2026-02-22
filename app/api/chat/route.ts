@@ -103,7 +103,6 @@ function extractPaperParams(text: string) {
     /(history|civics|geography|economics|science|math|mathematics|english|hindi)/i
   );
 
-  // crude chapters capture (after "chapter" or "chapters")
   let chapters: string[] = [];
   const chapMatch = lower.match(/chapters?\s*[:\-]?\s*([a-z0-9 ,&]+)/i);
   if (chapMatch?.[1]) {
@@ -118,10 +117,6 @@ function extractPaperParams(text: string) {
     subject: subjectMatch?.[1],
     chapters,
   };
-}
-
-function nowMs() {
-  return Date.now();
 }
 
 /* ================= GEMINI ================= */
@@ -149,20 +144,6 @@ async function callGemini(messages: ChatMessage[], temperature = 0.2) {
   return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "Unable to generate response.";
 }
 
-/* ================= IN-MEMORY EXAM SESSIONS ================= */
-
-type ExamSession = {
-  paper: string;
-  startedAt: number;
-  durationMin: number;
-  answers: string[];
-  subject?: string;
-  classNum?: string;
-  chapters?: string[];
-};
-
-const examSessions = new Map<string, ExamSession>();
-
 /* ================= API ================= */
 
 export async function POST(req: NextRequest) {
@@ -184,7 +165,6 @@ export async function POST(req: NextRequest) {
 
     const lower = (message || "").toLowerCase().trim();
 
-    // student from cookie
     const name = decodeURIComponent(req.cookies.get("shauri_name")?.value || "Student");
     const cls = decodeURIComponent(req.cookies.get("shauri_class")?.value || "Not specified");
 
@@ -202,11 +182,54 @@ Board: CBSE
     /* ================= EXAMINER MODE ================= */
 
     if (mode === "examiner") {
-      const studentId = `${name}__${cls}`;
+      // ===== GET ACTIVE SESSION =====
+      let { data: session } = await supabase
+        .from("exam_sessions")
+        .select("*")
+        .eq("student_name", name)
+        .eq("class", cls)
+        .neq("status", "completed")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      // ===== CREATE SESSION =====
+      if (!session) {
+        await supabase.from("exam_sessions").insert({
+          student_name: name,
+          class: cls,
+          answers: [],
+          status: "idle",
+        });
+
+        return NextResponse.json({
+          reply: `Hello ${name}. Which subject and chapters would you like to be tested on?`,
+        });
+      }
+
+      // ===== SUBJECT INTAKE =====
+      if (session.status === "idle" && !/\b(start|begin)\b/.test(lower)) {
+        const { classNum, subject, chapters } = extractPaperParams(message);
+
+        await supabase
+          .from("exam_sessions")
+          .update({
+            subject,
+            class: classNum || cls,
+            chapters,
+            status: "ready",
+          })
+          .eq("id", session.id);
+
+        return NextResponse.json({
+          reply: `Noted. You will be tested on ${subject ?? "the selected subject"}${
+            chapters?.length ? ` (${chapters.join(", ")})` : ""
+          }.\n\nType START to begin the exam.`,
+        });
+      }
 
       // ===== START =====
       if (/\b(start|begin)\b/.test(lower)) {
-        const { classNum, subject, chapters } = extractPaperParams(message);
         const durationMin = calculateDurationMinutes(message);
 
         const paper = await callGemini(
@@ -218,9 +241,9 @@ Board: CBSE
               role: "user",
               content: `
 Create a CBSE question paper.
-${classNum ? `Class: ${classNum}` : ""}
-${subject ? `Subject: ${subject}` : ""}
-${chapters?.length ? `Chapters: ${chapters.join(", ")}` : ""}
+Class: ${session.class}
+Subject: ${session.subject}
+${session.chapters?.length ? `Chapters: ${session.chapters.join(", ")}` : ""}
 Time: ${durationMin} minutes
 Maximum Marks: 80
 `,
@@ -229,52 +252,49 @@ Maximum Marks: 80
           0.2
         );
 
-        examSessions.set(studentId, {
-          paper,
-          startedAt: nowMs(),
-          durationMin,
-          answers: [],
-          subject,
-          classNum,
-          chapters,
-        });
+        await supabase
+          .from("exam_sessions")
+          .update({
+            paper,
+            started_at: new Date().toISOString(),
+            duration_min: durationMin,
+            status: "started",
+          })
+          .eq("id", session.id);
 
         return NextResponse.json({
           reply: paper,
-          meta: {
-            examStarted: true,
-            durationMin,
-          },
+          meta: { examStarted: true, durationMin },
         });
       }
 
-      const session = examSessions.get(studentId);
-
-      // ===== NO SESSION =====
-      if (!session) {
+      // ===== NOT STARTED =====
+      if (session.status !== "started") {
         return NextResponse.json({
           reply: "Type START to begin the exam.",
         });
       }
 
-      // ===== TIME CHECK =====
-      const elapsedMin = (nowMs() - session.startedAt) / (60 * 1000);
-      const timeLeft = Math.max(0, session.durationMin - elapsedMin);
+      // ===== TIME =====
+      const elapsedMin =
+        (Date.now() - new Date(session.started_at).getTime()) / (60 * 1000);
 
-      const isSubmit =
-        /\b(submit|done|end test|finish)\b/.test(lower);
+      const timeLeft = Math.max(0, session.duration_min - elapsedMin);
 
-      // ===== AUTO-SUBMIT ON TIME UP =====
-      if (!isSubmit && timeLeft <= 0) {
-        // fallthrough to evaluation
-      } else if (!isSubmit) {
-        // ===== SILENT MODE =====
-        session.answers.push(message);
+      const isSubmit = /\b(submit|done|end test|finish)\b/.test(lower);
+
+      // ===== STORE ANSWERS =====
+      if (!isSubmit && timeLeft > 0) {
+        const updatedAnswers = [...(session.answers || []), message];
+
+        await supabase
+          .from("exam_sessions")
+          .update({ answers: updatedAnswers })
+          .eq("id", session.id);
+
         return NextResponse.json({
           reply: "...",
-          meta: {
-            timeLeftMin: Math.ceil(timeLeft),
-          },
+          meta: { timeLeftMin: Math.ceil(timeLeft) },
         });
       }
 
@@ -292,7 +312,7 @@ QUESTION PAPER:
 ${session.paper}
 
 STUDENT ANSWERS:
-${session.answers.join("\n")}
+${(session.answers || []).join("\n")}
 `,
           },
         ],
@@ -301,9 +321,11 @@ ${session.answers.join("\n")}
 
       const parsed = safeParseJSON(evaluationRaw);
 
-      examSessions.delete(studentId);
+      await supabase
+        .from("exam_sessions")
+        .update({ status: "completed" })
+        .eq("id", session.id);
 
-      // ===== SAVE TO SUPABASE (for Progress) =====
       try {
         if (parsed) {
           await supabase.from("exam_attempts").insert({
@@ -332,7 +354,7 @@ ${session.answers.join("\n")}
       return NextResponse.json({ reply: evaluationRaw });
     }
 
-    /* ================= OTHER MODES (UNCHANGED) ================= */
+    /* ================= OTHER MODES ================= */
 
     if (mode === "teacher") {
       const reply = await callGemini([
