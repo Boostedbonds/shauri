@@ -151,11 +151,6 @@ Class: ${cls}
           })
           .eq("id", session.id);
 
-        // ✅ IMPORTANT FIX: update local object
-        session.subject = subject;
-        session.chapters = chapters;
-        session.status = "ready";
-
         return NextResponse.json({
           reply: `Subject noted: ${subject}. Type START to begin.`,
         });
@@ -199,11 +194,18 @@ Class: ${cls}
         const isSubmit = /\b(submit|done|finish)\b/.test(lower);
 
         if (!isSubmit) {
+          // ✅ FIX: always fetch latest answers
+          const { data: latest } = await supabase
+            .from("exam_sessions")
+            .select("answers")
+            .eq("id", session.id)
+            .single();
+
+          const updatedAnswers = [...(latest?.answers || []), message];
+
           await supabase
             .from("exam_sessions")
-            .update({
-              answers: [...(session.answers || []), message],
-            })
+            .update({ answers: updatedAnswers })
             .eq("id", session.id);
 
           return NextResponse.json({ reply: "..." });
