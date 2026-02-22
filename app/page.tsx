@@ -40,9 +40,8 @@ export default function HomePage() {
     };
 
     localStorage.setItem("shauri_student", JSON.stringify(studentContext));
-
-    document.cookie = `shauri_name=${encodeURIComponent(studentContext.name)}; path=/; SameSite=Lax`;
-    document.cookie = `shauri_class=${encodeURIComponent(studentContext.class)}; path=/; SameSite=Lax`;
+    document.cookie = `shauri_name=${encodeURIComponent(studentContext.name)}; path=/`;
+    document.cookie = `shauri_class=${encodeURIComponent(studentContext.class)}; path=/`;
 
     window.location.href = "/modes";
   }
@@ -50,7 +49,7 @@ export default function HomePage() {
   return (
     <div className={orbitron.className} style={{ minHeight: "100vh" }}>
 
-      {/* ================= LANDING ================= */}
+      {/* LANDING */}
       <AnimatePresence>
         {!entered && (
           <motion.div
@@ -64,44 +63,51 @@ export default function HomePage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
+
             {/* SUN */}
             <div
               style={{
                 position: "absolute",
-                top: "20%",
+                top: "22%",
                 left: "50%",
                 transform: "translate(-50%, -50%)",
                 width: "520px",
                 height: "520px",
                 borderRadius: "50%",
                 background:
-                  "radial-gradient(circle, rgba(255,215,120,0.95) 0%, rgba(255,160,40,0.5) 50%, transparent 80%)",
+                  "radial-gradient(circle, rgba(255,215,120,1) 0%, rgba(255,180,60,0.6) 50%, transparent 80%)",
                 filter: "blur(12px)",
               }}
             />
 
             {/* TITLE */}
-            <div style={{ position: "absolute", top: "20%", width: "100%", textAlign: "center", zIndex: 5 }}>
+            <div style={{ position: "absolute", top: "22%", width: "100%", textAlign: "center" }}>
               <h1
                 style={{
-                  fontSize: "84px",
-                  letterSpacing: "0.5em",
+                  fontSize: "76px",
+                  letterSpacing: "0.55em",
                   fontWeight: 700,
-                  background: "linear-gradient(to bottom, #FFD700, #D4AF37, #A67C00)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
+                  color: "#FFD700",
                   textShadow:
-                    "0 0 25px rgba(255,215,120,0.6), 0 2px 6px rgba(0,0,0,0.8)",
+                    "0 0 20px rgba(255,215,120,0.9), 0 0 40px rgba(255,200,80,0.6), 0 2px 6px rgba(0,0,0,0.8)",
                 }}
               >
                 SHAURI
               </h1>
 
-              <p style={{ marginTop: 10, color: "#ffffff", letterSpacing: "0.1em" }}>
+              <p style={{ marginTop: 12, color: "#ffffff", letterSpacing: "0.15em" }}>
                 THE COURAGE TO MASTER THE FUTURE
               </p>
 
-              <p style={{ color: "#FFD700", marginTop: 6 }}>
+              <p
+                style={{
+                  color: "#FFD700",
+                  fontSize: "13px",
+                  letterSpacing: "0.15em",
+                  marginTop: 6,
+                  whiteSpace: "nowrap",
+                }}
+              >
                 CBSE-ALIGNED ADAPTIVE LEARNING PLATFORM
               </p>
             </div>
@@ -119,52 +125,43 @@ export default function HomePage() {
               onClick={handleEnter}
               style={{
                 position: "absolute",
-                bottom: "24%",
+                bottom: "220px",
                 left: "50%",
                 transform: "translateX(-50%)",
                 cursor: "pointer",
               }}
-              animate={{ opacity: [0.6, 1, 0.6] }}
-              transition={{ duration: 2, repeat: Infinity }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
             >
               <div
                 style={{
                   position: "relative",
-                  padding: "14px 40px",
+                  padding: "14px 42px",
                   borderRadius: "999px",
-                  color: "#FFD700",
-                  letterSpacing: "0.3em",
-                  border: "1px solid rgba(255,215,0,0.6)",
+                  border: "1px solid rgba(255,215,0,0.5)",
                   overflow: "hidden",
+                  color: "#FFD700",
+                  letterSpacing: "0.35em",
                 }}
               >
-                {/* GOLD RUNNING LIGHT */}
-                <div
+                {/* running gold light */}
+                <motion.div
                   style={{
                     position: "absolute",
-                    inset: 0,
+                    top: 0,
+                    left: "-100%",
+                    width: "100%",
+                    height: "100%",
                     background:
-                      "linear-gradient(120deg, transparent, rgba(255,215,0,0.7), transparent)",
-                    transform: "translateX(-100%)",
-                    animation: "shine 2.5s infinite",
+                      "linear-gradient(90deg, transparent, rgba(255,215,0,0.6), transparent)",
                   }}
+                  animate={{ left: ["-100%", "100%"] }}
+                  transition={{ duration: 2, repeat: Infinity }}
                 />
 
-                <span style={{ position: "relative", zIndex: 2 }}>
-                  BEGIN THE ASCEND
-                </span>
+                BEGIN THE ASCENT
               </div>
             </motion.div>
-
-            {/* ANIMATION KEYFRAMES */}
-            <style>
-              {`
-                @keyframes shine {
-                  0% { transform: translateX(-100%); }
-                  100% { transform: translateX(100%); }
-                }
-              `}
-            </style>
 
             {warp && (
               <motion.div
@@ -177,7 +174,7 @@ export default function HomePage() {
         )}
       </AnimatePresence>
 
-      {/* ================= ACCESS PAGE ================= */}
+      {/* ACCESS PAGE */}
       {entered && (
         <div
           style={{
@@ -186,44 +183,26 @@ export default function HomePage() {
             justifyContent: "center",
             alignItems: "center",
             flexDirection: "column",
-            background:
-              "linear-gradient(to bottom, #f5e6c8, #e8d3a3)",
+            background: "linear-gradient(to bottom, #e6d3a3, #d6c08d)",
           }}
         >
-          {/* TITLE */}
           <h1
             style={{
               fontSize: "48px",
-              letterSpacing: "0.2em",
-              marginBottom: 10,
+              letterSpacing: "0.4em",
+              fontWeight: 700,
               color: "#0f172a",
-              textShadow: "0 2px 8px rgba(0,0,0,0.1)",
+              textShadow: "0 2px 4px rgba(0,0,0,0.15)",
             }}
           >
             SHAURI
           </h1>
 
-          {/* SUBTITLE */}
-          <p
-            style={{
-              marginBottom: 30,
-              color: "#444",
-              fontSize: "14px",
-              letterSpacing: "0.08em",
-            }}
-          >
-            Step into your personalized learning journey
+          <p style={{ marginTop: 10, marginBottom: 30, opacity: 0.7 }}>
+            CBSE-Aligned. Adaptive. Built for your growth.
           </p>
 
-          {/* FORM */}
-          <form
-            onSubmit={handleSubmit}
-            style={{
-              display: "grid",
-              gap: 16,
-              width: "280px",
-            }}
-          >
+          <form onSubmit={handleSubmit} style={{ display: "grid", gap: 16 }}>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -251,44 +230,31 @@ export default function HomePage() {
             />
 
             <button style={buttonStyle}>STEP IN</button>
-
-            {error && (
-              <p style={{ color: "red", fontSize: 12 }}>{error}</p>
-            )}
           </form>
 
-          {/* QUOTE */}
-          <p
-            style={{
-              marginTop: 40,
-              fontSize: "13px",
-              color: "#444",
-              opacity: 0.8,
-            }}
-          >
+          <p style={{ marginTop: 40, opacity: 0.6 }}>
             Discipline today builds the confidence of tomorrow.
           </p>
+
+          {error && <p style={{ color: "red", marginTop: 10 }}>{error}</p>}
         </div>
       )}
     </div>
   );
 }
 
-/* ================= STYLES ================= */
-
 const inputStyle = {
   padding: "12px",
   borderRadius: "12px",
-  border: "1px solid rgba(212,175,55,0.6)",
-  background: "#ffffff",
-  outline: "none",
+  border: "1px solid #d4af37",
+  width: "260px",
+  background: "#f8fafc",
 };
 
 const buttonStyle = {
   padding: "12px",
   borderRadius: "999px",
-  border: "1px solid #D4AF37",
-  background: "linear-gradient(to right, #f5e6c8, #e8d3a3)",
+  border: "1px solid #d4af37",
+  background: "transparent",
   cursor: "pointer",
-  letterSpacing: "0.1em",
 };
