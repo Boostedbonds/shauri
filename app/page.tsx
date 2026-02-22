@@ -31,7 +31,7 @@ export default function HomePage() {
 
   function handleEnter() {
     setWarp(true);
-    setTimeout(() => setEntered(true), 900);
+    setTimeout(() => setEntered(true), 800);
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -55,8 +55,8 @@ export default function HomePage() {
 
   return (
     <div className={orbitron.className} style={{ minHeight: "100vh" }}>
-      
-      {/* HERO */}
+
+      {/* ================= LANDING ================= */}
       <AnimatePresence>
         {!entered && (
           <motion.div
@@ -70,58 +70,43 @@ export default function HomePage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            {/* SUN (animated pulse) */}
-            <motion.div
-              animate={{
-                scale: [1, 1.05, 1],
-                opacity: [0.9, 1, 0.9],
-              }}
-              transition={{ duration: 4, repeat: Infinity }}
+
+            {/* SUN (reduced blur for sharp glow) */}
+            <div
               style={{
                 position: "absolute",
-                top: "22%",
+                top: "28%",
                 left: "50%",
                 transform: "translate(-50%, -50%)",
                 width: "420px",
                 height: "420px",
                 borderRadius: "50%",
                 background:
-                  "radial-gradient(circle, rgba(255,215,120,0.95) 0%, rgba(255,170,60,0.4) 55%, transparent 75%)",
-                filter: "blur(4px)",
+                  "radial-gradient(circle, rgba(255,215,120,0.95) 0%, rgba(255,180,60,0.5) 45%, transparent 75%)",
+                filter: "blur(4px)", // 🔥 FIXED (was 10px)
               }}
             />
 
             {/* TITLE */}
-            <div
-              style={{
-                position: "absolute",
-                top: "22%",
-                width: "100%",
-                textAlign: "center",
-                zIndex: 5,
-              }}
-            >
+            <div style={{ position: "absolute", top: "26%", width: "100%", textAlign: "center", zIndex: 5 }}>
               <h1
                 style={{
                   fontSize: "72px",
                   letterSpacing: "0.5em",
                   fontWeight: 700,
-                  background:
-                    "linear-gradient(to bottom, #FFD700, #E6C200, #A67C00)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
+                  color: "#FFD700",
                   textShadow:
-                    "0 0 10px rgba(255,215,120,0.7), 0 0 25px rgba(255,200,80,0.5), 0 2px 4px rgba(0,0,0,0.7)",
+                    "0 0 6px rgba(255,215,120,0.9), 0 0 20px rgba(255,200,80,0.6), 0 0 40px rgba(255,180,60,0.4)",
                 }}
               >
                 SHAURI
               </h1>
 
-              <p style={{ marginTop: 12, color: "#fff", letterSpacing: "0.1em" }}>
+              <p style={{ marginTop: 10, color: "#ffffffcc" }}>
                 THE COURAGE TO MASTER THE FUTURE
               </p>
 
-              <p style={{ color: "#FFD700", marginTop: 4 }}>
+              <p style={{ color: "#FFD700", fontSize: "14px" }}>
                 CBSE-ALIGNED ADAPTIVE LEARNING PLATFORM
               </p>
             </div>
@@ -134,14 +119,12 @@ export default function HomePage() {
               />
             </svg>
 
-            {/* CTA */}
+            {/* CTA (FIXED POSITION ABOVE PEAK) */}
             <motion.div
               onClick={handleEnter}
-              whileHover={{ scale: 1.08 }}
-              whileTap={{ scale: 0.95 }}
               style={{
                 position: "absolute",
-                bottom: "40%",
+                bottom: "38%", // 🔥 moved above peak
                 left: "50%",
                 transform: "translateX(-50%)",
                 letterSpacing: "0.4em",
@@ -153,54 +136,46 @@ export default function HomePage() {
               transition={{ duration: 2, repeat: Infinity }}
             >
               BEGIN THE ASCENT
-              <div style={{ fontSize: "12px", marginTop: 10 }}>
+              <div style={{ fontSize: "12px", marginTop: 8, opacity: 0.8 }}>
                 {getDynamicLine()}
               </div>
             </motion.div>
 
-            {/* DAWN TRANSITION */}
+            {/* SUNRISE TRANSITION (NOT WHITE FLASH) */}
             {warp && (
               <motion.div
-                initial={{ scaleY: 0 }}
-                animate={{ scaleY: 1 }}
                 style={{
-                  transformOrigin: "bottom",
                   position: "absolute",
                   inset: 0,
                   background:
-                    "linear-gradient(to bottom, #fff7e6, #f3e2b3, #e6d3a3)",
+                    "linear-gradient(to bottom, #f5e6c8, #e6d3a3, #d9c48c)",
                 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
               />
             )}
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ACCESS PAGE */}
+      {/* ================= ACCESS PAGE ================= */}
       {entered && (
         <div
           style={{
             minHeight: "100vh",
             display: "flex",
+            flexDirection: "column",
             justifyContent: "center",
             alignItems: "center",
-            flexDirection: "column",
-            background:
-              "linear-gradient(to bottom, #fff7e6, #f3e2b3, #e6d3a3)",
+            background: "linear-gradient(to bottom, #f5e6c8, #e6d3a3)",
           }}
         >
-          <h1 style={{ fontSize: 40, marginBottom: 30 }}>SHAURI</h1>
+          <h1 style={{ marginBottom: 24, letterSpacing: "0.3em" }}>
+            SHAURI
+          </h1>
 
-          <form
-            onSubmit={handleSubmit}
-            style={{
-              display: "grid",
-              gap: 18,
-              width: "100%",
-              maxWidth: "340px",
-              backdropFilter: "blur(6px)",
-            }}
-          >
+          <form onSubmit={handleSubmit} style={{ display: "grid", gap: 18, width: "320px" }}>
+
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -214,7 +189,7 @@ export default function HomePage() {
               style={inputStyle}
             >
               <option value="">Select Class</option>
-              {[6, 7, 8, 9, 10, 11, 12].map((c) => (
+              {[6,7,8,9,10,11,12].map(c => (
                 <option key={c}>Class {c}</option>
               ))}
             </select>
@@ -228,26 +203,19 @@ export default function HomePage() {
             />
 
             {error && (
-              <div style={{ color: "red", fontSize: "13px" }}>{error}</div>
+              <div style={{ color: "red", fontSize: 13 }}>{error}</div>
             )}
 
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              style={buttonStyle}
-            >
-              STEP IN
-            </motion.button>
+            <button style={buttonStyle}>STEP IN</button>
           </form>
 
-          {/* STRONG QUOTE */}
+          {/* MOTIVATIONAL QUOTE */}
           <p
             style={{
-              marginTop: "70px",
-              fontSize: "14px",
-              opacity: 0.8,
-              textAlign: "center",
-              maxWidth: "400px",
+              position: "absolute",
+              bottom: 40,
+              fontSize: 14,
+              opacity: 0.7,
             }}
           >
             Discipline today builds the confidence of tomorrow.
@@ -261,17 +229,16 @@ export default function HomePage() {
 const inputStyle = {
   padding: "14px",
   borderRadius: "14px",
-  border: "1px solid #D4AF37",
+  border: "1px solid #d4af37",
+  background: "#ffffffcc",
   fontSize: "14px",
-  outline: "none",
-  transition: "all 0.2s ease",
 };
 
 const buttonStyle = {
   padding: "14px",
   borderRadius: "999px",
-  border: "1px solid #D4AF37",
-  background: "transparent",
+  border: "1px solid #d4af37",
+  background: "#e6d3a3",
   fontWeight: 600,
   cursor: "pointer",
 };
