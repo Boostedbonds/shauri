@@ -11,7 +11,7 @@ const orbitron = Orbitron({
 
 const ACCESS_CODE = "0330";
 
-/* 🔥 NEW — Dynamic Line */
+/* 🔥 Dynamic Line */
 function getDynamicLine() {
   const hour = new Date().getHours();
 
@@ -63,13 +63,8 @@ export default function HomePage() {
 
     localStorage.setItem("shauri_student", JSON.stringify(studentContext));
 
-    document.cookie = `shauri_name=${encodeURIComponent(
-      studentContext.name
-    )}; path=/; SameSite=Lax`;
-
-    document.cookie = `shauri_class=${encodeURIComponent(
-      studentContext.class
-    )}; path=/; SameSite=Lax`;
+    document.cookie = `shauri_name=${encodeURIComponent(studentContext.name)}; path=/; SameSite=Lax`;
+    document.cookie = `shauri_class=${encodeURIComponent(studentContext.class)}; path=/; SameSite=Lax`;
 
     window.location.href = "/modes";
   }
@@ -97,7 +92,50 @@ export default function HomePage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            {/* 🔥 ENHANCED GLOW (Alive feel) */}
+            {/* 🌅 SUN */}
+            <motion.div
+              style={{
+                position: "absolute",
+                top: "24%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                width: "min(520px, 90vw)",
+                height: "min(520px, 90vw)",
+                borderRadius: "50%",
+                background:
+                  "radial-gradient(circle, rgba(255,215,120,0.95) 0%, rgba(255,200,80,0.7) 25%, rgba(255,170,40,0.45) 45%, rgba(255,140,0,0.25) 60%, rgba(255,120,0,0.12) 70%, transparent 85%)",
+                filter: "blur(6px)",
+                zIndex: 1,
+              }}
+              animate={{
+                scale: [1, 1.04, 1],
+                opacity: [0.9, 1, 0.9],
+              }}
+              transition={{
+                duration: 6,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }}
+            />
+
+            {/* 🌄 HORIZON BLENDING (NEW) */}
+            <div
+              style={{
+                position: "absolute",
+                bottom: "28%",
+                left: "50%",
+                transform: "translateX(-50%)",
+                width: "120%",
+                height: "180px",
+                background:
+                  "radial-gradient(ellipse at center, rgba(255,180,80,0.35) 0%, rgba(255,140,40,0.18) 35%, rgba(255,120,0,0.08) 55%, transparent 75%)",
+                filter: "blur(30px)",
+                zIndex: 2,
+                pointerEvents: "none",
+              }}
+            />
+
+            {/* SOFT GLOBAL GLOW */}
             <motion.div
               style={{
                 position: "absolute",
@@ -108,21 +146,21 @@ export default function HomePage() {
                 height: "min(720px, 140vw)",
                 borderRadius: "50%",
                 background:
-                  "radial-gradient(circle, rgba(255,215,120,0.55) 0%, rgba(255,215,120,0.32) 30%, rgba(255,215,120,0.18) 50%, rgba(255,215,120,0.08) 70%, transparent 90%)",
-                filter: "blur(24px)",
+                  "radial-gradient(circle, rgba(255,215,120,0.35) 0%, rgba(255,215,120,0.18) 40%, transparent 70%)",
+                filter: "blur(28px)",
                 pointerEvents: "none",
                 zIndex: 1,
               }}
               animate={{
-                opacity: [0.75, 1, 0.75],
-                scale: [1, 1.05, 1],
+                opacity: [0.7, 1, 0.7],
               }}
               transition={{
-                duration: 5,
+                duration: 6,
                 repeat: Infinity,
               }}
             />
 
+            {/* TITLE */}
             <div
               style={{
                 position: "absolute",
@@ -139,7 +177,7 @@ export default function HomePage() {
                   letterSpacing: "clamp(0.25em, 0.55em, 0.55em)",
                   fontWeight: 700,
                   color: "#D4AF37",
-                  textShadow: "0 0 25px rgba(212,175,55,0.15)", // 🔥 subtle glow
+                  textShadow: "0 0 40px rgba(255,200,100,0.25)",
                 }}
               >
                 SHAURI
@@ -168,31 +206,31 @@ export default function HomePage() {
               </p>
             </div>
 
-            {/* LIGHT BEAM */}
-            <motion.div
+            {/* 🌊 WAVES (slightly tuned) */}
+            <svg
+              viewBox="0 0 1440 800"
+              preserveAspectRatio="none"
               style={{
                 position: "absolute",
-                top: "34%",
-                bottom: "27%",
-                left: "50%",
-                transform: "translateX(-50%)",
-                width: "min(160px, 20vw)",
-                background:
-                  "linear-gradient(to bottom, rgba(255,215,120,0.35), rgba(255,215,120,0.18), rgba(255,215,120,0.08), transparent)",
-                filter: "blur(14px)",
-                borderRadius: "80px",
-                cursor: "pointer",
-                zIndex: 3,
+                bottom: 0,
+                width: "100%",
+                height: "100%",
+                zIndex: 2,
               }}
-              animate={{
-                opacity: [0.65, 1, 0.65],
-              }}
-              transition={{
-                duration: 4,
-                repeat: Infinity,
-              }}
-              onClick={handleEnter}
-            />
+            >
+              <path
+                d="M0,640 C200,600 350,580 550,560 C750,540 950,570 1440,620 L1440,800 L0,800 Z"
+                fill="#0a1f33"
+              />
+              <path
+                d="M0,700 C200,650 400,620 600,600 C700,580 760,550 820,600 C1000,650 1200,680 1440,710 L1440,800 L0,800 Z"
+                fill="#04121f"
+              />
+              <path
+                d="M0,730 C200,690 400,660 620,620 C680,590 710,550 720,500 C730,550 760,590 820,620 C1000,660 1200,700 1440,720 L1440,800 L0,800 Z"
+                fill="#000000"
+              />
+            </svg>
 
             {/* CTA */}
             <motion.div
@@ -220,7 +258,6 @@ export default function HomePage() {
             >
               BEGIN THE ASCENT
 
-              {/* 🔥 ALIVE LINE */}
               <div
                 style={{
                   marginTop: "10px",
