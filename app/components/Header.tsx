@@ -21,7 +21,7 @@ export default function Header({ onLogout }: { onLogout?: () => void }) {
             fontWeight: 700,
           }}
         >
-          Shauri
+          SHAURI
         </h2>
         <small
           style={{
@@ -29,7 +29,7 @@ export default function Header({ onLogout }: { onLogout?: () => void }) {
             fontSize: 14,
           }}
         >
-          Competency-Based Adaptive Learning Platform
+          CBSE-Aligned Adaptive Learning Platform
         </small>
       </div>
 
