@@ -1,217 +1,168 @@
 "use client";
 
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Orbitron } from "next/font/google";
 
-const orbitron = Orbitron({
-  subsets: ["latin"],
-  weight: ["400", "600", "700"],
-});
-
-const ACCESS_CODE = "0330";
-
-function getDynamicLine() {
-  const hour = new Date().getHours();
-  if (hour < 5) return "The system is quiet… but listening.";
-  if (hour < 12) return "A fresh mind learns faster.";
-  if (hour < 17) return "Focus sharpens understanding.";
-  if (hour < 22) return "Consistency builds mastery.";
-  return "Even now, progress is possible.";
-}
-
-export default function HomePage() {
+export default function Page() {
   const [entered, setEntered] = useState(false);
-  const [warp, setWarp] = useState(false);
-
-  const [name, setName] = useState("");
-  const [studentClass, setStudentClass] = useState("");
-  const [code, setCode] = useState("");
-  const [error, setError] = useState("");
-
-  function handleEnter() {
-    setWarp(true);
-    setTimeout(() => setEntered(true), 900);
-  }
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-
-    if (!name.trim()) return setError("Please enter student name");
-    if (!studentClass) return setError("Please select class");
-    if (code !== ACCESS_CODE) return setError("Invalid access code");
-
-    const studentContext = {
-      name: name.trim(),
-      class: studentClass,
-      board: "CBSE",
-    };
-
-    localStorage.setItem("shauri_student", JSON.stringify(studentContext));
-    window.location.href = "/modes";
-  }
 
   return (
-    <div className={orbitron.className} style={{ minHeight: "100vh" }}>
-
-      {/* ================= LANDING ================= */}
-      <AnimatePresence>
-        {!entered && (
-          <motion.div
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "linear-gradient(to top, #000814, #001d3d, #0a2540)",
-              overflow: "hidden",
-            }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            {/* SUN */}
-            <div
-              style={{
-                position: "absolute",
-                top: "22%",
-                left: "50%",
-                transform: "translate(-50%, -50%)",
-                width: "520px",
-                height: "520px",
-                borderRadius: "50%",
-                background:
-                  "radial-gradient(circle, rgba(255,215,120,0.95) 0%, rgba(255,160,40,0.5) 50%, transparent 80%)",
-                filter: "blur(10px)",
-              }}
-            />
-
-            {/* TITLE */}
-            <div
-              style={{
-                position: "absolute",
-                top: "22%",
-                width: "100%",
-                textAlign: "center",
-                zIndex: 5,
-              }}
-            >
-              <h1
-                style={{
-                  fontSize: "72px",
-                  letterSpacing: "0.5em",
-                  fontWeight: 700,
-                  background: "linear-gradient(to bottom, #FFD700, #D4AF37, #A67C00)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  textShadow:
-                    "0 0 15px rgba(255,215,120,0.4), 0 2px 4px rgba(0,0,0,0.7)",
-                }}
-              >
-                SHAURI
-              </h1>
-
-              <p style={{ marginTop: 10, color: "#fff" }}>
-                THE COURAGE TO MASTER THE FUTURE
-              </p>
-
-              <p style={{ color: "#FFD700" }}>
-                CBSE-ALIGNED ADAPTIVE LEARNING PLATFORM
-              </p>
-            </div>
-
-            {/* MOUNTAIN */}
-            <svg
-              viewBox="0 0 1440 800"
-              style={{
-                position: "absolute",
-                bottom: 0,
-                zIndex: 1, // ✅ kept below CTA
-              }}
-            >
-              <path
-                d="M0,730 C400,650 700,600 720,500 C740,600 1000,650 1440,720 L1440,800 L0,800 Z"
-                fill="black"
-              />
-            </svg>
-
-            {/* CTA (FIXED) */}
-            <motion.div
-              onClick={handleEnter}
-              style={{
-                position: "absolute",
-                bottom: "38%", // ✅ moved above peak
-                left: "50%",
-                transform: "translateX(-50%)",
-                letterSpacing: "0.4em",
-                color: "#D4AF37",
-                cursor: "pointer",
-                zIndex: 10, // ✅ forced above mountain
-                overflow: "hidden",
-              }}
-              animate={{ opacity: [0.5, 1, 0.5] }}
-              transition={{ duration: 2, repeat: Infinity }}
-            >
-              {/* Golden running light */}
-              <div
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: "-50%",
-                  width: "50%",
-                  height: "100%",
-                  background:
-                    "linear-gradient(120deg, transparent, rgba(255,215,0,0.8), transparent)",
-                  animation: "run 2s linear infinite",
-                }}
-              />
-
-              BEGIN THE ASCENT
-            </motion.div>
-
-            <style>
-              {`
-              @keyframes run {
-                0% { left: -50%; }
-                100% { left: 120%; }
-              }
-              `}
-            </style>
-
-            {warp && (
-              <motion.div
-                style={{ position: "absolute", inset: 0, background: "white" }}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-              />
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ================= ACCESS (UNCHANGED) ================= */}
-      {entered && (
-        <div
-          style={{
-            minHeight: "100vh",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            flexDirection: "column",
-          }}
-        >
-          <h1>SHAURI</h1>
-
-          <form onSubmit={handleSubmit} style={{ display: "grid", gap: 16 }}>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Student Name" />
-            <select value={studentClass} onChange={(e) => setStudentClass(e.target.value)}>
-              <option value="">Select Class</option>
-              {[6,7,8,9,10,11,12].map(c => <option key={c}>Class {c}</option>)}
-            </select>
-            <input type="password" value={code} onChange={(e) => setCode(e.target.value)} placeholder="Access Code" />
-            <button>INITIATE ASCENT</button>
-          </form>
-        </div>
-      )}
+    <div style={{ minHeight: "100vh", fontFamily: "sans-serif" }}>
+      {!entered ? <Landing onEnter={() => setEntered(true)} /> : <Access />}
     </div>
   );
 }
+
+/* ================= LANDING ================= */
+
+function Landing({ onEnter }: { onEnter: () => void }) {
+  return (
+    <div
+      style={{
+        height: "100vh",
+        background: "#0b2a4a",
+        position: "relative",
+        overflow: "hidden",
+        color: "white",
+        textAlign: "center",
+      }}
+    >
+      {/* SUN */}
+      <div
+        style={{
+          position: "absolute",
+          top: "10%",
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: 400,
+          height: 400,
+          borderRadius: "50%",
+          background: "radial-gradient(circle, #e6c27a, #caa24f, transparent)",
+          filter: "blur(20px)",
+        }}
+      />
+
+      {/* TITLE */}
+      <h1
+        style={{
+          marginTop: 120,
+          fontSize: "64px",
+          letterSpacing: "18px",
+          color: "#FFD700",
+          textShadow: "0 0 20px rgba(255,215,0,0.8)",
+        }}
+      >
+        SHAURI
+      </h1>
+
+      <p style={{ opacity: 0.8 }}>
+        THE COURAGE TO MASTER THE FUTURE
+      </p>
+      <p style={{ color: "#FFD700" }}>
+        CBSE-ALIGNED ADAPTIVE LEARNING PLATFORM
+      </p>
+
+      {/* MOUNTAIN */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 0,
+          width: "100%",
+          height: "40%",
+          background: "black",
+          clipPath: "polygon(0% 100%, 50% 40%, 100% 100%)",
+          zIndex: 1,
+        }}
+      />
+
+      {/* CTA */}
+      <button
+        onClick={onEnter}
+        style={{
+          position: "absolute",
+          bottom: "26%",
+          left: "50%",
+          transform: "translateX(-50%)",
+          padding: "14px 40px",
+          borderRadius: "30px",
+          border: "1px solid #FFD700",
+          color: "#FFD700",
+          background: "transparent",
+          fontSize: "14px",
+          letterSpacing: "4px",
+          cursor: "pointer",
+          zIndex: 3,
+          boxShadow: "0 0 15px rgba(255,215,0,0.6)",
+        }}
+      >
+        BEGIN THE ASCENT
+      </button>
+    </div>
+  );
+}
+
+/* ================= ACCESS ================= */
+
+function Access() {
+  return (
+    <div
+      style={{
+        height: "100vh",
+        background: "#e8d3a8",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <h1
+        style={{
+          fontSize: "40px",
+          letterSpacing: "10px",
+          marginBottom: "20px",
+          color: "#0b2a4a",
+        }}
+      >
+        SHAURI
+      </h1>
+
+      <p style={{ marginBottom: "30px", opacity: 0.7 }}>
+        CBSE-Aligned. Adaptive. Built for your growth.
+      </p>
+
+      <div style={{ width: "280px", display: "flex", flexDirection: "column", gap: "14px" }}>
+        <input placeholder="Student Name" style={inputStyle} />
+        <select style={inputStyle}>
+          <option>Select Class</option>
+        </select>
+        <input placeholder="Access Code" style={inputStyle} />
+
+        <button
+          style={{
+            marginTop: "10px",
+            padding: "12px",
+            borderRadius: "25px",
+            border: "none",
+            background: "#d4af37",
+            color: "black",
+            letterSpacing: "2px",
+            cursor: "pointer",
+          }}
+        >
+          INITIATE ASCENT
+        </button>
+      </div>
+
+      <p style={{ marginTop: "40px", opacity: 0.6 }}>
+        Discipline today builds the confidence of tomorrow.
+      </p>
+    </div>
+  );
+}
+
+/* ================= STYLES ================= */
+
+const inputStyle = {
+  padding: "10px",
+  borderRadius: "8px",
+  border: "1px solid #ccc",
+};
