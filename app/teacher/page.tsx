@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect, useState } from "react";
 import ChatUI from "../components/ChatUI";
 import ChatInput from "../components/ChatInput";
@@ -12,28 +11,24 @@ export type Message = {
 export default function TeacherPage() {
   const [messages, setMessages] = useState<Message[]>([]);
 
-  // ✅ Dynamic Greeting (FIXED)
   useEffect(() => {
     try {
       const stored = localStorage.getItem("shauri_student");
       if (stored) {
         const student = JSON.parse(stored);
-
         const name = student?.name || "Student";
         const cls = student?.class || "";
-
         setMessages([
           {
             role: "assistant",
-            content: `Hello ${name}! I'm Shauri, here to help you ace your ${cls} studies as per NCERT and CBSE. Let’s go step by step.`,
+            content: `Hello ${name}! I'm Shauri, here to help you ace your Class ${cls} studies as per NCERT and CBSE. What would you like to learn today?`,
           },
         ]);
       } else {
         setMessages([
           {
             role: "assistant",
-            content:
-              "Hello! I'm Shauri. Let’s go step by step. What would you like to study?",
+            content: "Hello! I'm Shauri. What would you like to study today?",
           },
         ]);
       }
@@ -41,14 +36,12 @@ export default function TeacherPage() {
       setMessages([
         {
           role: "assistant",
-          content:
-            "Hello! I'm Shauri. Let’s go step by step. What would you like to study?",
+          content: "Hello! I'm Shauri. What would you like to study today?",
         },
       ]);
     }
   }, []);
 
-  // ✅ Only scroll when NEW message comes (not typing)
   useEffect(() => {
     window.scrollTo({
       top: document.body.scrollHeight,
@@ -60,14 +53,9 @@ export default function TeacherPage() {
     if (!text.trim() && !uploadedText) return;
 
     let userContent = "";
-
     if (uploadedText) {
-      userContent += `
-[UPLOADED STUDY MATERIAL / ANSWER SHEET]
-${uploadedText}
-`;
+      userContent += `\n[UPLOADED STUDY MATERIAL / ANSWER SHEET]\n${uploadedText}\n`;
     }
-
     if (text.trim()) {
       userContent += text.trim();
     }
@@ -83,46 +71,54 @@ ${uploadedText}
     let student = null;
     try {
       const stored = localStorage.getItem("shauri_student");
-      if (stored) {
-        student = JSON.parse(stored);
-      }
+      if (stored) student = JSON.parse(stored);
     } catch {
       student = null;
     }
 
-    const res = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        mode: "teacher",
-        messages: updatedMessages,
-        student,
-        uploadedText: uploadedText ?? null,
-      }),
-    });
+    // ✅ strip greeting + strip last user message (route.ts adds it via message field)
+    const historyToSend = updatedMessages
+      .slice(1)     // remove initial greeting
+      .slice(0, -1) // remove last user message
+      .map((m) => ({ role: m.role, content: m.content }));
 
-    const data = await res.json();
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "teacher",
+          message: userContent.trim(), // ✅ send message separately
+          history: historyToSend,
+          student,
+          uploadedText: uploadedText ?? null,
+        }),
+      });
 
-    const aiMessage: Message = {
-      role: "assistant",
-      content:
-        typeof data?.reply === "string"
-          ? data.reply
-          : "Something went wrong. Please try again.",
-    };
+      const data = await res.json();
 
-    setMessages([...updatedMessages, aiMessage]);
+      const aiMessage: Message = {
+        role: "assistant",
+        content:
+          typeof data?.reply === "string"
+            ? data.reply
+            : "Something went wrong. Please try again.",
+      };
+
+      setMessages([...updatedMessages, aiMessage]);
+    } catch {
+      setMessages([
+        ...updatedMessages,
+        {
+          role: "assistant",
+          content: "Network error. Please check your connection and try again.",
+        },
+      ]);
+    }
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        paddingTop: 24,
-        paddingBottom: 120, // space for input
-      }}
-    >
-      {/* 🔙 Back */}
+    <div style={{ minHeight: "100vh", paddingTop: 24, paddingBottom: 120 }}>
       <div style={{ paddingLeft: 24, marginBottom: 16 }}>
         <button
           onClick={() => (window.location.href = "/modes")}
@@ -140,14 +136,10 @@ ${uploadedText}
         </button>
       </div>
 
-      <h1 style={{ textAlign: "center", marginBottom: 16 }}>
-        Teacher Mode
-      </h1>
+      <h1 style={{ textAlign: "center", marginBottom: 16 }}>Teacher Mode</h1>
 
-      {/* ✅ NO INTERNAL SCROLL */}
       <ChatUI messages={messages} />
 
-      {/* ⌨️ Input */}
       <div
         style={{
           position: "fixed",
