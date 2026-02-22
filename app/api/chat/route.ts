@@ -27,8 +27,22 @@ Never guess the class.
 
 /* ================= MODE PROMPTS ================= */
 
-const TEACHER_PROMPT = `You are in TEACHER MODE. Teach step-by-step, CBSE aligned.`;
+const TEACHER_PROMPT = `
+You are in TEACHER MODE.
+
+Rules:
+- Greet student using name and class
+- Keep response max 2 lines
+- Warm, human tone
+- No examples
+- No long paragraphs
+
+Style:
+"Hi {name}, we’ll go step by step. What would you like to study today?"
+`;
+
 const ORAL_PROMPT = `You are in ORAL MODE. Short, classroom-like, CBSE aligned.`;
+
 const PROGRESS_PROMPT = `
 Generate a concise CBSE performance summary (6–8 lines):
 - Overall level
@@ -182,7 +196,6 @@ Board: CBSE
     /* ================= EXAMINER MODE ================= */
 
     if (mode === "examiner") {
-      // ===== GET ACTIVE SESSION =====
       let { data: session } = await supabase
         .from("exam_sessions")
         .select("*")
@@ -193,7 +206,6 @@ Board: CBSE
         .limit(1)
         .single();
 
-      // ===== CREATE SESSION =====
       if (!session) {
         await supabase.from("exam_sessions").insert({
           student_name: name,
@@ -207,9 +219,15 @@ Board: CBSE
         });
       }
 
-      // ===== SUBJECT INTAKE =====
+      // ✅ FIXED: only move to ready if subject detected
       if (session.status === "idle" && !/\b(start|begin)\b/.test(lower)) {
         const { classNum, subject, chapters } = extractPaperParams(message);
+
+        if (!subject && (!chapters || chapters.length === 0)) {
+          return NextResponse.json({
+            reply: `Please tell me the subject and chapters you want the test from.`,
+          });
+        }
 
         await supabase
           .from("exam_sessions")
@@ -222,14 +240,17 @@ Board: CBSE
           .eq("id", session.id);
 
         return NextResponse.json({
-          reply: `Noted. You will be tested on ${subject ?? "the selected subject"}${
-            chapters?.length ? ` (${chapters.join(", ")})` : ""
-          }.\n\nType START to begin the exam.`,
+          reply: `Subject and chapters noted. Type START to begin the exam.`,
         });
       }
 
-      // ===== START =====
       if (/\b(start|begin)\b/.test(lower)) {
+        if (!session.subject) {
+          return NextResponse.json({
+            reply: `Please tell me the subject first.`,
+          });
+        }
+
         const durationMin = calculateDurationMinutes(message);
 
         const paper = await callGemini(
@@ -268,14 +289,12 @@ Maximum Marks: 80
         });
       }
 
-      // ===== NOT STARTED =====
       if (session.status !== "started") {
         return NextResponse.json({
           reply: "Type START to begin the exam.",
         });
       }
 
-      // ===== TIME =====
       const elapsedMin =
         (Date.now() - new Date(session.started_at).getTime()) / (60 * 1000);
 
@@ -283,7 +302,6 @@ Maximum Marks: 80
 
       const isSubmit = /\b(submit|done|end test|finish)\b/.test(lower);
 
-      // ===== STORE ANSWERS =====
       if (!isSubmit && timeLeft > 0) {
         const updatedAnswers = [...(session.answers || []), message];
 
@@ -298,7 +316,6 @@ Maximum Marks: 80
         });
       }
 
-      // ===== EVALUATION =====
       const evaluationRaw = await callGemini(
         [
           { role: "system", content: GLOBAL_CONTEXT },

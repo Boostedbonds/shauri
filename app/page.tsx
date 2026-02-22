@@ -11,10 +11,8 @@ const orbitron = Orbitron({
 
 const ACCESS_CODE = "0330";
 
-/* 🔥 Dynamic Line */
 function getDynamicLine() {
   const hour = new Date().getHours();
-
   if (hour < 5) return "The system is quiet… but listening.";
   if (hour < 12) return "A fresh mind learns faster.";
   if (hour < 17) return "Focus sharpens understanding.";
@@ -30,7 +28,6 @@ export default function HomePage() {
   const [studentClass, setStudentClass] = useState("");
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
-
   const [activeField, setActiveField] = useState<string | null>(null);
 
   function handleEnter() {
@@ -42,20 +39,9 @@ export default function HomePage() {
     e.preventDefault();
     setError("");
 
-    if (!name.trim()) {
-      setError("Please enter student name");
-      return;
-    }
-
-    if (!studentClass) {
-      setError("Please select class");
-      return;
-    }
-
-    if (code !== ACCESS_CODE) {
-      setError("Invalid access code");
-      return;
-    }
+    if (!name.trim()) return setError("Please enter student name");
+    if (!studentClass) return setError("Please select class");
+    if (code !== ACCESS_CODE) return setError("Invalid access code");
 
     const studentContext = {
       name: name.trim(),
@@ -72,204 +58,132 @@ export default function HomePage() {
   }
 
   return (
-    <div className={orbitron.className} style={{ width: "100%", minHeight: "100vh", overflowX: "hidden" }}>
+    <div className={orbitron.className} style={{ minHeight: "100vh" }}>
 
-      {/* ENTRY SCREEN (UNCHANGED) */}
+      {/* HERO */}
       <AnimatePresence>
         {!entered && (
           <motion.div
             style={{
               position: "fixed",
               inset: 0,
-              background:
-                "linear-gradient(to top, #000814 0%, #001d3d 60%, #0a2540 100%)",
+              background: "linear-gradient(to top, #000814, #001d3d, #0a2540)",
+              overflow: "hidden",
             }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            {/* keep your existing hero untouched */}
+            {/* SUN */}
+            <div
+              style={{
+                position: "absolute",
+                top: "22%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                width: "520px",
+                height: "520px",
+                borderRadius: "50%",
+                background:
+                  "radial-gradient(circle, rgba(255,215,120,0.95) 0%, rgba(255,160,40,0.5) 50%, transparent 80%)",
+                filter: "blur(10px)",
+              }}
+            />
+
+            {/* TITLE */}
+            <div style={{ position: "absolute", top: "22%", width: "100%", textAlign: "center", zIndex: 5 }}>
+              <h1
+                style={{
+                  fontSize: "72px",
+                  letterSpacing: "0.5em",
+                  fontWeight: 700,
+                  background: "linear-gradient(to bottom, #FFD700, #D4AF37, #A67C00)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  textShadow:
+                    "0 0 15px rgba(255,215,120,0.4), 0 2px 4px rgba(0,0,0,0.7)",
+                }}
+              >
+                SHAURI
+              </h1>
+
+              <p style={{ marginTop: 10, color: "#fff" }}>
+                THE COURAGE TO MASTER THE FUTURE
+              </p>
+
+              <p style={{ color: "#FFD700" }}>
+                CBSE-ALIGNED ADAPTIVE LEARNING PLATFORM
+              </p>
+            </div>
+
+            {/* MOUNTAIN */}
+            <svg viewBox="0 0 1440 800" style={{ position: "absolute", bottom: 0 }}>
+              <path
+                d="M0,730 C400,650 700,600 720,500 C740,600 1000,650 1440,720 L1440,800 L0,800 Z"
+                fill="black"
+              />
+            </svg>
+
+            {/* CTA */}
             <motion.div
               onClick={handleEnter}
               style={{
                 position: "absolute",
-                bottom: "34%",
+                bottom: "33%",
                 left: "50%",
                 transform: "translateX(-50%)",
-                letterSpacing: "0.38em",
+                letterSpacing: "0.4em",
                 color: "#D4AF37",
                 cursor: "pointer",
               }}
+              animate={{ opacity: [0.5, 1, 0.5] }}
+              transition={{ duration: 2, repeat: Infinity }}
             >
               BEGIN THE ASCENT
+              <div style={{ fontSize: "12px", marginTop: 8 }}>
+                {getDynamicLine()}
+              </div>
             </motion.div>
 
             {warp && (
               <motion.div
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  background: "white",
-                }}
+                style={{ position: "absolute", inset: 0, background: "white" }}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ duration: 0.9 }}
               />
             )}
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ✅ ACCESS PAGE (FULL UPGRADE) */}
+      {/* ACCESS PAGE (your upgraded one kept) */}
       {entered && (
-        <div
-          style={{
-            minHeight: "100vh",
-            background:
-              "linear-gradient(to bottom, #FFF3D9 0%, #FFE4B3 35%, #E6F2FF 70%, #F8FAFC 100%)",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "20px",
-            position: "relative",
-            overflow: "hidden",
-          }}
-        >
-          {/* glow */}
-          <div
-            style={{
-              position: "absolute",
-              top: "20%",
-              left: "50%",
-              transform: "translateX(-50%)",
-              width: "400px",
-              height: "400px",
-              borderRadius: "50%",
-              background:
-                "radial-gradient(circle, rgba(255,200,100,0.25), transparent 70%)",
-              filter: "blur(40px)",
-            }}
-          />
+        <div style={{ minHeight: "100vh", display: "flex", justifyContent: "center", alignItems: "center", flexDirection: "column" }}>
+          <h1>SHAURI</h1>
 
-          {/* heading */}
-          <div style={{ textAlign: "center", marginBottom: "20px", zIndex: 2 }}>
-            <h1 style={{ fontSize: "32px", letterSpacing: "0.45em" }}>
-              SHAURI
-            </h1>
-
-            <p style={{ marginTop: "10px", fontSize: "14px", color: "#333" }}>
-              Welcome. Let’s begin your journey.
-            </p>
-
-            <p style={{ fontSize: "12px", letterSpacing: "0.2em", color: "#B08A2E" }}>
-              CBSE-ALIGNED ADAPTIVE LEARNING PLATFORM
-            </p>
-          </div>
-
-          {/* form */}
-          <form
-            onSubmit={handleSubmit}
-            style={{ display: "grid", gap: "16px", width: "100%", maxWidth: "340px", zIndex: 2 }}
-          >
-            {/* NAME */}
-            <input
-              placeholder="Student Name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onFocus={() => setActiveField("name")}
-              onBlur={() => setActiveField(null)}
-              style={{
-                ...inputStyle,
-                boxShadow:
-                  activeField === "name"
-                    ? "0 0 12px rgba(212,175,55,0.35)"
-                    : "none",
-                transform: activeField === "name" ? "scale(1.02)" : "scale(1)",
-              }}
-            />
-
-            {/* CLASS */}
-            <select
-              value={studentClass}
-              onChange={(e) => setStudentClass(e.target.value)}
-              onFocus={() => setActiveField("class")}
-              onBlur={() => setActiveField(null)}
-              style={{
-                ...inputStyle,
-                boxShadow:
-                  activeField === "class"
-                    ? "0 0 12px rgba(212,175,55,0.35)"
-                    : "none",
-                transform: activeField === "class" ? "scale(1.02)" : "scale(1)",
-              }}
-            >
+          <form onSubmit={handleSubmit} style={{ display: "grid", gap: 16 }}>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Student Name" style={inputStyle}/>
+            <select value={studentClass} onChange={(e) => setStudentClass(e.target.value)} style={inputStyle}>
               <option value="">Select Class</option>
-              {[6, 7, 8, 9, 10, 11, 12].map((c) => (
-                <option key={c}>Class {c}</option>
-              ))}
+              {[6,7,8,9,10,11,12].map(c => <option key={c}>Class {c}</option>)}
             </select>
-
-            {/* CODE */}
-            <input
-              type="password"
-              placeholder="Access Code"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              onFocus={() => setActiveField("code")}
-              onBlur={() => setActiveField(null)}
-              style={{
-                ...inputStyle,
-                boxShadow:
-                  activeField === "code"
-                    ? "0 0 12px rgba(212,175,55,0.35)"
-                    : "none",
-                transform: activeField === "code" ? "scale(1.02)" : "scale(1)",
-              }}
-            />
-
-            {error && <div style={{ color: "red" }}>{error}</div>}
-
-            <button
-              style={buttonStyle}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.boxShadow =
-                  "0 0 12px rgba(212,175,55,0.4)")
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.boxShadow = "none")
-              }
-            >
-              STEP IN
-            </button>
+            <input type="password" value={code} onChange={(e) => setCode(e.target.value)} placeholder="Access Code" style={inputStyle}/>
+            <button style={buttonStyle}>STEP IN</button>
           </form>
-
-          {/* footer */}
-          <div style={{ position: "absolute", bottom: "20px", fontSize: "11px", color: "#555" }}>
-            Your journey is private. Your progress is yours.
-          </div>
         </div>
       )}
     </div>
   );
 }
 
-const inputStyle: React.CSSProperties = {
+const inputStyle = {
   padding: "12px",
-  borderRadius: "12px",
-  border: "1px solid rgba(0,0,0,0.15)",
-  width: "100%",
-  fontSize: "16px",
-  outline: "none",
-  transition: "all 0.25s ease",
+  borderRadius: "10px",
+  border: "1px solid #ccc",
 };
 
-const buttonStyle: React.CSSProperties = {
-  padding: "14px",
+const buttonStyle = {
+  padding: "12px",
   borderRadius: "999px",
   border: "1px solid #D4AF37",
-  background: "white",
-  letterSpacing: "0.25em",
-  cursor: "pointer",
-  width: "100%",
 };
