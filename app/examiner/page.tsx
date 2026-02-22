@@ -29,11 +29,8 @@ export default function ExaminerPage() {
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimestampRef = useRef<number | null>(null);
-
-  // ✅ NEW: scroll container ref
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // ✅ CLEAN scroll fix
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTo({
@@ -43,19 +40,13 @@ export default function ExaminerPage() {
     }
   }, [messages]);
 
-  /* ================= STOPWATCH ================= */
-
   function startTimer(serverStartTime: number) {
     if (timerRef.current) return;
-
     startTimestampRef.current = serverStartTime;
     setExamStarted(true);
-
     timerRef.current = setInterval(() => {
       if (startTimestampRef.current) {
-        const diff = Math.floor(
-          (Date.now() - startTimestampRef.current) / 1000
-        );
+        const diff = Math.floor((Date.now() - startTimestampRef.current) / 1000);
         setElapsedSeconds(diff);
       }
     }, 1000);
@@ -80,8 +71,6 @@ export default function ExaminerPage() {
     return `${hrs}h ${mins}m ${secs}s`;
   }
 
-  /* ================= SAVE ATTEMPT ================= */
-
   function saveExamAttempt(
     allMessages: Message[],
     timeTaken: number,
@@ -96,9 +85,7 @@ export default function ExaminerPage() {
       .join("\n\n");
 
     const scorePercent =
-      totalMarks > 0
-        ? Math.round((marksObtained / totalMarks) * 100)
-        : 0;
+      totalMarks > 0 ? Math.round((marksObtained / totalMarks) * 100) : 0;
 
     const attempt: ExamAttempt = {
       id: crypto.randomUUID(),
@@ -115,31 +102,19 @@ export default function ExaminerPage() {
 
     try {
       const existing = localStorage.getItem("shauri_exam_attempts");
-      const parsed: ExamAttempt[] = existing
-        ? JSON.parse(existing)
-        : [];
+      const parsed: ExamAttempt[] = existing ? JSON.parse(existing) : [];
       parsed.push(attempt);
-      localStorage.setItem(
-        "shauri_exam_attempts",
-        JSON.stringify(parsed)
-      );
+      localStorage.setItem("shauri_exam_attempts", JSON.stringify(parsed));
     } catch {}
   }
-
-  /* ================= HANDLE SEND ================= */
 
   async function handleSend(text: string, uploadedText?: string) {
     if (!text.trim() && !uploadedText) return;
 
     let userContent = "";
-
     if (uploadedText) {
-      userContent += `
-[UPLOADED ANSWER SHEET]
-${uploadedText}
-`;
+      userContent += `\n[UPLOADED ANSWER SHEET]\n${uploadedText}\n`;
     }
-
     userContent += text.trim();
 
     const userMessage: Message = {
@@ -156,12 +131,18 @@ ${uploadedText}
       if (stored) student = JSON.parse(stored);
     } catch {}
 
+    // ✅ FIXED: send message + history separately (same fix as teacher mode)
+    const historyToSend = updatedMessages
+      .slice(0, -1)
+      .map((m) => ({ role: m.role, content: m.content }));
+
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         mode: "examiner",
-        messages: updatedMessages,
+        message: userContent.trim(), // ✅ FIXED: was missing
+        history: historyToSend,      // ✅ FIXED: was "messages"
         student,
       }),
     });
@@ -176,7 +157,6 @@ ${uploadedText}
 
     if (data?.examEnded === true) {
       stopTimer();
-
       const usedSeconds = elapsedSeconds;
       const subject = data?.subject ?? "Exam";
       const chapters = data?.chapters ?? [];
@@ -184,8 +164,7 @@ ${uploadedText}
       const totalMarks = data?.totalMarks ?? 0;
 
       const evaluationWithTime =
-        aiReply +
-        `\n\n⏱ Time Taken: ${formatTime(usedSeconds)}`;
+        aiReply + `\n\n⏱ Time Taken: ${formatTime(usedSeconds)}`;
 
       setMessages([
         ...updatedMessages,
@@ -200,7 +179,6 @@ ${uploadedText}
         marksObtained,
         totalMarks
       );
-
       return;
     }
 
@@ -211,8 +189,6 @@ ${uploadedText}
       ]);
     }
   }
-
-  /* ================= UI ================= */
 
   return (
     <div
@@ -259,17 +235,11 @@ ${uploadedText}
         </div>
       )}
 
-      <h1 style={{ textAlign: "center", marginBottom: 16 }}>
-        Examiner Mode
-      </h1>
+      <h1 style={{ textAlign: "center", marginBottom: 16 }}>Examiner Mode</h1>
 
       <div
         ref={chatContainerRef}
-        style={{
-          flex: 1,
-          overflowY: "auto",
-          paddingBottom: 96,
-        }}
+        style={{ flex: 1, overflowY: "auto", paddingBottom: 96 }}
       >
         <ChatUI messages={messages} />
       </div>
