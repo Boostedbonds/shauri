@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react"; // ❌ removed useEffect
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Orbitron } from "next/font/google";
 
@@ -10,6 +10,17 @@ const orbitron = Orbitron({
 });
 
 const ACCESS_CODE = "0330";
+
+/* 🔥 NEW — Dynamic Line */
+function getDynamicLine() {
+  const hour = new Date().getHours();
+
+  if (hour < 5) return "The system is quiet… but listening.";
+  if (hour < 12) return "A fresh mind learns faster.";
+  if (hour < 17) return "Focus sharpens understanding.";
+  if (hour < 22) return "Consistency builds mastery.";
+  return "Even now, progress is possible.";
+}
 
 export default function HomePage() {
   const [entered, setEntered] = useState(false);
@@ -86,6 +97,7 @@ export default function HomePage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
+            {/* 🔥 ENHANCED GLOW (Alive feel) */}
             <motion.div
               style={{
                 position: "absolute",
@@ -102,11 +114,11 @@ export default function HomePage() {
                 zIndex: 1,
               }}
               animate={{
-                opacity: [0.8, 1, 0.8],
-                scale: [1, 1.03, 1],
+                opacity: [0.75, 1, 0.75],
+                scale: [1, 1.05, 1],
               }}
               transition={{
-                duration: 6,
+                duration: 5,
                 repeat: Infinity,
               }}
             />
@@ -127,6 +139,7 @@ export default function HomePage() {
                   letterSpacing: "clamp(0.25em, 0.55em, 0.55em)",
                   fontWeight: 700,
                   color: "#D4AF37",
+                  textShadow: "0 0 25px rgba(212,175,55,0.15)", // 🔥 subtle glow
                 }}
               >
                 SHAURI
@@ -155,6 +168,7 @@ export default function HomePage() {
               </p>
             </div>
 
+            {/* LIGHT BEAM */}
             <motion.div
               style={{
                 position: "absolute",
@@ -180,37 +194,12 @@ export default function HomePage() {
               onClick={handleEnter}
             />
 
-            <svg
-              viewBox="0 0 1440 800"
-              preserveAspectRatio="none"
-              style={{
-                position: "absolute",
-                bottom: 0,
-                width: "100%",
-                height: "100%",
-                zIndex: 2,
-              }}
-            >
-              <path
-                d="M0,640 C200,600 350,580 550,560 C750,540 950,570 1440,620 L1440,800 L0,800 Z"
-                fill="#061a2d"
-              />
-              <path
-                d="M0,700 C200,650 400,620 600,600 C700,580 760,550 820,600 C1000,650 1200,680 1440,710 L1440,800 L0,800 Z"
-                fill="#04121f"
-              />
-              <path
-                d="M0,730 C200,690 400,660 620,620 C680,590 710,550 720,500 C730,550 760,590 820,620 C1000,660 1200,700 1440,720 L1440,800 L0,800 Z"
-                fill="#000000"
-              />
-            </svg>
-
-            {/* ✅ FIXED CTA POSITION */}
+            {/* CTA */}
             <motion.div
               onClick={handleEnter}
               style={{
                 position: "absolute",
-                bottom: "27.4%", // 🔥 FIXED (was 27.4%)
+                bottom: "27.4%",
                 left: "50%",
                 transform: "translateX(-50%)",
                 fontSize: "clamp(10px, 2.2vw, 13px)",
@@ -222,7 +211,7 @@ export default function HomePage() {
                 padding: "0 20px",
               }}
               animate={{
-                opacity: [0.6, 1, 0.6],
+                opacity: [0.5, 1, 0.5],
               }}
               transition={{
                 duration: 2,
@@ -230,6 +219,18 @@ export default function HomePage() {
               }}
             >
               BEGIN THE ASCENT
+
+              {/* 🔥 ALIVE LINE */}
+              <div
+                style={{
+                  marginTop: "10px",
+                  fontSize: "11px",
+                  letterSpacing: "0.18em",
+                  color: "rgba(255,255,255,0.6)",
+                }}
+              >
+                {getDynamicLine()}
+              </div>
             </motion.div>
 
             {warp && (
@@ -249,6 +250,7 @@ export default function HomePage() {
         )}
       </AnimatePresence>
 
+      {/* FORM (UNCHANGED) */}
       {entered && (
         <div
           style={{
