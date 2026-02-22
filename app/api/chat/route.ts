@@ -23,6 +23,13 @@ type ExamSession = {
   startedAt?: number;
 };
 
+/* 🔥 NEW: Learning State */
+type LearningState = {
+  stage: "IDLE" | "EXPLAIN" | "QUESTION" | "EVALUATE";
+  topic?: string;
+  lastQuestion?: string;
+};
+
 /* ================= GLOBAL ================= */
 
 const GLOBAL_CONTEXT = `
@@ -39,18 +46,18 @@ You must:
 const TEACHER_PROMPT = `
 You are a CBSE teacher.
 
-STYLE:
-- Friendly but controlled
-- Teach step-by-step (ONE concept at a time)
-- Max 6–8 lines per response
-- After teaching → ask 1–2 short questions
-- Do NOT dump full chapter
-- Do NOT over-explain
+STRICT RULES:
+- Teach ONLY ONE concept at a time
+- Keep explanation short (max 5 lines)
+- Use simple language
+- After explanation → ask 1 short question
+- DO NOT continue until student answers
+- If student is wrong → re-explain simply
+- If correct → move to next concept
 
-RULES:
-- If message is greeting → respond like human (short)
-- If message is non-academic → gently redirect
-- Never ask student name/class (already known)
+DO NOT:
+- Dump full chapter
+- Give long answers
 `;
 
 /* ================= EXAMINER PROMPT ================= */
@@ -66,6 +73,9 @@ Generate CBSE question paper.
 /* ================= SESSION ================= */
 
 const examSessions = new Map<string, ExamSession>();
+
+/* 🔥 NEW: Learning Memory */
+const learningStates = new Map<string, LearningState>();
 
 function getKey(student?: StudentContext) {
   return `${student?.name || "anon"}_${student?.class || "x"}`;
@@ -111,6 +121,7 @@ async function callAI(messages: ChatMessage[]) {
     );
 
     const data = await res.json();
+
     return (
       data?.candidates?.[0]?.content?.parts?.[0]?.text ||
       "Unable to respond."
@@ -140,6 +151,8 @@ export async function POST(req: NextRequest) {
 
     const lower = message.toLowerCase().trim();
 
+    const key = getKey(student);
+
     const conversation: ChatMessage[] = [
       ...history,
       { role: "user", content: message },
@@ -148,69 +161,112 @@ export async function POST(req: NextRequest) {
     /* ================= TEACHER ================= */
 
     if (mode === "teacher") {
-      // ✅ Greeting handled manually
-      if (isGreeting(lower)) {
+      const name = student?.name || "Student";
+      const cls = student?.class || "";
+
+      const clean = lower.replace(/[^\w\s]/g, "").trim();
+
+      let state = learningStates.get(key) || { stage: "IDLE" };
+
+      /* ===== GREETING ===== */
+      if (isGreeting(clean)) {
+        learningStates.set(key, { stage: "IDLE" });
         return NextResponse.json({
-          reply: `Hi ${student?.name || ""} 👋 Class ${
-            student?.class || ""
-          } — what do you want to learn today?`,
+          reply: `Hi ${name} 👋 Class ${cls} — what would you like to learn today?`,
         });
       }
 
-      const reply = await callAI([
-        { role: "system", content: GLOBAL_CONTEXT },
-        { role: "system", content: TEACHER_PROMPT },
-        ...conversation,
-      ]);
-
-      return NextResponse.json({ reply });
-    }
-
-    /* ================= EXAMINER ================= */
-
-    if (mode === "examiner") {
-      const key = getKey(student);
-      const session =
-        examSessions.get(key) || { status: "IDLE", answers: [] };
-
-      // ✅ Greeting
-      if (isGreeting(lower) && session.status === "IDLE") {
+      /* ===== NON-STUDY ===== */
+      if (!looksLikeSubject(clean) && state.stage === "IDLE") {
         return NextResponse.json({
-          reply: `Hi ${student?.name || "Student"}, Class ${
-            student?.class || ""
-          }.\nI'm your examiner today.\n\nTell me subject and chapters.`,
+          reply: `Let's stay focused 👍 Tell me the subject or chapter you want to learn.`,
         });
       }
 
-      // ✅ Submit
-      if (isSubmit(lower) && session.status === "IN_EXAM") {
-        const duration =
-          session.startedAt != null
-            ? Math.floor((Date.now() - session.startedAt) / 1000)
-            : 0;
+      /* ===== START NEW TOPIC ===== */
+      if (state.stage === "IDLE") {
+        state = {
+          stage: "QUESTION",
+          topic: message,
+        };
+      }
 
+      /* ===== EXPLAIN + QUESTION ===== */
+      if (state.stage === "QUESTION") {
+        const ai = await callAI([
+          { role: "system", content: GLOBAL_CONTEXT },
+          { role: "system", content: TEACHER_PROMPT },
+          {
+            role: "user",
+            content: `Teach first concept of: ${state.topic}`,
+          },
+        ]);
+
+        state.stage = "EVALUATE";
+        learningStates.set(key, state);
+
+        return NextResponse.json({ reply: ai });
+      }
+
+      /* ===== EVALUATE ANSWER ===== */
+      if (state.stage === "EVALUATE") {
         const evaluation = await callAI([
           { role: "system", content: GLOBAL_CONTEXT },
           {
             role: "user",
             content: `
-Evaluate answers.
+Student answer: "${message}"
 
-QUESTION PAPER:
-${session.questionPaper}
+Check if correct (yes/no) and respond:
 
-ANSWERS:
+If correct:
+- Say correct briefly
+- Move to next concept (short + ask 1 question)
+
+If wrong:
+- Say incorrect
+- Re-explain simply
+- Ask again
+`,
+          },
+        ]);
+
+        return NextResponse.json({ reply: evaluation });
+      }
+    }
+
+    /* ================= EXAMINER ================= */
+
+    if (mode === "examiner") {
+      const session =
+        examSessions.get(key) || { status: "IDLE", answers: [] };
+
+      if (isGreeting(lower) && session.status === "IDLE") {
+        return NextResponse.json({
+          reply: `Hi ${student?.name || "Student"}, Class ${
+            student?.class || ""
+          }.\nI'm your examiner.\n\nTell subject and chapters.`,
+        });
+      }
+
+      if (isSubmit(lower) && session.status === "IN_EXAM") {
+        const evaluation = await callAI([
+          { role: "system", content: GLOBAL_CONTEXT },
+          {
+            role: "user",
+            content: `
+Evaluate answers:
+
 ${session.answers.join("\n")}
 `,
           },
         ]);
 
-        // ✅ Save to Supabase
         await supabase.from("exam_attempts").insert({
           student_name: student?.name || "",
           class: student?.class || "",
           subject: session.subject || "General",
-          percentage: 60, // (can improve later with parsing)
+          percentage: 60,
           created_at: new Date().toISOString(),
         });
 
@@ -219,14 +275,12 @@ ${session.answers.join("\n")}
         return NextResponse.json({ reply: evaluation });
       }
 
-      // ✅ Collect answers silently
       if (session.status === "IN_EXAM") {
         session.answers.push(message);
         examSessions.set(key, session);
         return NextResponse.json({ reply: "" });
       }
 
-      // ✅ Subject detected
       if (looksLikeSubject(lower) && session.status === "IDLE") {
         examSessions.set(key, {
           status: "READY",
@@ -240,7 +294,6 @@ ${session.answers.join("\n")}
         });
       }
 
-      // ✅ Start exam
       if (isStart(lower) && session.status === "READY") {
         const paper = await callAI([
           { role: "system", content: GLOBAL_CONTEXT },
