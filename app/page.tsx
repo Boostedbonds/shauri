@@ -20,6 +20,10 @@ function getDynamicLine() {
   return "Even now, progress is possible.";
 }
 
+function getMotivation() {
+  return "Small steps today build big success tomorrow.";
+}
+
 export default function HomePage() {
   const [entered, setEntered] = useState(false);
   const [warp, setWarp] = useState(false);
@@ -28,7 +32,6 @@ export default function HomePage() {
   const [studentClass, setStudentClass] = useState("");
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
-  const [activeField, setActiveField] = useState<string | null>(null);
 
   function handleEnter() {
     setWarp(true);
@@ -60,7 +63,7 @@ export default function HomePage() {
   return (
     <div className={orbitron.className} style={{ minHeight: "100vh" }}>
 
-      {/* HERO */}
+      {/* 🌌 HERO */}
       <AnimatePresence>
         {!entered && (
           <motion.div
@@ -74,7 +77,7 @@ export default function HomePage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            {/* SUN */}
+            {/* 🌞 SUN */}
             <div
               style={{
                 position: "absolute",
@@ -85,12 +88,11 @@ export default function HomePage() {
                 height: "520px",
                 borderRadius: "50%",
                 background:
-                  "radial-gradient(circle, rgba(255,215,120,0.95) 0%, rgba(255,160,40,0.5) 50%, transparent 80%)",
-                filter: "blur(10px)",
+                  "radial-gradient(circle, rgba(255,215,120,1) 0%, rgba(255,180,60,0.6) 40%, rgba(255,140,0,0.2) 65%, transparent 80%)",
               }}
             />
 
-            {/* TITLE */}
+            {/* ✨ TITLE */}
             <div style={{ position: "absolute", top: "22%", width: "100%", textAlign: "center", zIndex: 5 }}>
               <h1
                 style={{
@@ -101,7 +103,7 @@ export default function HomePage() {
                   WebkitBackgroundClip: "text",
                   WebkitTextFillColor: "transparent",
                   textShadow:
-                    "0 0 15px rgba(255,215,120,0.4), 0 2px 4px rgba(0,0,0,0.7)",
+                    "0 0 25px rgba(255,215,120,0.8), 0 0 50px rgba(255,200,80,0.6), 0 2px 6px rgba(0,0,0,0.9)",
                 }}
               >
                 SHAURI
@@ -116,7 +118,7 @@ export default function HomePage() {
               </p>
             </div>
 
-            {/* MOUNTAIN */}
+            {/* ⛰️ MOUNTAIN */}
             <svg viewBox="0 0 1440 800" style={{ position: "absolute", bottom: 0 }}>
               <path
                 d="M0,730 C400,650 700,600 720,500 C740,600 1000,650 1440,720 L1440,800 L0,800 Z"
@@ -124,27 +126,29 @@ export default function HomePage() {
               />
             </svg>
 
-            {/* CTA */}
+            {/* 🎯 CTA (FIXED POSITION + CLEAR SEPARATION) */}
             <motion.div
               onClick={handleEnter}
               style={{
                 position: "absolute",
-                bottom: "33%",
+                bottom: "42%", // ⬅️ lifted above peak
                 left: "50%",
                 transform: "translateX(-50%)",
                 letterSpacing: "0.4em",
-                color: "#D4AF37",
+                color: "#FFD700",
                 cursor: "pointer",
+                textAlign: "center",
               }}
               animate={{ opacity: [0.5, 1, 0.5] }}
               transition={{ duration: 2, repeat: Infinity }}
             >
-              BEGIN THE ASCENT
-              <div style={{ fontSize: "12px", marginTop: 8 }}>
+              <div style={{ fontSize: "16px" }}>BEGIN THE ASCENT</div>
+              <div style={{ fontSize: "12px", marginTop: 10 }}>
                 {getDynamicLine()}
               </div>
             </motion.div>
 
+            {/* ⚡ TRANSITION */}
             {warp && (
               <motion.div
                 style={{ position: "absolute", inset: 0, background: "white" }}
@@ -156,20 +160,74 @@ export default function HomePage() {
         )}
       </AnimatePresence>
 
-      {/* ACCESS PAGE (your upgraded one kept) */}
+      {/* 🌄 ACCESS PAGE (DAWN FEEL FIXED) */}
       {entered && (
-        <div style={{ minHeight: "100vh", display: "flex", justifyContent: "center", alignItems: "center", flexDirection: "column" }}>
-          <h1>SHAURI</h1>
+        <div
+          style={{
+            minHeight: "100vh",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            flexDirection: "column",
+            background: "linear-gradient(to bottom, #f5e6c8, #f8fafc)",
+            padding: "20px",
+          }}
+        >
+          <h1 style={{ marginBottom: 20 }}>SHAURI</h1>
 
-          <form onSubmit={handleSubmit} style={{ display: "grid", gap: 16 }}>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Student Name" style={inputStyle}/>
-            <select value={studentClass} onChange={(e) => setStudentClass(e.target.value)} style={inputStyle}>
+          <form
+            onSubmit={handleSubmit}
+            style={{
+              display: "grid",
+              gap: 18,
+              width: "100%",
+              maxWidth: "320px",
+            }}
+          >
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Student Name"
+              style={inputStyle}
+            />
+
+            <select
+              value={studentClass}
+              onChange={(e) => setStudentClass(e.target.value)}
+              style={inputStyle}
+            >
               <option value="">Select Class</option>
-              {[6,7,8,9,10,11,12].map(c => <option key={c}>Class {c}</option>)}
+              {[6, 7, 8, 9, 10, 11, 12].map((c) => (
+                <option key={c}>Class {c}</option>
+              ))}
             </select>
-            <input type="password" value={code} onChange={(e) => setCode(e.target.value)} placeholder="Access Code" style={inputStyle}/>
+
+            <input
+              type="password"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="Access Code"
+              style={inputStyle}
+            />
+
+            {error && (
+              <div style={{ color: "red", fontSize: "13px" }}>{error}</div>
+            )}
+
             <button style={buttonStyle}>STEP IN</button>
           </form>
+
+          {/* 💬 MOTIVATION (ADDED) */}
+          <div
+            style={{
+              position: "absolute",
+              bottom: 30,
+              fontSize: "13px",
+              opacity: 0.7,
+            }}
+          >
+            {getMotivation()}
+          </div>
         </div>
       )}
     </div>
@@ -177,13 +235,17 @@ export default function HomePage() {
 }
 
 const inputStyle = {
-  padding: "12px",
-  borderRadius: "10px",
-  border: "1px solid #ccc",
+  padding: "14px",
+  borderRadius: "12px",
+  border: "1px solid #d4af37",
+  fontSize: "14px",
 };
 
 const buttonStyle = {
-  padding: "12px",
+  padding: "14px",
   borderRadius: "999px",
   border: "1px solid #D4AF37",
+  background: "#fff",
+  fontWeight: 600,
+  cursor: "pointer",
 };
