@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "../../lib/supabase";
 
-/* ================= TYPES ================= */
-
 type ChatMessage = {
   role: "user" | "assistant" | "system";
   content: string;
@@ -23,78 +21,11 @@ type ExamSession = {
   startedAt?: number;
 };
 
-/* ================= GLOBAL ================= */
-
-const GLOBAL_CONTEXT = `
-You are Shauri — strictly aligned to NCERT and CBSE.
-
-- Adapt to student's class
-- Stay within syllabus
-- Be clear, human, and concise
-`;
-
-/* ================= PROMPTS ================= */
-
-const TEACHER_PROMPT = `
-You are a real CBSE school teacher.
-
-STRICT RULES:
-- MAX 3–4 lines only
-- Teach ONLY what is asked
-- NO introductions
-- NO "let's start" or filler lines
-- NO asking what to learn
-
-STYLE:
-- Human, calm, clear
-- Start explanation immediately
-- End with one small question (optional)
-`;
-
-const ORAL_PROMPT = `
-You are in ORAL MODE.
-
-- Conversational
-- Short replies
-- Ask small questions
-- Keep it interactive
-`;
-
-const PROGRESS_PROMPT = `
-Analyze student performance.
-
-- Max 5 lines
-- Strengths
-- Weaknesses
-- One improvement
-`;
-
-const EXAMINER_PROMPT = `
-You are a strict CBSE examiner.
-
-- Professional human tone
-- Generate full question paper only
-- No explanation
-- No extra words
-
-FORMAT:
-Class, Subject
-Time & Marks
-
-Section A
-Section B
-Section C
-`;
-
-/* ================= MEMORY ================= */
-
 const examSessions = new Map<string, ExamSession>();
 
 function getKey(student?: StudentContext) {
   return `${student?.name || "anon"}_${student?.class || "x"}`;
 }
-
-/* ================= HELPERS ================= */
 
 function isGreeting(text: string) {
   return /^(hi|hello|hey)\b/i.test(text);
@@ -105,20 +36,15 @@ function isSubmit(text: string) {
 }
 
 function isStart(text: string) {
-  return text === "start";
+  return text.trim().toLowerCase() === "start";
 }
 
 function looksLikeSubject(text: string) {
   return /math|science|history|geo|civics|english|hindi|chapter/i.test(text);
 }
 
-function isDirectStudyRequest(text: string) {
-  return /chapter|exercise|numerical|question|define|what is|explain/i.test(text);
-}
-
-/* ================= AI CALL ================= */
-
-async function callAI(messages: ChatMessage[]) {
+// ✅ THE REAL FIX: separate system prompt from conversation contents
+async function callAI(systemPrompt: string, messages: ChatMessage[]) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) return "AI error";
 
@@ -129,26 +55,29 @@ async function callAI(messages: ChatMessage[]) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: messages.map((m) => ({
-            role: m.role === "assistant" ? "model" : "user",
-            parts: [{ text: m.content || "" }],
-          })),
+          // ✅ system prompt goes HERE — not in contents
+          systemInstruction: {
+            parts: [{ text: systemPrompt }],
+          },
+          // ✅ only user/assistant messages go in contents
+          contents: messages
+            .filter((m) => m.role !== "system")
+            .map((m) => ({
+              role: m.role === "assistant" ? "model" : "user",
+              parts: [{ text: m.content || "" }],
+            })),
         }),
       }
     );
 
     const data = await res.json();
-
     return (
-      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "Unable to respond."
+      data?.candidates?.[0]?.content?.parts?.[0]?.text || "Unable to respond."
     );
   } catch {
     return "AI server error.";
   }
 }
-
-/* ================= API ================= */
 
 export async function POST(req: NextRequest) {
   try {
@@ -169,9 +98,8 @@ export async function POST(req: NextRequest) {
     const lower = message.toLowerCase().trim();
     const key = getKey(student);
 
-    // 🔥 LIMIT CONTEXT (prevents repetition)
     const conversation: ChatMessage[] = [
-      ...history.slice(-4),
+      ...history.slice(-6),
       { role: "user", content: message },
     ];
 
@@ -181,63 +109,57 @@ export async function POST(req: NextRequest) {
       const name = student?.name || "Student";
       const cls = student?.class || "";
 
-      // Greeting
-      if (isGreeting(lower)) {
+      if (isGreeting(lower) && history.length === 0) {
         return NextResponse.json({
-          reply: `Hi ${name} 👋`,
+          reply: `Hi ${name} 👋 What would you like to learn today?`,
         });
       }
 
-      // 🔥 FORCE TEACHING MODE (MAIN FIX)
-      if (looksLikeSubject(lower) || isDirectStudyRequest(lower)) {
-        const reply = await callAI([
-          { role: "system", content: GLOBAL_CONTEXT },
-          { role: "system", content: TEACHER_PROMPT },
-          {
-            role: "system",
-            content: `Student name is ${name}. Class is ${cls}. Start teaching immediately.`,
-          },
-          {
-            role: "user",
-            content: `Explain clearly: ${message}`,
-          },
-        ]);
+      const systemPrompt = `
+You are Shauri, a real CBSE school teacher.
 
-        return NextResponse.json({ reply });
-      }
+Student name: ${name}
+Student class: ${cls}
+Board: CBSE / NCERT
 
-      // Normal fallback
-      const reply = await callAI([
-        { role: "system", content: GLOBAL_CONTEXT },
-        { role: "system", content: TEACHER_PROMPT },
-        {
-          role: "system",
-          content: `Student name is ${name}. Class is ${cls}.`,
-        },
-        ...conversation,
-      ]);
+STRICT RULES:
+- Teach ONLY what the student asks
+- MAX 4-5 lines per reply
+- NO filler like "Great question!" or "Let's get started"
+- NO asking "what do you want to learn" if topic is already given
+- If student asks your name → say "I'm Shauri, your CBSE tutor"
+- If student asks their name → say "You're ${name}, Class ${cls}"
+- Start explanation immediately when a topic is given
+- End with one short question to check understanding (optional)
+- Stay strictly within NCERT syllabus for Class ${cls}
+      `.trim();
 
+      const reply = await callAI(systemPrompt, conversation);
       return NextResponse.json({ reply });
     }
 
     /* ================= EXAMINER ================= */
 
     if (mode === "examiner") {
-      const session =
-        examSessions.get(key) || { status: "IDLE", answers: [] };
+      const session = examSessions.get(key) || { status: "IDLE", answers: [] };
 
       if (isGreeting(lower) && session.status === "IDLE") {
         return NextResponse.json({
-          reply: `Hello ${student?.name || "Student"}.\nProvide subject and chapters.`,
+          reply: `Hello ${student?.name || "Student"}.\nProvide subject and chapters to begin.`,
         });
       }
 
       if (isSubmit(lower) && session.status === "IN_EXAM") {
-        const evaluation = await callAI([
-          { role: "system", content: GLOBAL_CONTEXT },
+        const systemPrompt = `
+You are a CBSE examiner evaluating a Class ${student?.class || ""} student.
+Give marks per question, brief feedback, and a final score.
+Be encouraging but accurate.
+        `.trim();
+
+        const evaluation = await callAI(systemPrompt, [
           {
             role: "user",
-            content: `Evaluate answers:\n${session.answers.join("\n")}`,
+            content: `Question Paper:\n${session.questionPaper}\n\nStudent Answers:\n${session.answers.join("\n")}`,
           },
         ]);
 
@@ -250,14 +172,15 @@ export async function POST(req: NextRequest) {
         });
 
         examSessions.delete(key);
-
         return NextResponse.json({ reply: evaluation });
       }
 
       if (session.status === "IN_EXAM") {
         session.answers.push(message);
         examSessions.set(key, session);
-        return NextResponse.json({ reply: "" });
+        return NextResponse.json({
+          reply: "Answer recorded ✅ Continue or type **submit** when done.",
+        });
       }
 
       if (looksLikeSubject(lower) && session.status === "IDLE") {
@@ -267,16 +190,19 @@ export async function POST(req: NextRequest) {
           subject: message,
           answers: [],
         });
-
         return NextResponse.json({
-          reply: "Subject noted. Type START.",
+          reply: `Got it! Subject: **${message}**\nType **start** when ready.`,
         });
       }
 
       if (isStart(lower) && session.status === "READY") {
-        const paper = await callAI([
-          { role: "system", content: GLOBAL_CONTEXT },
-          { role: "system", content: EXAMINER_PROMPT },
+        const systemPrompt = `
+You are a strict CBSE examiner.
+Generate a complete question paper only. No explanation. No extra words.
+Format: Class, Subject, Time, Total Marks, then Section A / B / C with marks per question.
+        `.trim();
+
+        const paper = await callAI(systemPrompt, [
           {
             role: "user",
             content: `Class ${student?.class}, ${session.subjectRequest}`,
@@ -295,20 +221,24 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ reply: paper });
       }
 
-      return NextResponse.json({
-        reply: "Provide subject and chapters.",
-      });
+      return NextResponse.json({ reply: "Please provide subject and chapters." });
     }
 
     /* ================= ORAL ================= */
 
     if (mode === "oral") {
-      const reply = await callAI([
-        { role: "system", content: GLOBAL_CONTEXT },
-        { role: "system", content: ORAL_PROMPT },
-        ...conversation,
-      ]);
+      const name = student?.name || "Student";
+      const cls = student?.class || "";
 
+      const systemPrompt = `
+You are Shauri in ORAL quiz mode for ${name}, Class ${cls}, CBSE.
+- Short conversational replies only
+- Ask one question at a time
+- Give instant feedback on answers
+- Keep it encouraging and interactive
+      `.trim();
+
+      const reply = await callAI(systemPrompt, conversation);
       return NextResponse.json({ reply });
     }
 
@@ -317,12 +247,19 @@ export async function POST(req: NextRequest) {
     if (mode === "progress") {
       const attempts = body?.attempts || [];
 
-      const reply = await callAI([
-        { role: "system", content: GLOBAL_CONTEXT },
-        { role: "system", content: PROGRESS_PROMPT },
+      const systemPrompt = `
+Analyze this CBSE student's exam performance.
+- Max 5 lines
+- Clear strengths
+- Clear weaknesses  
+- One actionable improvement tip
+- Be encouraging
+      `.trim();
+
+      const reply = await callAI(systemPrompt, [
         {
           role: "user",
-          content: JSON.stringify(attempts),
+          content: `Student: ${student?.name || "Unknown"}, Class: ${student?.class || "Unknown"}\n\nAttempts:\n${JSON.stringify(attempts, null, 2)}`,
         },
       ]);
 
