@@ -20,6 +20,7 @@ export default function ChatInput({ onSend }: Props) {
   const [listening, setListening] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null); // ✅ NEW: ref to blur after send
   const recognitionRef = useRef<any>(null);
 
   /* -------------------- MIC SETUP -------------------- */
@@ -78,21 +79,22 @@ export default function ChatInput({ onSend }: Props) {
     const names = files.map((file) => file.name);
     setFileNames(names);
 
+    // ✅ FIX: Be honest about what was uploaded so the AI isn't confused.
+    // Only tell the AI the file names and types — don't pretend content was extracted.
+    // Real OCR/extraction should happen server-side; sending fake text breaks the AI.
     const combinedText = files
-      .map((file, index) => {
+      .map((file) => {
         if (file.type === "application/pdf") {
-          return `Page ${index + 1}: PDF file "${file.name}" uploaded.`;
+          return `Student uploaded a PDF file named "${file.name}". Acknowledge the upload and ask them to type out or describe the content they need help with, since direct PDF reading isn't available yet.`;
         } else if (file.type.startsWith("image/")) {
-          return `Page ${index + 1}: Image file "${file.name}" uploaded.`;
+          return `Student uploaded an image file named "${file.name}". Acknowledge the upload and ask them to describe what's in it or type out the question/content they need help with.`;
         } else {
-          return `Page ${index + 1}: File "${file.name}" uploaded.`;
+          return `Student uploaded a file named "${file.name}". Acknowledge and ask them to share the content as text.`;
         }
       })
       .join("\n");
 
-    setUploadedText(
-      `Student uploaded the following answer sheets:\n${combinedText}`
-    );
+    setUploadedText(combinedText);
   }
 
   /* -------------------- SEND -------------------- */
@@ -105,6 +107,10 @@ export default function ChatInput({ onSend }: Props) {
 
     setValue("");
     clearAttachment();
+
+    // ✅ FIX: Blur the textarea after sending so arrow keys scroll the page
+    // instead of being captured by the focused input element.
+    textareaRef.current?.blur();
   }
 
   return (
@@ -215,6 +221,7 @@ export default function ChatInput({ onSend }: Props) {
 
           {/* ✍️ Text input */}
           <textarea
+            ref={textareaRef} // ✅ attached ref
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder="Type or speak…"
@@ -234,19 +241,7 @@ export default function ChatInput({ onSend }: Props) {
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                handleSend();
-              }
-
-              // ✅ FIX: allow arrow keys to scroll page when input is empty
-              if (
-                (e.key === "ArrowUp" || e.key === "ArrowDown") &&
-                value.trim() === ""
-              ) {
-                e.currentTarget.blur();
-                window.scrollBy({
-                  top: e.key === "ArrowDown" ? 120 : -120,
-                  behavior: "smooth",
-                });
+                handleSend(); // blur is called inside handleSend now
               }
             }}
           />
