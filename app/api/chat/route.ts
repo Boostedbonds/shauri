@@ -37,6 +37,7 @@ type ExamSession = {
   answerLog: string[];
   startedAt?: number;
   totalMarksOnPaper?: number;
+  syllabusFromUpload?: string; // ← NEW: custom syllabus extracted from student-uploaded PDF/image
 };
 
 const examSessions = new Map<string, ExamSession>();
@@ -278,6 +279,67 @@ function parseTotalMarksFromPaper(paper: string): number {
 }
 
 // ─────────────────────────────────────────────────────────────
+// NEW HELPER: Extract and parse syllabus from uploaded text
+// Called when a student uploads a syllabus PDF/image in IDLE state
+// Returns { subjectName, chapterList } shaped the same as
+// getChaptersForSubject() so downstream paper-generation is identical.
+// ─────────────────────────────────────────────────────────────
+async function parseSyllabusFromUpload(
+  uploadedText: string,
+  cls: string,
+  board: string
+): Promise<{ subjectName: string; chapterList: string; raw: string }> {
+  // Ask AI to extract a clean, structured syllabus from the raw OCR/extracted text.
+  const extractionPrompt = `
+You are a syllabus extraction assistant.
+The following text was extracted from a student's uploaded syllabus document (PDF or image).
+Your job is to extract EXACTLY what is listed in the document — do NOT add, invent, or remove any topics.
+
+Instructions:
+1. Identify the subject name (e.g., "Mathematics", "Science – Physics", "English", etc.)
+2. List every chapter, topic, unit, or section exactly as it appears in the document.
+3. Format the output as:
+
+SUBJECT: <exact subject name>
+
+CHAPTERS / TOPICS:
+1. <topic or chapter name>
+2. <topic or chapter name>
+...
+
+If the document lists sub-topics under chapters, include them indented under their chapter.
+If multiple subjects are present, list them all with their own sections.
+Do NOT include any commentary or explanation — output the structured list only.
+
+RAW EXTRACTED TEXT FROM UPLOAD:
+──────────────────────────────────────────
+${uploadedText}
+──────────────────────────────────────────
+`.trim();
+
+  const extracted = await callAI(extractionPrompt, [
+    { role: "user", content: uploadedText },
+  ]);
+
+  // Parse subject name from AI output
+  const subjectMatch = extracted.match(/^SUBJECT:\s*(.+)$/im);
+  const subjectName = subjectMatch
+    ? subjectMatch[1].trim()
+    : "Custom Subject";
+
+  return {
+    subjectName,
+    chapterList:
+      `SOURCE: Student-uploaded syllabus document\n` +
+      `IMPORTANT FOR AI: Generate the exam paper ONLY from the topics listed below.\n` +
+      `Do NOT add NCERT chapters not present in this list.\n` +
+      `Do NOT skip any topic listed here — every topic must appear at least once.\n\n` +
+      extracted,
+    raw: extracted,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────
 // CORE AI CALLER
 // ─────────────────────────────────────────────────────────────
 async function callAI(
@@ -365,8 +427,13 @@ export async function POST(req: NextRequest) {
     // EXAMINER MODE
     //
     // FLOW:
-    //   IDLE    → student specifies subject
+    //   IDLE    → student specifies subject OR uploads syllabus PDF/image
+    //             • Upload detected → AI extracts syllabus, confirms to student,
+    //               moves to READY with syllabusFromUpload stored
+    //             • Text subject → moves to READY as before
     //   READY   → student types "start" → full paper shown, timer begins
+    //             • If syllabusFromUpload present → paper based on that
+    //             • Else → paper based on NCERT chapters (getChaptersForSubject)
     //   IN_EXAM → every message/upload appended to answerLog silently
     //   SUBMIT  → all collected answers evaluated together in one shot
     // ═══════════════════════════════════════════════════════════
@@ -383,6 +450,7 @@ export async function POST(req: NextRequest) {
             `Hello ${name}! 📋 I'm your strict CBSE Examiner.\n\n` +
             `Tell me the **subject** you want to be tested on:\n` +
             `Science | Mathematics | SST | History | Geography | Civics | Economics | English | Hindi\n\n` +
+            `📎 **OR** upload your **syllabus as a PDF or image** and I'll generate a paper exactly based on it.\n\n` +
             `⏱️ Your timer starts the moment you type **start**.`,
         });
       }
@@ -455,7 +523,7 @@ GENERAL RULES (all sections):
 • Uploaded image/PDF answers → evaluate content only, ignore handwriting.
 • Cross-reference carefully — student may have answered out of order.
 • Be consistent — same quality of answer always gets same marks.
-• All factual claims must be NCERT Class ${cls} accurate to receive marks.
+• All factual claims must be accurate for the subject and class level to receive marks.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EVALUATION REPORT FORMAT — FOLLOW THIS EXACTLY:
@@ -522,7 +590,7 @@ Your Grade: [grade + label]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Strengths   : [specific chapters where ${name} scored well]
 Weaknesses  : [specific chapters to focus on]
-Study Tip   : [one NCERT-specific, actionable improvement tip]
+Study Tip   : [one actionable improvement tip based on the syllabus used]
         `.trim();
 
         const evaluation = await callAI(evaluationPrompt, [
@@ -604,31 +672,81 @@ Study Tip   : [one NCERT-specific, actionable improvement tip]
         });
       }
 
-      // ── IDLE: student provides subject ───────────────────────
+      // ════════════════════════════════════════════════════════
+      // ── IDLE: check for syllabus upload FIRST, then text ───
+      // ════════════════════════════════════════════════════════
       if (session.status === "IDLE" && !isGreeting(lower)) {
+
+        // ── CASE 1: Student uploaded a syllabus PDF/image ─────
+        // Detected when uploadedText is present and it doesn't
+        // look like an answer (i.e. exam hasn't started yet).
+        if (uploadedText && uploadedText.trim().length > 30) {
+          // Extract and structure the syllabus from the upload
+          const { subjectName, chapterList, raw } =
+            await parseSyllabusFromUpload(uploadedText, cls, board);
+
+          examSessions.set(key, {
+            status: "READY",
+            subjectRequest: subjectName,
+            subject: subjectName,
+            answerLog: [],
+            syllabusFromUpload: chapterList, // ← store custom syllabus
+          });
+
+          return NextResponse.json({
+            reply:
+              `📄 **Syllabus uploaded and read successfully!**\n\n` +
+              `I've extracted the following from your document:\n\n` +
+              `**Subject detected:** ${subjectName}\n\n` +
+              `**Topics / Chapters found:**\n${raw}\n\n` +
+              `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+              `The exam paper will be generated **strictly based on the above syllabus only**.\n\n` +
+              `✅ If this looks correct, type **start** to begin your exam.\n` +
+              `✏️ If something is wrong, upload a clearer image or retype the subject name.`,
+          });
+        }
+
+        // ── CASE 2: Student typed a subject name ──────────────
         const { subjectName } = getChaptersForSubject(message, cls);
         examSessions.set(key, {
           status: "READY",
           subjectRequest: message,
           subject: subjectName,
           answerLog: [],
+          // syllabusFromUpload intentionally absent → use NCERT
         });
         return NextResponse.json({
           reply:
             `📚 Got it! I'll prepare a **strict CBSE Board question paper** for:\n` +
             `**${subjectName} — Class ${cls}**\n\n` +
             `Paper will strictly follow the NCERT Class ${cls} syllabus chapters.\n\n` +
+            `📎 **Tip:** If you'd like a paper based on YOUR specific syllabus instead,\n` +
+            `upload your syllabus as a PDF or image before typing start.\n\n` +
             `Type **start** when you're ready to begin.\n` +
             `⏱️ Timer starts the moment you type start.`,
         });
       }
 
-      // ── START: generate full NCERT syllabus-locked paper ────
+      // ── START: generate full paper ───────────────────────────
       if (isStart(lower) && session.status === "READY") {
-        const { subjectName, chapterList } = getChaptersForSubject(
-          session.subjectRequest || "",
-          cls
-        );
+
+        // ── Decide chapter source: custom upload OR NCERT ──────
+        let subjectName: string;
+        let chapterList: string;
+
+        if (session.syllabusFromUpload) {
+          // Use the syllabus the student uploaded
+          subjectName = session.subject || "Custom Subject";
+          chapterList = session.syllabusFromUpload;
+        } else {
+          // Fall back to NCERT syllabus lookup
+          const resolved = getChaptersForSubject(
+            session.subjectRequest || "",
+            cls
+          );
+          subjectName = resolved.subjectName;
+          chapterList = resolved.chapterList;
+        }
 
         const isMath = /math/i.test(session.subjectRequest || "");
         const isSST = /sst|social/i.test(session.subjectRequest || "");
@@ -669,7 +787,7 @@ Q1–Q10  Multiple Choice Questions [1 mark each]
   • Mix: 40% knowledge recall, 40% conceptual, 20% application/HOTs
 
 Q11–Q15  Fill in the Blanks [1 mark each]
-  • Test key NCERT terms, dates, names, scientific names, or definitions
+  • Test key terms, dates, names, scientific names, or definitions
   • One blank per sentence only
 
 Q16–Q20  True / False [1 mark each]
@@ -706,7 +824,7 @@ Q31–Q36  [5 marks each]
 
         const paperPrompt = `
 You are an official CBSE Board question paper setter for Class ${cls}.
-Generate a COMPLETE, FULL-LENGTH question paper STRICTLY based on the NCERT chapters listed below.
+Generate a COMPLETE, FULL-LENGTH question paper STRICTLY based on the syllabus/chapters listed below.
 Output the paper ONLY. No commentary outside the paper itself.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -723,10 +841,10 @@ General Instructions:
 2. Marks for each question are shown in [ ].
 3. Write well-structured answers.
 4. For diagrams/maps — describe clearly what you would draw with correct labels.
-5. Use NCERT standard language for all definitions.
+5. Use standard language for all definitions.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-AUTHORISED NCERT CHAPTERS FOR THIS PAPER (questions must come from ONLY these):
+AUTHORISED SYLLABUS FOR THIS PAPER (questions must come from ONLY these):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${chapterList}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -736,11 +854,10 @@ ${isMath ? mathSections : standardSections}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 MANDATORY QUALITY & BALANCE RULES:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• Distribute questions EVENLY — every chapter must appear at least once
+• Distribute questions EVENLY — every topic/chapter must appear at least once
 • No single chapter should contribute more than 3 questions total
 • Difficulty balance across full paper: 30% easy | 50% medium | 20% hard (HOTs)
-• ALL questions strictly from the NCERT chapters listed above — nothing outside
-• Use NCERT terminology throughout — not simplified or paraphrased language
+• ALL questions strictly from the syllabus listed above — nothing outside
 • Questions must be original, board-exam quality — not copied from sample papers
 • Number ALL questions continuously Q1 through Q36
 • Each question must clearly show: [1 mark] / [3 marks] / [5 marks]
@@ -766,6 +883,7 @@ MANDATORY QUALITY & BALANCE RULES:
           answerLog: [],
           startedAt: startTime,
           totalMarksOnPaper,
+          syllabusFromUpload: session.syllabusFromUpload, // carry forward for reference
         });
 
         return NextResponse.json({
@@ -789,7 +907,8 @@ MANDATORY QUALITY & BALANCE RULES:
       return NextResponse.json({
         reply:
           `Please tell me the **subject** you want to be tested on, ${name}.\n` +
-          `Options: Science | Mathematics | SST | History | Geography | Civics | Economics | English | Hindi`,
+          `Options: Science | Mathematics | SST | History | Geography | Civics | Economics | English | Hindi\n\n` +
+          `📎 Or **upload your syllabus** as a PDF or image for a custom paper.`,
       });
     }
 

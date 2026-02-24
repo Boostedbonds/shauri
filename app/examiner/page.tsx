@@ -46,7 +46,9 @@ export default function ExaminerPage() {
     setExamStarted(true);
     timerRef.current = setInterval(() => {
       if (startTimestampRef.current) {
-        const diff = Math.floor((Date.now() - startTimestampRef.current) / 1000);
+        const diff = Math.floor(
+          (Date.now() - startTimestampRef.current) / 1000
+        );
         setElapsedSeconds(diff);
       }
     }, 1000);
@@ -109,17 +111,21 @@ export default function ExaminerPage() {
   }
 
   async function handleSend(text: string, uploadedText?: string) {
+    // Allow send if there's either typed text OR an upload
     if (!text.trim() && !uploadedText) return;
 
-    let userContent = "";
+    // ── Build what shows in the chat bubble for the user ──────
+    // Show typed text; if there's an upload, note it clearly.
+    let displayContent = text.trim();
     if (uploadedText) {
-      userContent += `\n[UPLOADED ANSWER SHEET]\n${uploadedText}\n`;
+      displayContent = displayContent
+        ? `${displayContent}\n\n📎 [Uploaded document attached]`
+        : `📎 [Uploaded document attached]`;
     }
-    userContent += text.trim();
 
     const userMessage: Message = {
       role: "user",
-      content: userContent.trim(),
+      content: displayContent,
     };
 
     const updatedMessages = [...messages, userMessage];
@@ -131,18 +137,23 @@ export default function ExaminerPage() {
       if (stored) student = JSON.parse(stored);
     } catch {}
 
-    // ✅ FIXED: send message + history separately (same fix as teacher mode)
+    // ── Build history (everything except the message just sent) ─
     const historyToSend = updatedMessages
       .slice(0, -1)
       .map((m) => ({ role: m.role, content: m.content }));
 
+    // ── FIX: send message and uploadedText as SEPARATE fields ───
+    // Backend reads body.message and body.uploadedText independently.
+    // Merging them into one string breaks syllabus upload detection
+    // and answer sheet recording on the backend.
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         mode: "examiner",
-        message: userContent.trim(), // ✅ FIXED: was missing
-        history: historyToSend,      // ✅ FIXED: was "messages"
+        message: text.trim(),           // ✅ typed text only
+        uploadedText: uploadedText || "", // ✅ OCR/extracted text as its own field
+        history: historyToSend,
         student,
       }),
     });
@@ -151,10 +162,12 @@ export default function ExaminerPage() {
     const aiReply: string =
       typeof data?.reply === "string" ? data.reply : "";
 
+    // ── Timer: start when backend confirms exam has begun ───────
     if (typeof data?.startTime === "number") {
       startTimer(data.startTime);
     }
 
+    // ── Exam ended: stop timer, save attempt ───────────────────
     if (data?.examEnded === true) {
       stopTimer();
       const usedSeconds = elapsedSeconds;
