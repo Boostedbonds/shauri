@@ -54,7 +54,6 @@ type ChapterEntry = { number: number; name: string };
 
 // ─────────────────────────────────────────────────────────────
 // INPUT VALIDATION
-// Allowlists for board and class — prevents injection into prompts
 // ─────────────────────────────────────────────────────────────
 
 const VALID_BOARDS = ["CBSE", "ICSE", "IB"];
@@ -74,8 +73,6 @@ function sanitiseClass(raw: string): string {
 
 // ─────────────────────────────────────────────────────────────
 // SUPABASE SESSION HELPERS
-// All exam state lives in Supabase — zero in-memory state.
-// Safe across serverless cold starts, concurrent users, deploys.
 // ─────────────────────────────────────────────────────────────
 
 async function getSession(key: string): Promise<ExamSession | null> {
@@ -118,8 +115,6 @@ async function deleteSession(key: string): Promise<void> {
 
 // ─────────────────────────────────────────────────────────────
 // SYLLABUS HELPERS
-// Class 9  → local syllabus.ts (primary) + AI fills any gaps
-// All other classes → AI fetches from NCERT training knowledge
 // ─────────────────────────────────────────────────────────────
 
 function getChaptersForSubject(
@@ -267,7 +262,6 @@ function getChaptersForSubject(
     };
   }
 
-  // Classes 6–8, 10–12: AI fetches entirely from NCERT
   const subjectLabel =
     /science|physics|chemistry|biology/.test(req) ? "Science" :
     /math/.test(req)                               ? "Mathematics" :
@@ -298,9 +292,6 @@ function getChaptersForSubject(
 // ─────────────────────────────────────────────────────────────
 
 function getKey(student?: StudentContext): string {
-  // sessionId is always sent by the client (stable for the entire page session).
-  // Fallback uses name+class WITHOUT Date.now() — same student always gets
-  // the same fallback key rather than a brand new session every request.
   if (student?.sessionId) return student.sessionId;
   return `${student?.name || "anon"}_${student?.class || "x"}`;
 }
@@ -353,7 +344,7 @@ function parseTotalMarksFromPaper(paper: string): number {
 
 function sanitiseUpload(raw: string): string {
   return raw
-    .slice(0, 8000) // hard length cap — prevents token abuse
+    .slice(0, 8000)
     .replace(/system\s*:/gi, "")
     .replace(/ignore\s+previous\s+instructions?/gi, "")
     .replace(/you\s+are\s+now/gi, "")
@@ -363,7 +354,6 @@ function sanitiseUpload(raw: string): string {
 
 // ─────────────────────────────────────────────────────────────
 // SYLLABUS EXTRACTION FROM UPLOAD
-// Module-level function — not nested inside POST
 // ─────────────────────────────────────────────────────────────
 
 async function parseSyllabusFromUpload(
@@ -421,7 +411,6 @@ ${safe}
 
 // ─────────────────────────────────────────────────────────────
 // SYLLABUS UPLOAD HANDLER
-// Module-level function — not nested inside POST
 // ─────────────────────────────────────────────────────────────
 
 async function handleSyllabusUpload(
@@ -474,7 +463,6 @@ async function handleSyllabusUpload(
 
 // ─────────────────────────────────────────────────────────────
 // CORE AI CALLER
-// 30s default timeout + proper AbortController cleanup
 // ─────────────────────────────────────────────────────────────
 
 async function callAI(
@@ -520,7 +508,6 @@ async function callAI(
   }
 }
 
-// Evaluation calls can take longer — 90s timeout
 async function callAIForEvaluation(
   sysPrompt: string,
   messages: ChatMessage[]
@@ -529,10 +516,10 @@ async function callAIForEvaluation(
 }
 
 // ─────────────────────────────────────────────────────────────
-// EXAM TIME LIMIT — server enforces 3-hour limit
+// EXAM TIME LIMIT
 // ─────────────────────────────────────────────────────────────
 
-const MAX_EXAM_MS = 3 * 60 * 60 * 1000; // 3 hours
+const MAX_EXAM_MS = 3 * 60 * 60 * 1000;
 
 function isOverTime(startedAt?: number): boolean {
   if (!startedAt) return false;
@@ -550,14 +537,10 @@ export async function POST(req: NextRequest) {
     const mode: string            = body?.mode || "";
     const student: StudentContext = body?.student || {};
 
-    // Personal name — empty string when unknown (never falls back to "Student")
     const name      = student?.name?.trim() || "";
-    // greetName: "Hi there!" when name unknown — natural, never cold
     const greetName = name || "there";
-    // callName: ", Aryan" mid-sentence, or "" when name unknown — always reads naturally
     const callName  = name ? `, ${name}` : "";
 
-    // Validated and clamped — safe to inject directly into AI prompts
     const cls   = sanitiseClass(student?.class || "");
     const board = sanitiseBoard(student?.board || "");
 
@@ -570,15 +553,9 @@ export async function POST(req: NextRequest) {
       history.filter((m) => m.role === "user").pop()?.content ||
       "";
 
-    // Sanitise all uploaded text immediately on entry
     const rawUploadedText: string = body?.uploadedText || "";
-
-    // uploadType: explicit signal from ChatInput
-    // "syllabus" = uploaded before exam started (IDLE or READY)
-    // "answer"   = uploaded during exam (IN_EXAM)
     const uploadType: "syllabus" | "answer" | undefined = body?.uploadType ?? undefined;
 
-    // Image OCR: if upload contains base64 image, extract via Gemini vision
     let uploadedText: string = sanitiseUpload(rawUploadedText);
 
     if (rawUploadedText.includes("[IMAGE_BASE64]")) {
@@ -619,7 +596,6 @@ export async function POST(req: NextRequest) {
             }
           }
         } catch {
-          // OCR failed — uploadedText stays empty, student gets a clear message downstream
           uploadedText = "";
         }
       }
@@ -627,7 +603,6 @@ export async function POST(req: NextRequest) {
 
     const lower = message.toLowerCase().trim();
 
-    // Context window capped at 14 messages (~7 turns) to stay within Gemini token budget
     const conversation: ChatMessage[] = [
       ...history.slice(-14),
       { role: "user", content: message },
@@ -648,16 +623,6 @@ export async function POST(req: NextRequest) {
 
     // ═══════════════════════════════════════════════════════════
     // EXAMINER MODE
-    //
-    // ALL session state lives in Supabase `exam_sessions` table.
-    // No in-memory Map — safe across serverless cold starts.
-    //
-    // FLOW:
-    //   IDLE    → student specifies subject OR uploads syllabus
-    //   READY   → student types "start" → full paper shown, timer begins
-    //   IN_EXAM → every message/upload appended to answer_log in DB
-    //   SUBMIT  → all answers evaluated, result saved, session deleted
-    //   FAILED  → evaluation timed out; session preserved, student can retry
     // ═══════════════════════════════════════════════════════════
     if (mode === "examiner") {
       const key = getKey(student);
@@ -671,7 +636,41 @@ export async function POST(req: NextRequest) {
         student_board: board,
       };
 
-      // ── Greeting ───────────────────────────────────────────
+      // ── FIX: Re-greeting a READY session — remind instead of falling through ──
+      if (isGreeting(lower) && session.status === "READY") {
+        return NextResponse.json({
+          reply:
+            `📚 Welcome back${callName}! Your subject is set to **${session.subject}**.\n\n` +
+            `Type **start** when you're ready to begin your exam. ⏱️ Timer starts immediately.\n\n` +
+            `📎 Want to use a different syllabus? Upload a PDF or image now to override.`,
+        });
+      }
+
+      // ── FIX: Re-greeting during an active exam — resume context ──
+      if (isGreeting(lower) && session.status === "IN_EXAM") {
+        const elapsed = session.started_at
+          ? formatDuration(Date.now() - session.started_at)
+          : "—";
+        return NextResponse.json({
+          reply:
+            `⏱️ Your **${session.subject}** exam is still in progress!\n\n` +
+            `Time elapsed: **${elapsed}**\n` +
+            `Answers recorded so far: **${session.answer_log.length}**\n\n` +
+            `Continue typing your answers or upload photos of handwritten work.\n` +
+            `When fully done, type **submit**.`,
+        });
+      }
+
+      // ── FIX: Re-greeting a FAILED session ──
+      if (isGreeting(lower) && session.status === "FAILED") {
+        return NextResponse.json({
+          reply:
+            `⚠️ Welcome back${callName}! Your previous evaluation hit a timeout, but your answers are all saved.\n\n` +
+            `Type **submit** to retry the evaluation.`,
+        });
+      }
+
+      // ── Greeting: fresh IDLE session ──────────────────────
       if (isGreeting(lower) && session.status === "IDLE") {
         return NextResponse.json({
           reply:
@@ -693,9 +692,7 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // ── Recovery: FAILED session — let student retry submit ─
-      // If evaluation timed out previously, answers are still saved in DB.
-      // We reset status to IN_EXAM so the submit block below handles it normally.
+      // ── Recovery: FAILED session ───────────────────────────
       if (session.status === "FAILED") {
         if (isSubmit(lower)) {
           session.status = "IN_EXAM";
@@ -848,8 +845,6 @@ Weaknesses  : [specific chapters to focus on]
 Study Tip   : [one actionable improvement tip based on the syllabus used]
         `.trim();
 
-        // Mark FAILED before the 90s call — if it times out or throws,
-        // the session is already persisted so the student can safely retry.
         await saveSession({ ...session, status: "FAILED" });
 
         let evaluation: string;
@@ -866,7 +861,6 @@ Study Tip   : [one actionable improvement tip based on the syllabus used]
             },
           ]);
         } catch (evalErr) {
-          // Session stays FAILED in DB — student can type "submit" to retry
           console.error("[evaluation] callAIForEvaluation threw:", evalErr);
           return NextResponse.json({
             reply:
@@ -878,7 +872,6 @@ Study Tip   : [one actionable improvement tip based on the syllabus used]
         const { obtained, total } = parseScore(evaluation);
         const percentage = total > 0 ? Math.round((obtained / total) * 100) : 0;
 
-        // Save result to Supabase
         try {
           await supabase.from("exam_attempts").insert({
             student_name:    name || null,
@@ -894,10 +887,8 @@ Study Tip   : [one actionable improvement tip based on the syllabus used]
           });
         } catch (dbErr) {
           console.error("Failed to save exam_attempt:", dbErr);
-          // Don't block — student still gets their evaluation
         }
 
-        // Clean up session only after successful evaluation + DB save
         await deleteSession(key);
 
         return NextResponse.json({
@@ -1240,15 +1231,11 @@ MANDATORY QUALITY & BALANCE RULES:
 
     // ═══════════════════════════════════════════════════════════
     // PROGRESS MODE
-    // Receives pre-computed subjectStats from the Progress page.
-    // Falls back to legacy attempts array if old client sends it.
-    // Trims legacy attempts to last 10 per subject to stay within token budget.
     // ═══════════════════════════════════════════════════════════
     if (mode === "progress") {
       const subjectStats = body?.subjectStats || null;
       const attempts     = body?.attempts     || [];
 
-      // Trim legacy attempts to last 10 per subject to avoid token overflow
       const trimmedAttempts = Array.isArray(attempts)
         ? Object.values(
             attempts.reduce((acc: Record<string, any[]>, a: any) => {

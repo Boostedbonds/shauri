@@ -1,93 +1,45 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+
+import { useEffect, useRef, useState } from "react";
 import ChatUI from "../components/ChatUI";
 import ChatInput from "../components/ChatInput";
 
-export type Message = {
+type Message = {
   role: "user" | "assistant";
   content: string;
 };
 
 export default function TeacherPage() {
   const [messages, setMessages] = useState<Message[]>([]);
-  const hasInteractedRef = useRef(false);
+  const [isLoading, setIsLoading]   = useState(false);
 
+  const greetingFiredRef = useRef(false);
+  const isSendingRef     = useRef(false);
+  const sessionIdRef     = useRef<string>(crypto.randomUUID());
+
+  // ── Opening greeting ─────────────────────────────────────────
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("shauri_student");
-      if (stored) {
-        const student = JSON.parse(stored);
-        const name = student?.name || "Student";
-        const cls = student?.class || "";
-        setMessages([
-          {
-            role: "assistant",
-            content: `Hello ${name}! I'm Shauri, here to help you ace your Class ${cls} studies as per NCERT and CBSE. What would you like to learn today?`,
-          },
-        ]);
-      } else {
-        setMessages([
-          {
-            role: "assistant",
-            content: "Hello! I'm Shauri. What would you like to study today?",
-          },
-        ]);
-      }
-    } catch {
-      setMessages([
-        {
-          role: "assistant",
-          content: "Hello! I'm Shauri. What would you like to study today?",
-        },
-      ]);
-    }
+    if (greetingFiredRef.current) return;
+    greetingFiredRef.current = true;
+    sendToAPI("hi", undefined, undefined, true);
   }, []);
 
-  // ✅ Scroll ONLY after user interaction (not on initial load)
-  useEffect(() => {
-    if (!hasInteractedRef.current) return;
+  // ── Core API caller ──────────────────────────────────────────
+  async function sendToAPI(
+    text: string,
+    uploadedText?: string,
+    uploadType?: "syllabus" | "answer",
+    isGreeting = false
+  ) {
+    if (isSendingRef.current) return;
+    isSendingRef.current = true;
+    setIsLoading(true);
 
-    setTimeout(() => {
-      window.scrollTo({
-        top: document.body.scrollHeight,
-        behavior: "smooth",
-      });
-    }, 100);
-  }, [messages.length]);
-
-  async function handleSend(text: string, uploadedText?: string) {
-    if (!text.trim() && !uploadedText) return;
-
-    hasInteractedRef.current = true;
-
-    let userContent = "";
-    if (uploadedText) {
-      userContent += `\n[UPLOADED STUDY MATERIAL / ANSWER SHEET]\n${uploadedText}\n`;
-    }
-    if (text.trim()) {
-      userContent += text.trim();
-    }
-
-    const userMessage: Message = {
-      role: "user",
-      content: userContent.trim(),
-    };
-
-    const updatedMessages: Message[] = [...messages, userMessage];
-    setMessages(updatedMessages);
-
-    let student = null;
+    let student: any = null;
     try {
       const stored = localStorage.getItem("shauri_student");
       if (stored) student = JSON.parse(stored);
-    } catch {
-      student = null;
-    }
-
-    const historyToSend = updatedMessages
-      .slice(1)
-      .slice(0, -1)
-      .map((m) => ({ role: m.role, content: m.content }));
+    } catch {}
 
     try {
       const res = await fetch("/api/chat", {
@@ -95,73 +47,107 @@ export default function TeacherPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode: "teacher",
-          message: userContent.trim(),
-          history: historyToSend,
-          student,
-          uploadedText: uploadedText ?? null,
+          message: text,
+          uploadedText: uploadedText || "",
+          uploadType: uploadType || null,
+          history: isGreeting ? [] : messages.map(m => ({ role: m.role, content: m.content })),
+          student: { ...student, sessionId: sessionIdRef.current },
         }),
       });
 
       const data = await res.json();
-
-      const aiMessage: Message = {
-        role: "assistant",
-        content:
-          typeof data?.reply === "string"
-            ? data.reply
-            : "Something went wrong. Please try again.",
-      };
-
-      setMessages([...updatedMessages, aiMessage]);
-    } catch {
-      setMessages([
-        ...updatedMessages,
-        {
-          role: "assistant",
-          content: "Network error. Please check your connection and try again.",
-        },
-      ]);
+      const aiReply: string = typeof data?.reply === "string" ? data.reply : "";
+      if (aiReply) {
+        setMessages(prev => [...prev, { role: "assistant", content: aiReply }]);
+      }
+    } catch (err) {
+      console.error("[Teacher sendToAPI] fetch failed:", err);
+      setMessages(prev => [...prev, { role: "assistant", content: "⚠️ Network error. Please try again." }]);
+    } finally {
+      isSendingRef.current = false;
+      setIsLoading(false);
     }
   }
 
+  async function handleSend(text: string, uploadedText?: string, uploadType?: "syllabus" | "answer") {
+    if (!text.trim() && !uploadedText) return;
+    if (isSendingRef.current) return;
+
+    setMessages(prev => [...prev, { role: "user", content: text.trim() }]);
+    await sendToAPI(text, uploadedText, uploadType);
+  }
+
   return (
-    <div style={{ minHeight: "100vh", paddingTop: 24, paddingBottom: 140 }}>
-      <div style={{ paddingLeft: 24, marginBottom: 16 }}>
+    <div style={{
+      height: "100vh",
+      display: "flex",
+      flexDirection: "column",
+      overflow: "hidden",
+      background: "#f8fafc",
+    }}>
+      {/* ── Top bar ── */}
+      <div style={{
+        height: 52,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "0 20px",
+        background: "#fff",
+        borderBottom: "1px solid #e2e8f0",
+        flexShrink: 0,
+        zIndex: 20,
+      }}>
         <button
           onClick={() => (window.location.href = "/modes")}
           style={{
-            padding: "10px 16px",
-            background: "#2563eb",
-            color: "#ffffff",
-            borderRadius: 12,
-            border: "none",
-            fontSize: 14,
-            cursor: "pointer",
+            padding: "7px 14px", background: "#f1f5f9",
+            color: "#374151", borderRadius: 8, border: "1px solid #e2e8f0",
+            fontSize: 13, cursor: "pointer", fontWeight: 600,
           }}
         >
-          ← Modes
+          ← Back
         </button>
+        <div style={{ fontSize: 15, fontWeight: 700, color: "#0f172a", letterSpacing: "0.05em" }}>
+          📚 Teacher Mode
+        </div>
+        <div style={{ width: 80 }} />
       </div>
 
-      <h1 style={{ textAlign: "center", marginBottom: 16 }}>
-        Teacher Mode
-      </h1>
+      {/* ── Main: ChatUI fills remaining height ── */}
+      <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        <div style={{ flex: 1, overflow: "hidden" }}>
+          <ChatUI
+            messages={messages}
+            mode="teacher"
+          />
+        </div>
 
-      <ChatUI messages={messages} />
+        {/* Loading dots */}
+        {isLoading && (
+          <div style={{
+            padding: "8px 32px", background: "#fff",
+            borderTop: "1px solid #f1f5f9", fontSize: 13, color: "#64748b",
+            display: "flex", alignItems: "center", gap: 8, flexShrink: 0,
+          }}>
+            <span>●</span><span>●</span><span>●</span>
+          </div>
+        )}
 
-      {/* ✅ Fixed input, page scroll stays clean */}
-      <div
-        style={{
-          position: "fixed",
-          bottom: 0,
-          left: 0,
-          width: "100%",
-          background: "#f8fafc",
-          padding: "12px 0",
-          borderTop: "1px solid #e2e8f0",
-        }}
-      >
-        <ChatInput onSend={handleSend} />
+        {/* ── Input — fixed to bottom-left 80% (chat area only) ── */}
+        <div style={{
+          background: "#fff", borderTop: "1px solid #e2e8f0",
+          padding: "10px 16px", display: "flex",
+          justifyContent: "flex-start", flexShrink: 0,
+        }}>
+          {/* 78% width to align with chat area, leaving room for dictionary panel */}
+          <div style={{ width: "78%" }}>
+            <ChatInput
+              onSend={handleSend}
+              disabled={isLoading}
+              inline
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
