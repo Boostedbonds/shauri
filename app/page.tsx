@@ -36,101 +36,80 @@ export default function HomePage() {
 
         /* ─── LANDING ─── */
         .land {
-          position: fixed; inset: 0;
+          position: fixed; inset: 0; overflow: hidden;
           background: linear-gradient(to top, #000814 0%, #001d3d 55%, #0a2540 100%);
-          /* flex column: sun (decorative), content, mountain */
-          display: flex; flex-direction: column;
-          align-items: center; overflow: hidden;
         }
-
-        /* Sun is purely decorative — absolutely positioned, never affects layout */
         .sun {
           position: absolute;
-          top: -10%; left: 50%; transform: translateX(-50%);
-          width: min(70vw, 460px); height: min(70vw, 460px);
+          top: 22%; left: 50%; transform: translate(-50%, -50%);
+          width: clamp(240px, 50vw, 520px); height: clamp(240px, 50vw, 520px);
           border-radius: 50%;
-          background: radial-gradient(circle,
-            rgba(255,215,120,1) 0%,
-            rgba(255,180,60,0.55) 45%,
-            transparent 75%);
-          filter: blur(10px);
-          pointer-events: none; z-index: 0;
+          background: radial-gradient(circle, rgba(255,215,120,1) 0%, rgba(255,180,60,0.6) 50%, transparent 80%);
+          filter: blur(12px); pointer-events: none; z-index: 0;
         }
 
-        /* All real content stacked in normal flow */
+        /* DESKTOP default — original absolute positioning */
         .content {
-          position: relative; z-index: 2;
+          position: absolute;
+          top: 22%; left: 50%; transform: translate(-50%, -50%);
+          z-index: 2; width: 100%; padding: 0 20px;
           display: flex; flex-direction: column;
-          align-items: center; text-align: center;
-          padding: 0 20px;
-          /* Push content down from top — scales with height */
-          margin-top: max(12vh, 48px);
-          gap: clamp(10px, 2.5vh, 22px);
+          align-items: center; text-align: center; gap: 12px;
         }
-
         .main-title {
-          /* Key fix: font-size drives letter-spacing budget.
-             On a 390px screen, "SHAURI" at 0.4em spacing = ~7 chars × size × 1.4
-             clamp ensures it always fits within viewport width */
-          font-size: clamp(38px, 11.5vw, 80px);
-          /* Letter spacing relative to font — stays proportional */
-          letter-spacing: 0.32em;
-          font-weight: 700;
-          color: #FFD700;
-          text-shadow:
-            0 0 24px rgba(255,215,120,0.9),
-            0 0 50px rgba(255,200,80,0.5),
-            0 2px 8px rgba(0,0,0,0.9);
-          line-height: 1;
-          white-space: nowrap;
-          /* Safety: if somehow still too wide, scale down */
-          max-width: 100%;
+          font-size: 76px; letter-spacing: 0.55em;
+          font-weight: 700; color: #FFD700; line-height: 1; white-space: nowrap;
+          text-shadow: 0 0 20px rgba(255,215,120,0.9), 0 0 40px rgba(255,200,80,0.6), 0 2px 6px rgba(0,0,0,0.8);
         }
+        .tagline { color: #fff; font-size: 13px; letter-spacing: 0.15em; line-height: 1.5; opacity: 0.9; }
+        .subtitle { color: #FFD700; font-size: 13px; letter-spacing: 0.15em; opacity: 0.85; line-height: 1.5; }
 
-        .tagline {
-          color: #fff;
-          font-size: clamp(8px, 2.3vw, 13px);
-          letter-spacing: clamp(0.06em, 1.2vw, 0.16em);
-          line-height: 1.55; opacity: 0.9;
-          max-width: 320px;
+        .cta-wrap {
+          position: absolute;
+          bottom: 220px; left: 50%; transform: translateX(-50%);
+          z-index: 2; cursor: pointer;
         }
-
-        .subtitle {
-          color: #FFD700;
-          font-size: clamp(7px, 1.9vw, 12px);
-          letter-spacing: clamp(0.05em, 0.9vw, 0.14em);
-          opacity: 0.85; line-height: 1.55;
-          max-width: 300px;
-        }
-
         .cta-btn {
           position: relative; overflow: hidden;
-          padding: clamp(11px, 2.8vw, 15px) clamp(26px, 7vw, 48px);
-          border-radius: 999px;
-          border: 1.5px solid rgba(255,215,0,0.55);
-          color: #FFD700;
-          font-size: clamp(10px, 2.5vw, 14px);
-          letter-spacing: clamp(0.1em, 1.8vw, 0.35em);
-          white-space: nowrap; cursor: pointer;
-          font-family: inherit;
+          padding: 14px 42px; border-radius: 999px;
+          border: 1px solid rgba(255,215,0,0.5);
+          color: #FFD700; font-size: 13px; letter-spacing: 0.35em;
+          white-space: nowrap; cursor: pointer; font-family: inherit;
         }
-
-        /* Mountain at very bottom — fixed height, never overlaps content */
         .mountain {
           position: absolute; bottom: 0; left: 0; right: 0;
-          z-index: 1; pointer-events: none;
-          /* Height scales but caps so it stays below content */
-          height: clamp(80px, 18vh, 180px);
+          z-index: 1; pointer-events: none; width: 100%;
         }
 
-        /* Landscape: compress vertical gaps */
+        /* ── MOBILE portrait ≤600px: switch to normal flow ── */
+        @media (max-width: 600px) {
+          .land { display: flex; flex-direction: column; align-items: center; }
+          .sun {
+            top: 0; left: 50%; transform: translateX(-50%);
+            width: min(90vw, 300px); height: min(90vw, 300px);
+          }
+          .content {
+            position: relative; top: auto; left: auto; transform: none;
+            margin-top: max(14vh, 52px); gap: 8px;
+          }
+          .main-title { font-size: clamp(34px, 10.5vw, 54px); letter-spacing: 0.28em; }
+          .tagline { font-size: clamp(9px, 2.3vw, 12px); letter-spacing: 0.08em; max-width: 290px; }
+          .subtitle { font-size: clamp(8px, 2vw, 11px); letter-spacing: 0.06em; max-width: 270px; }
+          .cta-wrap {
+            position: relative; bottom: auto; left: auto; transform: none; margin-top: 18px;
+          }
+          .cta-btn { padding: 12px 30px; font-size: 11px; letter-spacing: 0.16em; }
+          .mountain { position: absolute; height: clamp(80px, 18vh, 160px); }
+        }
+
+        /* Landscape phone */
         @media (orientation: landscape) and (max-height: 500px) {
-          .content { margin-top: max(6vh, 24px); gap: 8px; }
-          .main-title { font-size: clamp(28px, 8vh, 48px); }
+          .content { top: 16%; gap: 5px; }
+          .main-title { font-size: clamp(26px, 8vh, 46px); letter-spacing: 0.3em; }
           .tagline { font-size: clamp(7px, 1.6vh, 10px); }
           .subtitle { font-size: clamp(6px, 1.4vh, 9px); }
+          .cta-wrap { bottom: 80px; }
           .cta-btn { padding: 8px 26px; font-size: 10px; letter-spacing: 0.14em; }
-          .mountain { height: clamp(60px, 14vh, 110px); }
         }
 
         /* ─── ACCESS FORM ─── */
@@ -196,34 +175,36 @@ export default function HomePage() {
 
             <div className="sun" />
 
-            {/* All text content — stacked naturally in DOM order */}
+            {/* All text content */}
             <div className="content">
               <h1 className="main-title">SHAURI</h1>
               <p className="tagline">THE COURAGE TO MASTER THE FUTURE</p>
               <p className="subtitle">CBSE-ALIGNED ADAPTIVE LEARNING PLATFORM</p>
-
-              <motion.div onClick={handleEnter}
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ cursor: "pointer" }}>
-                <div className="cta-btn">
-                  <motion.div
-                    style={{
-                      position: "absolute", top: 0, left: "-100%",
-                      width: "100%", height: "100%",
-                      background: "linear-gradient(90deg, transparent, rgba(255,215,0,0.55), transparent)",
-                    }}
-                    animate={{ left: ["-100%", "100%"] }}
-                    transition={{ duration: 2, repeat: Infinity }}
-                  />
-                  BEGIN THE ASCENT
-                </div>
-              </motion.div>
             </div>
 
-            {/* Mountain — absolute, behind content (z-index 1 < content z-index 2) */}
-            <svg className="mountain" viewBox="0 0 390 180"
-              preserveAspectRatio="xMidYMax meet">
+            {/* CTA — separate from content so it can be independently positioned */}
+            <motion.div className="cta-wrap"
+              onClick={handleEnter}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div className="cta-btn">
+                <motion.div
+                  style={{
+                    position: "absolute", top: 0, left: "-100%",
+                    width: "100%", height: "100%",
+                    background: "linear-gradient(90deg, transparent, rgba(255,215,0,0.55), transparent)",
+                  }}
+                  animate={{ left: ["-100%", "100%"] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                />
+                BEGIN THE ASCENT
+              </div>
+            </motion.div>
+
+            {/* Mountain — full width SVG, sits at bottom */}
+            <svg className="mountain" viewBox="0 0 1440 800"
+              preserveAspectRatio="xMidYMax slice">
               <path
-                d="M0,160 C80,140 170,110 195,50 C220,110 310,140 390,155 L390,180 L0,180 Z"
+                d="M0,730 C400,650 700,600 720,500 C740,600 1000,650 1440,720 L1440,800 L0,800 Z"
                 fill="black" />
             </svg>
 
