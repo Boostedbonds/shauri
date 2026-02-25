@@ -62,26 +62,8 @@ function useTTS(gender: Gender, lang: Lang) {
     window.speechSynthesis.speak(u);
   }
 
-  async function speakAPI(text: string, onStart: () => void, onEnd: () => void) {
-    try {
-      const res = await fetch("/api/tts", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, gender, lang: lang === "auto" ? "en-IN" : lang }),
-        signal: AbortSignal.timeout(8000), // don't wait forever
-      });
-      if (!res.ok) throw new Error(`tts ${res.status}`);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      audioRef.current = audio;
-      onStart();
-      audio.onended = () => { URL.revokeObjectURL(url); audioRef.current = null; onEnd(); };
-      audio.onerror = () => { URL.revokeObjectURL(url); audioRef.current = null; onEnd(); };
-      await audio.play();
-    } catch {
-      // API failed or timed out — fall back to browser immediately
-      speakBrowser(text, onStart, onEnd);
-    }
+  async function speakAPI(_text: string, _onStart: () => void, _onEnd: () => void) {
+    // Reserved for future Gemini TTS upgrade — not active in this build
   }
 
   function speak(rawText: string, onStart: () => void, onEnd: () => void) {
@@ -161,7 +143,7 @@ export default function OralPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages]);
 
-  // Speech recognition setup
+  // Speech recognition — cleanup on lang change + unmount
   useEffect(() => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) return;
@@ -180,7 +162,11 @@ export default function OralPage() {
     r.onend = () => setListening(false);
     r.onerror = () => setListening(false);
     recognitionRef.current = r;
+    return () => { try { r.stop(); } catch {} r.onresult = null; r.onend = null; };
   }, [lang]);
+
+  // Stop audio when navigating away
+  useEffect(() => () => stopAll(), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function toggleMic() {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;

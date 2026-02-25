@@ -614,10 +614,20 @@ export async function POST(req: NextRequest) {
     if (mode === "teacher") {
       if (isGreeting(lower) && history.length === 0) {
         return NextResponse.json({
-          reply: `Hi ${greetName}! 👋 I'm Shauri, your ${board} teacher. What would you like to learn today?`,
+          reply: `Hi ${greetName}! 👋 I'm Shauri, your ${board} teacher${cls ? ` for Class ${cls}` : ""}. What would you like to learn today?`,
         });
       }
-      const reply = await callAI(systemPrompt("teacher"), conversation);
+      // Prepend student context as a user→assistant exchange so AI always knows who it's talking to
+      const contextPrimer: ChatMessage[] = name ? [
+        { role: "user", content: `My name is ${name}${cls ? `, I'm in Class ${cls}` : ""}${board ? `, ${board} board` : ""}.` },
+        { role: "assistant", content: `Got it! I'll call you ${name}${cls ? ` (Class ${cls})` : ""}. How can I help you today?` },
+      ] : [];
+      const teacherConversation: ChatMessage[] = [
+        ...contextPrimer,
+        ...history.slice(-12),
+        { role: "user", content: message },
+      ];
+      const reply = await callAI(systemPrompt("teacher"), teacherConversation);
       return NextResponse.json({ reply });
     }
 
@@ -646,18 +656,23 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // ── FIX: Re-greeting during an active exam — resume context ──
+      // ── Re-greeting during an active exam — restore full UI state ──
       if (isGreeting(lower) && session.status === "IN_EXAM") {
         const elapsed = session.started_at
           ? formatDuration(Date.now() - session.started_at)
           : "—";
+        // Return paper + startTime so frontend can restore paper panel and timer
         return NextResponse.json({
           reply:
             `⏱️ Your **${session.subject}** exam is still in progress!\n\n` +
             `Time elapsed: **${elapsed}**\n` +
-            `Answers recorded so far: **${session.answer_log.length}**\n\n` +
-            `Continue typing your answers or upload photos of handwritten work.\n` +
+            `Answers recorded: **${session.answer_log.length}**\n\n` +
+            `Your question paper has been restored on the left. Continue answering.\n` +
             `When fully done, type **submit**.`,
+          resumeExam: true,
+          questionPaper: session.question_paper || "",
+          startTime: session.started_at,
+          subject: session.subject,
         });
       }
 
@@ -1209,7 +1224,16 @@ MANDATORY QUALITY & BALANCE RULES:
     // ORAL MODE
     // ═══════════════════════════════════════════════════════════
     if (mode === "oral") {
-      const reply = await callAI(systemPrompt("oral"), conversation);
+      const contextPrimer: ChatMessage[] = name ? [
+        { role: "user", content: `My name is ${name}${cls ? `, I'm in Class ${cls}` : ""}${board ? `, ${board} board` : ""}.` },
+        { role: "assistant", content: `Great! I'll call you ${name}. Let's get started.` },
+      ] : [];
+      const oralConversation: ChatMessage[] = [
+        ...contextPrimer,
+        ...history.slice(-12),
+        { role: "user", content: message },
+      ];
+      const reply = await callAI(systemPrompt("oral"), oralConversation);
       return NextResponse.json({ reply });
     }
 

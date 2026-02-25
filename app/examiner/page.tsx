@@ -111,7 +111,8 @@ export default function ExaminerPage() {
   const timerRef         = useRef<NodeJS.Timeout | null>(null);
   const startTimestampRef = useRef<number | null>(null);
   const elapsedRef       = useRef(0);
-  const sessionIdRef     = useRef(crypto.randomUUID());
+  // Persist session ID across page refreshes — critical for exam continuity
+  const sessionIdRef = useRef<string>("");
   const greetingFiredRef = useRef(false);
   const isSendingRef     = useRef(false);
   const chatBottomRef    = useRef<HTMLDivElement>(null);
@@ -121,11 +122,21 @@ export default function ExaminerPage() {
   useEffect(() => { chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   useEffect(() => {
+    // ── Init persistent session ID (survives page refresh) ──
+    let sid = localStorage.getItem("shauri_exam_session_id");
+    if (!sid) {
+      sid = crypto.randomUUID();
+      localStorage.setItem("shauri_exam_session_id", sid);
+    }
+    sessionIdRef.current = sid;
+
+    // ── Load student name ──
     try {
       const s = JSON.parse(localStorage.getItem("shauri_student") || "null");
       if (s?.name) setStudentName(s.name);
     } catch {}
 
+    // ── Fire greeting (will auto-resume if exam is in progress) ──
     if (greetingFiredRef.current) return;
     greetingFiredRef.current = true;
     sendToAPI("", undefined, undefined, true);
@@ -225,6 +236,20 @@ export default function ExaminerPage() {
       const data = await res.json();
       const aiReply: string = typeof data?.reply === "string" ? data.reply : "";
 
+      // ── Exam resumed after page refresh — restore full UI ──
+      if (data?.resumeExam === true && data?.startTime) {
+        startTimer(data.startTime);
+        const subjectMatch = (data.subject || "").match(/([^\n]+)/);
+        setExamMeta(prev => ({
+          ...prev,
+          startTime: data.startTime,
+          subject: data.subject || prev.subject,
+        }));
+        if (data.questionPaper) setPaperContent(data.questionPaper);
+        setMessages(prev => [...prev, { role: "assistant", content: aiReply }]);
+        return;
+      }
+
       // Paper generated → split it out, start timer
       if (typeof data?.startTime === "number") {
         startTimer(data.startTime);
@@ -236,8 +261,9 @@ export default function ExaminerPage() {
         }));
         // Split paper from chat message at the divider
         const dividerIdx = aiReply.indexOf("━━━");
-        const paper = dividerIdx > -1 ? aiReply.slice(0, dividerIdx).trim() : aiReply;
-        const chatMsg = dividerIdx > -1 ? aiReply.slice(dividerIdx).replace(/^━+\s*/m, "").trim() : "Paper ready! Start answering in this chat.";
+        const paper = (dividerIdx > -1 ? aiReply.slice(0, dividerIdx) : aiReply).trim();
+        const afterDivider = dividerIdx > -1 ? aiReply.slice(dividerIdx).replace(/^━+\s*/m, "").trim() : "";
+        const chatMsg = afterDivider || `✅ Paper ready! Type your answers here.\n\nTap **📄 View Paper** in the top bar to see the full question paper any time.`;
         setPaperContent(paper);
         setMessages(prev => [...prev, { role: "assistant", content: chatMsg }]);
         return;
@@ -257,6 +283,8 @@ export default function ExaminerPage() {
           subject: data?.subject ?? prev.subject,
         }));
         saveExamAttempt(timeTaken, data?.subject ?? "Exam", data?.chapters ?? [], data?.marksObtained ?? 0, data?.totalMarks ?? 0);
+        // Clear session so next exam starts fresh
+        localStorage.removeItem("shauri_exam_session_id");
         return;
       }
 
