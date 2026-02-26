@@ -142,7 +142,8 @@ function DictionaryPanel() {
           }}>{loading ? "…" : "Go"}</button>
         </div>
       </div>
-      <div style={{ flex: 1, overflowY: "auto", padding: "10px 12px" }}>
+      {/* FIX: tabIndex={-1} prevents this scrollable div from capturing arrow keys */}
+      <div tabIndex={-1} style={{ flex: 1, overflowY: "auto", padding: "10px 12px", outline: "none" }}>
         {loading && <div style={{ color: "#64748b", fontSize: 13 }}>Looking up <em>{query}</em>…</div>}
         {result && !loading && (
           <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
@@ -214,18 +215,18 @@ function ExaminerView({ messages, examMeta, elapsed }: {
       <style>{`
         .exam-wrap {
           display: flex; height: 100%; overflow: hidden;
-          flex-direction: column; /* mobile: stacked */
+          flex-direction: column;
         }
         @media (min-width: 700px) {
-          .exam-wrap { flex-direction: row; } /* desktop: side by side */
+          .exam-wrap { flex-direction: row; }
         }
         .exam-paper {
           overflow-y: auto; background: #fff;
           padding: clamp(14px, 3vw, 24px) clamp(14px, 3vw, 28px);
           flex-shrink: 0;
-          /* Mobile: top half */
           height: 45%;
           border-bottom: 1.5px solid #e2e8f0;
+          outline: none;
         }
         @media (min-width: 700px) {
           .exam-paper {
@@ -236,16 +237,18 @@ function ExaminerView({ messages, examMeta, elapsed }: {
         .exam-chat {
           display: flex; flex-direction: column;
           background: #f8fafc; overflow: hidden;
-          /* Mobile: bottom half */
           flex: 1;
         }
         @media (min-width: 700px) {
           .exam-chat { width: 50%; height: 100%; }
         }
+        .exam-chat-scroll {
+          outline: none;
+        }
       `}</style>
       <div className="exam-wrap">
-        {/* Paper */}
-        <div className="exam-paper">
+        {/* Paper — FIX: tabIndex={-1} prevents arrow keys being captured */}
+        <div className="exam-paper" tabIndex={-1}>
           {examActive && (
             <div style={{
               position: "sticky", top: 0, zIndex: 10, background: "#0f172a", color: "#38bdf8",
@@ -282,7 +285,8 @@ function ExaminerView({ messages, examMeta, elapsed }: {
               {" · "}{examMeta.marksObtained}/{examMeta.totalMarks} ({examMeta.percentage}%)
             </div>
           )}
-          <div ref={chatRef} style={{ flex: 1, overflowY: "auto", padding: "14px 16px" }}>
+          {/* FIX: tabIndex={-1} prevents arrow keys being captured */}
+          <div ref={chatRef} tabIndex={-1} className="exam-chat-scroll" style={{ flex: 1, overflowY: "auto", padding: "14px 16px" }}>
             {chatMessages.map((m, i) => <Bubble key={i} m={m} />)}
             {chatMessages.length === 0 && (
               <div style={{ color: "#94a3b8", fontSize: 14, textAlign: "center", paddingTop: 30 }}>
@@ -321,19 +325,21 @@ export default function ChatUI({ messages, mode = "teacher", examMeta }: Props) 
             flex: 1; overflow-y: auto;
             padding: clamp(16px, 3vw, 24px) clamp(16px, 3vw, 32px);
             min-width: 0;
+            outline: none;
           }
-          /* Dictionary: hidden on mobile (<700px), visible on desktop */
           .teacher-dict {
             width: 240px; flex-shrink: 0;
             height: 100%; overflow-y: auto;
             display: none;
+            outline: none;
           }
           @media (min-width: 700px) {
             .teacher-dict { display: block; }
           }
         `}</style>
         <div className="teacher-wrap">
-          <div className="teacher-chat">
+          {/* FIX: tabIndex={-1} prevents arrow keys being captured by the chat scroll area */}
+          <div className="teacher-chat" tabIndex={-1}>
             {messages.map((m, i) => {
               if (!m?.role || !m?.content) return null;
               if (m.content.startsWith(PDF_MARKER)) return (
@@ -345,7 +351,8 @@ export default function ChatUI({ messages, mode = "teacher", examMeta }: Props) 
             })}
             <div ref={bottomRef} style={{ height: 100 }} />
           </div>
-          <div className="teacher-dict">
+          {/* FIX: tabIndex={-1} on dict panel scroll container too */}
+          <div className="teacher-dict" tabIndex={-1}>
             <DictionaryPanel />
           </div>
         </div>
