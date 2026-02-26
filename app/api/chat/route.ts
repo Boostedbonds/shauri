@@ -699,24 +699,26 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // ── Guard: "start" typed — check history for subject if Supabase is stale ──
+      // ── Guard: "start" typed — only use confirmedSubject, NEVER scan history ──
+      //
+      // BUG FIX: The previous version scanned chat history for a fallback subject,
+      // which caused it to pick up subjects from PREVIOUS sessions still in the
+      // frontend's history array (e.g. "Social Science"), then overwrite a correctly
+      // saved session (e.g. an uploaded English syllabus) in Supabase — resulting in
+      // the wrong subject's paper being generated.
+      //
+      // Fix: Remove the history scan entirely. Only trust `confirmedSubject` (an
+      // explicit signal from the frontend). If absent and status is still IDLE,
+      // ask the student to specify a subject — which is always the safe behaviour.
       if (isStart(lower) && session.status === "IDLE") {
-        // Race condition fix: Supabase write from previous message may not have committed yet.
-        // Try frontend's confirmed subject first, then history scan
         const confirmedSubject: string = body?.confirmedSubject || "";
 
-        const subjectFromHistory = confirmedSubject || history
-          .filter(m => m.role === "user")
-          .map(m => m.content.trim())
-          .filter(t => t.length > 1 && !isGreeting(t) && !isStart(t) && !isSubmit(t))
-          .pop();
-
-        if (subjectFromHistory) {
-          const { subjectName } = getChaptersForSubject(subjectFromHistory, cls);
+        if (confirmedSubject) {
+          const { subjectName } = getChaptersForSubject(confirmedSubject, cls);
           const recoveredSession: ExamSession = {
             session_key:     key,
             status:          "READY",
-            subject_request: subjectFromHistory,
+            subject_request: confirmedSubject,
             subject:         subjectName,
             answer_log:      [],
             student_name:    name,
@@ -726,7 +728,7 @@ export async function POST(req: NextRequest) {
           await saveSession(recoveredSession);
           session.status          = "READY";
           session.subject         = subjectName;
-          session.subject_request = subjectFromHistory;
+          session.subject_request = confirmedSubject;
           // Fall through to isStart + READY paper generation below
         } else {
           return NextResponse.json({
