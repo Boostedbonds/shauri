@@ -74,6 +74,25 @@ function getOrCreateSessionId(): string {
   return sid;
 }
 
+// ─── Extract subject from any bot reply that confirms readiness ─
+// Handles both: typed subject confirmation AND syllabus upload confirmation
+function extractConfirmedSubject(reply: string): string {
+  // From syllabus upload: "Subject detected: English"
+  const uploadMatch = reply.match(/\*?\*?Subject detected[:\*\s]+\*?\*?([^\n*]+)/i);
+  if (uploadMatch) return uploadMatch[1].trim();
+
+  // From typed subject: "question paper for:\n**English – Class 9**"
+  const paperMatch = reply.match(/question paper for[:\s]*\n?\*?\*?([^\n*]+)/i)
+    || reply.match(/for:\s*\n\*?\*?([^\n*]+)/i);
+  if (paperMatch) return paperMatch[1].trim();
+
+  // From subject set confirmation: "Subject is set to **English**"
+  const setMatch = reply.match(/[Ss]ubject is set to\s+\*?\*?([^\n*]+)/i);
+  if (setMatch) return setMatch[1].trim();
+
+  return "";
+}
+
 // ─── Main page ───────────────────────────────────────────────
 export default function ExaminerPage() {
   // Build greeting with student name
@@ -82,7 +101,7 @@ export default function ExaminerPage() {
     return `${n} 📋 I'm your strict CBSE Examiner.\n\nTell me the **subject** you want to be tested on:\nScience | Mathematics | SST | History | Geography | Civics | Economics | English | Hindi\n\n📎 **OR** upload your **syllabus as a PDF or image** and I'll generate a paper exactly based on it.\n\n⏱️ Your timer starts the moment you type **start**.`;
   }
 
-  const [messages, setMessages]   = useState<Message[]>([]);  // populated after mount with name
+  const [messages, setMessages]   = useState<Message[]>([]);
   const [paperContent, setPaper]  = useState("");
   const [showPaper, setShowPaper] = useState(false);
   const [examStarted, setStarted] = useState(false);
@@ -93,7 +112,8 @@ export default function ExaminerPage() {
     percentage?: number; timeTaken?: string; subject?: string;
   }>({});
   const [studentName, setStudentName] = useState("");
-  // Track last confirmed subject locally — survives Supabase write latency
+
+  // ── THE FIX: confirmed subject ref — updated from EVERY relevant bot reply ──
   const confirmedSubjectRef = useRef<string>("");
 
   const timerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -116,7 +136,6 @@ export default function ExaminerPage() {
       name = s?.name || "";
       setStudentName(name);
     } catch {}
-    // Show greeting immediately from local state — no API, no double-fire possible
     setMessages([{ role: "assistant", content: buildGreeting(name) }]);
   }, []);
 
@@ -141,7 +160,7 @@ export default function ExaminerPage() {
     return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m ${s % 60}s`;
   }
 
-  // ─── Call API — only when student sends a message ───────────
+  // ─── Call API ────────────────────────────────────────────────
   async function callAPI(text: string, uploadedText?: string, uploadType?: "syllabus" | "answer") {
     if (sendingRef.current) return;
     sendingRef.current = true;
@@ -152,7 +171,7 @@ export default function ExaminerPage() {
 
     // History = all messages EXCEPT the initial local greeting (index 0)
     const history = msgsRef.current
-      .slice(1) // skip the local greeting
+      .slice(1)
       .map(m => ({
         role: m.role,
         content: m.content
@@ -171,7 +190,8 @@ export default function ExaminerPage() {
           uploadedText: uploadedText || "",
           uploadType: uploadType || null,
           history,
-          // Include locally cached subject for race condition recovery
+          // Always send the cached confirmed subject — backend uses this as
+          // a last-resort fallback if DB session key lookup fails
           confirmedSubject: confirmedSubjectRef.current || undefined,
           student: {
             name: student?.name || "",
@@ -197,10 +217,12 @@ export default function ExaminerPage() {
       // Paper generated — exam starts
       if (typeof data?.startTime === "number") {
         startTimer(data.startTime);
-        const paper = data?.paper || reply; // paper comes as separate field now
+        const paper = data?.paper || reply;
         const subj  = paper.match(/Subject\s*[:\|]\s*([^\n]+)/i);
         setMeta(p => ({ ...p, subject: subj ? subj[1].trim() : data?.subject || p.subject }));
         setPaper(paper);
+        // Clear confirmed subject — exam is now active, no longer needed
+        confirmedSubjectRef.current = "";
         setMessages(p => [...p, {
           role: "assistant",
           content: reply || "✅ Paper ready! Tap **📄 View Paper** (top bar) to read it.\n\nType your answers here. When done, type **submit**.",
@@ -225,17 +247,22 @@ export default function ExaminerPage() {
           subject: data?.subject ?? p.subject,
         }));
         localStorage.removeItem("shauri_exam_sid");
+        confirmedSubjectRef.current = "";
         return;
       }
 
       if (reply) {
-        // When API confirms subject (says "type start"), cache it locally
-        // This survives Supabase write latency race condition
-        if (/type\s+\*?\*?start\*?\*?/i.test(reply)) {
-          const m = reply.match(/question paper for[:\s]*\n?\*?\*?([^\n*]+)/i)
-            || reply.match(/for:\s*\n\*?\*?([^\n*]+)/i);
-          if (m) confirmedSubjectRef.current = m[1].trim();
+        // ── THE FIX: extract and cache the confirmed subject from EVERY reply ──
+        // This runs on BOTH typed-subject confirmations AND syllabus upload replies.
+        // Previously it only ran when the reply contained "type start", and the
+        // regex didn't match the upload confirmation format — so confirmedSubject
+        // was always empty when "start" was typed after an upload.
+        const extracted = extractConfirmedSubject(reply);
+        if (extracted) {
+          confirmedSubjectRef.current = extracted;
+          console.log("[frontend] confirmedSubject cached:", extracted);
         }
+
         setMessages(p => [...p, { role: "assistant", content: reply }]);
       }
 
@@ -294,7 +321,6 @@ export default function ExaminerPage() {
 
         {/* LEFT — chat */}
         <div className="ex-chat">
-          {/* header */}
           <div style={{ padding: "10px 16px", borderBottom: "1px solid #e2e8f0", background: "#fff", fontSize: 13, fontWeight: 600, color: "#475569", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ width: 8, height: 8, borderRadius: "50%", display: "inline-block", flexShrink: 0, background: examActive ? "#22c55e" : examMeta.examEnded ? "#f97316" : "#94a3b8", boxShadow: examActive ? "0 0 6px #22c55e" : "none" }} />
@@ -305,7 +331,6 @@ export default function ExaminerPage() {
             )}
           </div>
 
-          {/* score */}
           {examMeta.examEnded && (
             <div style={{ background: "#f0fdf4", borderBottom: "1px solid #bbf7d0", padding: "10px 16px", fontSize: 13, flexShrink: 0 }}>
               <strong style={{ color: "#15803d" }}>✅ Submitted</strong>
@@ -314,7 +339,6 @@ export default function ExaminerPage() {
             </div>
           )}
 
-          {/* messages */}
           <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px" }}>
             {messages.map((m, i) => <Bubble key={i} m={m} />)}
             {isLoading && (
@@ -325,7 +349,6 @@ export default function ExaminerPage() {
             <div ref={bottomRef} />
           </div>
 
-          {/* input */}
           <div style={{ padding: "10px 12px", borderTop: "1px solid #e2e8f0", background: "#fff", flexShrink: 0 }}>
             <ChatInput onSend={handleSend} examStarted={examStarted} disabled={isLoading} inline={true} />
           </div>
