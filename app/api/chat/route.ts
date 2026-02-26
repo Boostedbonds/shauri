@@ -1225,10 +1225,7 @@ MANDATORY QUALITY & BALANCE RULES:
 
         return NextResponse.json({
           reply:
-            paper +
-            `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `⏱️  EXAM STARTED — Timer is now running!\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+            `⏱️ **Exam started! Timer is running.**\n\n` +
             `📌 How to answer:\n` +
             `• Answer questions in **any order** you prefer\n` +
             `• Type answers directly in chat, OR\n` +
@@ -1236,6 +1233,7 @@ MANDATORY QUALITY & BALANCE RULES:
             `• You can send multiple messages — all will be collected\n` +
             `• When fully done, type **submit** (or **done** / **finish**)\n\n` +
             `Good luck${callName}! 💪 Give it your best.`,
+          paper,        // ← paper sent separately, never mixed into reply
           startTime,
         });
       }

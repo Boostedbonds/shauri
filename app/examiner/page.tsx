@@ -197,15 +197,13 @@ export default function ExaminerPage() {
       // Paper generated — exam starts
       if (typeof data?.startTime === "number") {
         startTimer(data.startTime);
-        const divIdx = reply.indexOf("━━━");
-        const paper  = (divIdx > -1 ? reply.slice(0, divIdx) : reply).trim();
-        const rest   = divIdx > -1 ? reply.slice(divIdx).replace(/^━+\s*/m, "").trim() : "";
-        const subj   = paper.match(/Subject\s*[:\|]\s*([^\n]+)/i);
+        const paper = data?.paper || reply; // paper comes as separate field now
+        const subj  = paper.match(/Subject\s*[:\|]\s*([^\n]+)/i);
         setMeta(p => ({ ...p, subject: subj ? subj[1].trim() : data?.subject || p.subject }));
         setPaper(paper);
         setMessages(p => [...p, {
           role: "assistant",
-          content: rest || "✅ Paper ready! Tap **📄 View Paper** above to read it.\n\nType your answers here in any order. When done with all questions, type **submit**.",
+          content: reply || "✅ Paper ready! Tap **📄 View Paper** (top bar) to read it.\n\nType your answers here. When done, type **submit**.",
         }]);
         return;
       }
@@ -270,9 +268,9 @@ export default function ExaminerPage() {
         *{box-sizing:border-box}
         @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
         .ex-split{flex:1;display:flex;overflow:hidden}
-        .ex-left{width:50%;overflow-y:auto;background:#fff;border-right:1.5px solid #e2e8f0;padding:24px 28px}
-        .ex-right{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;background:#f8fafc}
-        @media(max-width:699px){.ex-left{display:none}.ex-right{width:100%!important}}
+        .ex-chat{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;background:#f8fafc}
+        .ex-paper{width:50%;overflow-y:auto;background:#fff;border-left:1.5px solid #e2e8f0;padding:24px 28px}
+        @media(max-width:699px){.ex-paper{display:none}.ex-chat{width:100%!important}}
       `}</style>
 
       {/* TOP BAR */}
@@ -294,28 +292,8 @@ export default function ExaminerPage() {
       {/* SPLIT */}
       <div className="ex-split">
 
-        {/* LEFT — paper */}
-        <div className="ex-left">
-          {paperContent ? (
-            <>
-              {examActive && (
-                <div style={{ position: "sticky", top: 0, zIndex: 5, background: "#0f172a", color: "#38bdf8", padding: "7px 14px", borderRadius: 8, marginBottom: 16, fontFamily: "monospace", fontSize: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span>⏱ {elapsed}</span>
-                  {examMeta.subject && <span style={{ opacity: 0.7, fontSize: 11 }}>📚 {examMeta.subject}</span>}
-                </div>
-              )}
-              <pre style={{ fontSize: 13, lineHeight: 1.95, color: "#0f172a", fontFamily: "monospace", whiteSpace: "pre-wrap", margin: 0, wordBreak: "break-word" }}>{paperContent}</pre>
-            </>
-          ) : (
-            <div style={{ color: "#94a3b8", fontSize: 14, textAlign: "center", paddingTop: 60, lineHeight: 1.9 }}>
-              Question paper will appear here.<br />
-              Tell the examiner your subject, then type <strong style={{ color: "#0f172a" }}>start</strong>.
-            </div>
-          )}
-        </div>
-
-        {/* RIGHT — chat */}
-        <div className="ex-right">
+        {/* LEFT — chat */}
+        <div className="ex-chat">
           {/* header */}
           <div style={{ padding: "10px 16px", borderBottom: "1px solid #e2e8f0", background: "#fff", fontSize: 13, fontWeight: 600, color: "#475569", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -352,6 +330,27 @@ export default function ExaminerPage() {
             <ChatInput onSend={handleSend} examStarted={examStarted} disabled={isLoading} inline={true} />
           </div>
         </div>
+
+        {/* RIGHT — paper */}
+        <div className="ex-paper">
+          {paperContent ? (
+            <>
+              {examActive && (
+                <div style={{ position: "sticky", top: 0, zIndex: 5, background: "#0f172a", color: "#38bdf8", padding: "7px 14px", borderRadius: 8, marginBottom: 16, fontFamily: "monospace", fontSize: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span>⏱ {elapsed}</span>
+                  {examMeta.subject && <span style={{ opacity: 0.7, fontSize: 11 }}>📚 {examMeta.subject}</span>}
+                </div>
+              )}
+              <pre style={{ fontSize: 13, lineHeight: 1.95, color: "#0f172a", fontFamily: "monospace", whiteSpace: "pre-wrap", margin: 0, wordBreak: "break-word" }}>{paperContent}</pre>
+            </>
+          ) : (
+            <div style={{ color: "#94a3b8", fontSize: 14, textAlign: "center", paddingTop: 60, lineHeight: 1.9 }}>
+              Question paper will appear here.<br />
+              Tell the examiner your subject, then type <strong style={{ color: "#0f172a" }}>start</strong>.
+            </div>
+          )}
+        </div>
+
       </div>
 
       {showPaper && paperContent && (
