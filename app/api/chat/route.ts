@@ -873,58 +873,165 @@ export async function POST(req: NextRequest) {
 
         const totalMarks = session.total_marks || 80;
 
+        // Determine subject type for evaluation
+        const evalSubj      = (session.subject || "").toLowerCase();
+        const evalIsEnglish = /english/i.test(evalSubj);
+        const evalIsHindi   = /hindi/i.test(evalSubj);
+        const evalIsMath    = /math/i.test(evalSubj);
+        const evalIsSST     = /sst|social|history|geography|civics|economics/i.test(evalSubj);
+        const evalIsScience = /science|physics|chemistry|biology/i.test(evalSubj);
+
+        // Build subject-specific marking rules
+        const subjectMarkingRules = evalIsEnglish ? `
+SECTION A — READING [20 marks total]
+• Unseen passage MCQs (Q1a, Q2a): 1 mark each — correct = 1, wrong = 0
+• Short-answer reading questions (Q1b, Q2b): 1 mark each for relevant, on-point answer
+  — Deduct 0.5 for vague/incomplete, award 0 for irrelevant
+
+SECTION B — WRITING SKILLS [20 marks total]
+• Each writing task has sub-marks for: Format / Content / Expression / Accuracy
+• Q3 Notice/Paragraph/Dialogue [5 marks]: Format 1 + Content 2 + Expression 2
+• Q4 Short Writing [5 marks]: Format 1 + Content 2 + Expression 2
+• Q5 Letter [5 marks]: Format 1 + Content 2 + Expression 2
+• Q6 Long Composition [5 marks]: Content 2 + Expression 2 + Organisation 1
+• Award marks proportionally — a strong answer with wrong format loses only format marks
+• Language errors: deduct from Expression marks, not Content marks
+
+SECTION C — GRAMMAR [20 marks total]
+• Every grammar question is 1 mark — fully correct = 1, wrong/missing = 0
+• No partial marks for grammar answers
+• Accept alternate correct grammatical forms if they are standard English
+• Spelling errors in grammar answers: deduct mark only if the error changes the grammar
+
+SECTION D — LITERATURE [20 marks total]
+• Extract MCQs (Q12, Q13): 1 mark each — correct = 1, wrong = 0
+• Short answer (Q14): 2 marks each
+    → Full answer with textual reference = 2/2
+    → Correct idea but vague/no reference = 1/2
+    → Wrong or off-topic = 0/2
+• Long answer (Q15): 4 marks
+    → Content/argument  : 2 marks
+    → Expression/clarity: 1 mark
+    → Textual evidence  : 1 mark` : evalIsHindi ? `
+SECTION A — APATHIT (Unseen Reading) [20 marks]
+• MCQs: 1 mark each — correct = 1, wrong = 0
+• Short answers: 1 mark each for relevant answer in correct Hindi
+
+SECTION B — LEKHAN (Writing) [20 marks]
+• Each writing task [5 marks]: Format 1 + Content 2 + Bhasha (Language) 2
+• Deduct from Bhasha for grammatical/spelling errors, not from Content
+
+SECTION C — VYAKARAN (Grammar) [20 marks]
+• 1 mark each — fully correct = 1, wrong = 0
+• Accept grammatically valid alternatives
+
+SECTION D — PATHEN (Literature) [20 marks]
+• Extract MCQs: 1 mark each
+• Short answers: 2 marks each (content 1 + expression 1)
+• Long answer: 4 marks (content 2 + expression 1 + sandarbh/reference 1)` : evalIsMath ? `
+SECTION A — MCQ & Assertion-Reason [1 mark each]
+• MCQ: Correct option = 1, wrong = 0. No negative marking.
+• Assertion-Reason: Award 1 mark ONLY for the correct option (a/b/c/d). No partial.
+
+SECTION B — Very Short Answer [2 marks each]
+• Both steps correct = 2/2
+• Correct method but arithmetic error = 1/2
+• Wrong method = 0/2
+
+SECTION C — Short Answer [3 marks each]
+• Award step marks: setup (1) + working (1) + correct answer (1)
+• Correct method with wrong final answer due to arithmetic = 2/3
+• Incomplete but correct start = 1/3
+
+SECTION D — Long Answer [5 marks each]
+• Award step marks throughout: each correct step = 1 mark
+• Full working must be shown — answer without steps = 0
+• Theorem proofs: Statement (1) + Construction/Figure (1) + Proof steps (2) + Conclusion (1)
+
+SECTION E — Case Study [4 marks each]
+• Sub-question (i): 1 mark — correct answer only
+• Sub-question (ii): 1 mark — correct answer only
+• Sub-question (iii): 2 marks — method (1) + answer (1)` : evalIsSST ? `
+SECTION A — Objective [1 mark each]
+• MCQ: Correct = 1, Wrong = 0. No negative marking.
+• Assertion-Reason: Correct option = 1, wrong = 0.
+• Fill in blank: Correct term = 1. Accept close paraphrases only if factually identical.
+
+SECTION B — Short Answer [3 marks each]
+• Award 1 mark per valid NCERT-accurate point (max 3 points)
+• Must be from the correct chapter — off-topic answers = 0
+• Map-related answers: correct identification = full marks, partial = partial
+
+SECTION C — Long Answer [5 marks each]
+• Introduction/Context : 1 mark
+• Main explanation     : 2 marks (min 3 correct NCERT points)
+• Example/Evidence     : 1 mark
+• Conclusion           : 1 mark
+
+SECTION D — Source-Based [4 marks each]
+• Sub (i) 1 mark: factual identification from source
+• Sub (ii) 1 mark: inference or connection
+• Sub (iii) 2 marks: explanation using source + own knowledge
+
+SECTION E — Map [5 marks total]
+• Each correctly identified and labelled location = 1 mark
+• Marking in wrong location = 0 (no partial for map questions)` : evalIsScience ? `
+SECTION A — Objective [1 mark each]
+• MCQ: Correct = 1, wrong = 0. No negative marking.
+• Assertion-Reason: Correct option = 1.
+• Fill in blank / one-word: Correct scientific term = 1. No partial.
+
+SECTION B — Very Short Answer [2 marks each]
+• 2 correct points / steps = 2/2
+• 1 correct point = 1/2
+• Diagrams in this section: optional but credited if labelled correctly
+
+SECTION C — Short Answer [3 marks each]
+• 3 correct NCERT-accurate points = 3/3
+• Diagram questions: correct diagram with all labels = full marks
+  Missing labels = deduct 1 mark per missing key label (max deduction 2)
+• Partial answers awarded proportionally
+
+SECTION D — Long Answer [5 marks each]
+• Detailed marking: Introduction (1) + Explanation/Points (2) + Diagram/Example (1) + Conclusion (1)
+• Numerical questions: formula (1) + substitution (1) + calculation (2) + unit/answer (1)
+• At least 1 labelled diagram where relevant — missing diagram loses its 1 mark
+
+SECTION E — Case Study [4 marks each]
+• Sub (i) 1 mark + Sub (ii) 1 mark + Sub (iii) 2 marks
+• Scientific accuracy required — vague answers score 0` : `
+SECTION A — Objective [1 mark each]: Correct = 1, wrong = 0. No negative marking.
+SECTION B — Short Answer [2–3 marks each]: Award proportionally per correct point.
+SECTION C — Long Answer [5 marks each]: Introduction(1) + Content(2) + Example(1) + Conclusion(1).
+SECTION D — Long Answer [5 marks each]: Same as Section C.
+SECTION E — Case Study [4 marks each]: Sub(i) 1m + Sub(ii) 1m + Sub(iii) 2m.`;
+
         const evaluationPrompt = `
 You are an official CBSE Board Examiner evaluating a Class ${cls} student named ${name || "the student"}.
 Subject: ${session.subject || "General"}
 Board: ${board}
-Maximum Marks on Paper: ${totalMarks}
-Time Taken by Student: ${timeTaken}${overtime ? " ⚠️ SUBMITTED AFTER 3-HOUR LIMIT" : ""}
+Maximum Marks: ${totalMarks}
+Time Taken: ${timeTaken}${overtime ? " ⚠️ SUBMITTED AFTER 3-HOUR LIMIT" : ""}
+
+IMPORTANT: Match the student's answers to questions by question number OR topic/context.
+Evaluate EVERY question on the paper — give 0 for unattempted questions, do not skip them.
+Student may have answered out of order — cross-reference carefully before marking.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-OFFICIAL CBSE MARKING SCHEME — FOLLOW EXACTLY:
+SUBJECT-SPECIFIC CBSE MARKING RULES:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${subjectMarkingRules}
 
-The student answered freely — match answers to questions by question number or topic context.
-Evaluate EVERY single question on the paper — attempted or not.
-
-SECTION A — Objective [1 mark each]:
-• MCQ           : Correct option = 1 mark. Wrong = 0. No partial. No negative.
-• Fill in Blank : Correct/acceptable NCERT term = 1 mark. Wrong = 0.
-• True / False  : Correct = 1 mark. Wrong = 0. No negative marking.
-• Be strict — no partial credit anywhere in Section A.
-
-SECTION B — Short Answer [3 marks each]:
-• Award in steps of 1 mark per valid NCERT-accurate key point (maximum 3).
-• Correct concept but missing example → 2/3.
-• Paraphrased definition with correct meaning → full marks.
-• Wrong or NCERT-inaccurate definition → 0 marks for that part.
-• Vague or incomplete → proportional marks with clear reason stated.
-• Must state exactly: "Awarded X/3 because [specific reason]".
-
-SECTION C — Long Answer [5 marks each]:
-• Fixed marks breakup per answer:
-    Introduction / context    : 1 mark
-    Main explanation / facts  : 2 marks
-    Example / evidence        : 1 mark
-    Conclusion / significance : 1 mark
-• Missing any component → deduct that component's marks, state which part was missing.
-• Correct points in imperfect structure → still award marks for correct content.
-• HOTs / Application → award marks for quality of reasoning even if exact NCERT
-  wording not used, provided the concept is correct.
-• Diagram/map questions → full marks if student clearly describes what to draw
-  with correct labels and key features named.
-
-GENERAL RULES (all sections):
-• No negative marking — minimum 0 per question.
-• No sympathy marks for vague, wrong, or off-topic answers.
-• Uploaded image/PDF answers → evaluate content only, ignore handwriting.
-• Cross-reference carefully — student may have answered out of order.
-• Be consistent — same quality of answer always gets same marks.
-• All factual claims must be accurate for the subject and class level to receive marks.
-${overtime ? `\n• ⚠️ NOTE: Student submitted after the 3-hour time limit. Mention this clearly in Examiner's Remarks.` : ""}
+UNIVERSAL RULES (apply to all subjects):
+• No negative marking — minimum per question is always 0
+• No sympathy marks for vague, wrong, or off-topic answers
+• Image/PDF answers → evaluate content only, ignore handwriting quality
+• Consistent marking — same quality of answer must always get the same marks
+• NCERT-accurate facts required for full marks; correct concept in own words = full marks
+${overtime ? "• ⚠️ Student submitted after the 3-hour limit. Note this in Examiner Remarks." : ""}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-EVALUATION REPORT FORMAT — FOLLOW THIS EXACTLY:
+EVALUATION REPORT — OUTPUT THIS FORMAT EXACTLY:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 📋 OFFICIAL CBSE EVALUATION REPORT
@@ -934,61 +1041,115 @@ Subject : ${session.subject}
 Board   : ${board}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-SECTION A — Objective Type [__ / 20]
-(One line per question)
-Q[N] | [x]/1 | ✅ / ❌ / — | [feedback only if wrong or not attempted]
-
+${evalIsEnglish || evalIsHindi ? `SECTION A — READING [__ / 20]
+Q[N] | [x]/[max] | ✅/⚠️/❌/— | [brief feedback if wrong or partial]
 Section A Total: [X] / 20
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION B — Short Answer [__ / 30]
+━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION B — WRITING [__ / 20]
+Q[N] — [type] | Format [x]/1 | Content [x]/2 | Expression [x]/2 | Total [x]/5
+Feedback: [what format elements were missing, what content was strong/weak]
+Section B Total: [X] / 20
 
-Q[N] — [chapter/topic] | [x]/3
-[✅ Correct | ⚠️ Partial | ❌ Wrong | — Not Attempted]
-Feedback: [specific — what was right, what was missing, correct answer if wrong]
+━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION C — GRAMMAR [__ / 20]
+Q[N] | [x]/[max] | ✅/❌ | [correct answer if wrong]
+Section C Total: [X] / 20
 
-Section B Total: [X] / 30
+━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION D — LITERATURE [__ / 20]
+Q[N] — [text/topic] | [x]/[max] | ✅/⚠️/❌/—
+Feedback: [specific — what was correct, what was missing]
+Section D Total: [X] / 20` : evalIsMath ? `SECTION A — MCQ & Assertion-Reason [__ / 20]
+Q[N] | [x]/1 | ✅/❌/— | [correct answer if wrong]
+Section A Total: [X] / 20
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION C — Long Answer [__ / 30]
+━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION B — Very Short Answer [__ / 10]
+Q[N] — [topic] | [x]/2 | Step marks: [detail]
+Section B Total: [X] / 10
 
-Q[N] — [chapter/topic] | [x]/5
-  Introduction    : [x]/1
-  Explanation     : [x]/2
-  Example/Evidence: [x]/1
-  Conclusion      : [x]/1
-Feedback: [what was strong, what was missing, how to improve]
+━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION C — Short Answer [__ / 18]
+Q[N] — [topic] | [x]/3 | Step marks: setup[x]/1 working[x]/1 answer[x]/1
+Section C Total: [X] / 18
 
-Section C Total: [X] / 30
+━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION D — Long Answer [__ / 20]
+Q[N] — [topic] | [x]/5 | [step-by-step mark breakdown]
+Section D Total: [X] / 20
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION E — Case Study [__ / 12]
+Q[N] (i)[x]/1 (ii)[x]/1 (iii)[x]/2 | Total [x]/4
+Section E Total: [X] / 12` : `SECTION A — Objective [__ / 20]
+Q[N] | [x]/1 | ✅/❌/— | [correct answer if wrong]
+Section A Total: [X] / 20
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION B — Short Answer [__ / 10]
+Q[N] — [topic] | [x]/2 | [brief feedback]
+Section B Total: [X] / 10
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION C — Short Answer [__ / 18]
+Q[N] — [topic] | [x]/3 | ✅/⚠️/❌/—
+Feedback: [specific — what was right, what was missing]
+Section C Total: [X] / 18
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION D — Long Answer [__ / 20]
+Q[N] — [topic] | [x]/5
+  Content/Points : [x]/3
+  Diagram/Example: [x]/1
+  Conclusion     : [x]/1
+Feedback: [what was strong, what was missing]
+Section D Total: [X] / 20
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION E — Case Study [__ / 12]
+Q[N] (i)[x]/1 (ii)[x]/1 (iii)[x]/2 | Total [x]/4
+Feedback: [accuracy of scientific/factual reasoning]
+Section E Total: [X] / 12`}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 FINAL RESULT:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Section A             : [X] / 20
-Section B             : [X] / 30
-Section C             : [X] / 30
+${evalIsEnglish || evalIsHindi ? `Section A (Reading)   : [X] / 20
+Section B (Writing)   : [X] / 20
+Section C (Grammar)   : [X] / 20
+Section D (Literature): [X] / 20` : evalIsMath ? `Section A (MCQ/AR)    : [X] / 20
+Section B (VSA 2m)    : [X] / 10
+Section C (SA 3m)     : [X] / 18
+Section D (LA 5m)     : [X] / 20
+Section E (Case Study): [X] / 12` : `Section A (Objective) : [X] / 20
+Section B (VSA 2m)    : [X] / 10
+Section C (SA 3m)     : [X] / 18
+Section D (LA 5m)     : [X] / 20
+Section E (Case Study): [X] / 12`}
 ─────────────────────────────────────────
 Total Marks Obtained  : [X] / ${totalMarks}
 Percentage            : [X.X]%
 Time Taken            : ${timeTaken}${overtime ? " ⚠️ Over time limit" : ""}
-Questions Attempted   : [X] of 36
 ─────────────────────────────────────────
 CBSE Grade:
-90–100% → A1  Outstanding
-75–89%  → A2  Excellent
-60–74%  → B1  Good
-45–59%  → B2  Average
-33–44%  → C   Pass
-Below 33% → F  Fail
+91–100% → A1  Outstanding
+81–90%  → A2  Excellent
+71–80%  → B1  Very Good
+61–70%  → B2  Good
+51–60%  → C1  Average
+41–50%  → C2  Satisfactory
+33–40%  → D   Pass
+Below 33% → E  Needs Improvement
 
 Your Grade: [grade + label]
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 💬 EXAMINER'S REMARKS:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Strengths   : [specific chapters where ${name || "the student"} scored well]
-Weaknesses  : [specific chapters to focus on]
-Study Tip   : [one actionable improvement tip based on the syllabus used]
+Strengths   : [specific sections/chapters where ${name || "the student"} performed well]
+Weaknesses  : [specific sections/chapters to work on]
+Study Tip   : [one specific, actionable improvement — e.g. "Practise Assertion-Reason daily" or "Work on Letter format"]
         `.trim();
 
         await saveSession({ ...session, status: "FAILED" });
@@ -1194,189 +1355,340 @@ Study Tip   : [one actionable improvement tip based on the syllabus used]
         const isHindi   = /hindi/i.test(subjectName);
         const hasUploadedSyllabus = !!session.syllabus_from_upload;
 
-        // ── ENGLISH CBSE PATTERN ─────────────────────────────
-        // Official CBSE English paper: Section A Reading, Section B Writing,
-        // Section C Grammar, Section D Literature. Marks: 20+20+20+20 = 80.
+        // ═══════════════════════════════════════════════════════════
+        // SUBJECT-SPECIFIC CBSE PAPER PATTERNS (2024-25 official format)
+        // ═══════════════════════════════════════════════════════════
+
+        // ── ENGLISH Language & Literature — CBSE Class 9/10 ──────────
+        // Official split: Reading 20 + Writing 20 + Grammar 20 + Literature 20 = 80
         const englishSections = `
 SECTION A — READING [20 Marks]
 ━━━━━━━━━━━━━━━━━━
-Q1  Unseen Passage 1 — Discursive/Factual [10 marks]
-  • 1 passage (~350–400 words)
-  • Q1(a) Multiple Choice Questions — 5 MCQs × 1 mark = 5 marks
-  • Q1(b) Short answer questions — 3 questions × 1 mark + 1 question × 2 marks = 5 marks
+Q1  Unseen Passage — Factual / Discursive [10 marks]
+  • One unseen prose passage of 350–400 words
+  • (a) 5 MCQs × 1 mark = 5 marks  (b) 5 Short-answer questions × 1 mark = 5 marks
 
-Q2  Unseen Passage 2 — Literary/Poem extract [10 marks]
-  • 1 passage or poem extract (~200–250 words)
-  • Q2(a) Multiple Choice Questions — 5 MCQs × 1 mark = 5 marks
-  • Q2(b) Short answer questions — 3 questions × 1 mark + 1 question × 2 marks = 5 marks
+Q2  Unseen Passage — Literary / Poem extract [10 marks]
+  • One poem or literary prose extract of 200–250 words
+  • (a) 5 MCQs × 1 mark = 5 marks  (b) 5 Short-answer questions × 1 mark = 5 marks
 
 SECTION B — WRITING SKILLS [20 Marks]
 ━━━━━━━━━━━━━━━━━━
-Q3  Notice Writing [4 marks]
-  • Write a notice for a school event or announcement (50–80 words)
-  • Follow standard notice format: Name of institution, Date, Title, Body, Issued by
+Q3  Descriptive Paragraph / Bio-sketch / Dialogue [5 marks]
+  • Write a paragraph OR bio-sketch OR dialogue on a given prompt
+  • 100–120 words | Marks: Content 2 + Expression 2 + Accuracy 1
 
-Q4  Paragraph Writing OR Dialogue Writing [4 marks]
-  • Either: write a descriptive/reflective paragraph (100–120 words)
-  • Or: write a dialogue between two people on a given situation (8–10 exchanges)
+Q4  Notice / Message / Advertisement [5 marks]
+  • Write a formal Notice OR a short Message OR an Advertisement
+  • Strictly follow the standard CBSE format for whichever type
+  • 50–80 words
 
-Q5  Formal / Informal Letter [6 marks]
-  • Write a formal letter (complaint / request / application) OR informal letter to friend
-  • 150–180 words, correct format mandatory
+Q5  Letter Writing [5 marks]
+  • Formal letter (complaint / request / application to principal or editor)
+    OR Informal letter to a friend/relative
+  • 120–150 words | Marks: Format 1 + Content 2 + Expression 2
 
-Q6  Long Composition — Article / Story / Speech [6 marks]
-  • Write an article OR story OR speech on a given topic
-  • 150–200 words
-  • Marks: Content 3 + Expression/Format 3
+Q6  Long Composition — Article / Speech / Story [5 marks]
+  • Write an article OR speech OR story on a given topic with a hint
+  • 150–200 words | Marks: Content 2 + Expression 2 + Accuracy/Organisation 1
 
 SECTION C — GRAMMAR [20 Marks]
 ━━━━━━━━━━━━━━━━━━
-Q7  Gap Filling — Tenses / Modals / Subject-Verb Concord [4 marks]
-  • 4 sentences with blanks, fill with correct form
-  • Test: simple present, past, future, modals (can/could/should/must/will/would)
+Q7  Gap Filling — Tenses / Modals / Voice [4 × 1 = 4 marks]
+  • 4 blanks in a passage — fill with the correct grammatical form
+  • Test: present/past/future tense, modals (can/could/should/must/will/would/may/might)
 
-Q8  Editing — Identify and correct errors [4 marks]
-  • 8 lines of a passage, one error per line (spelling/grammar/word choice)
-  • Error types: articles, prepositions, tense, concord, reported speech forms
+Q8  Editing — Error Correction [4 × 1 = 4 marks]
+  • A passage of 8–10 lines with one error per line
+  • Errors: articles, prepositions, tense, concord, word form, spelling
+  • Student writes: [incorrect word] → [correct word] for each line
 
-Q9  Sentence Transformation [4 marks]
-  • 4 sentences to rewrite as directed:
-      → Active to Passive (and vice versa)
-      → Direct to Indirect speech (and vice versa)
-      → Combine sentences using clauses
-      → Degree of comparison transformation
+Q9  Omission — Missing Words [4 × 1 = 4 marks]
+  • A passage with one word missing per line (shown by /)
+  • Student writes the missing word for each line
 
-Q10  Sentence Reordering [4 marks]
-  • 4 sets of jumbled words — rewrite as meaningful sentences
-  • Mix: simple, compound, complex sentences
+Q10  Sentence Reordering [4 × 1 = 4 marks]
+  • 4 sets of jumbled words — reorder into a correct, meaningful sentence
 
-Q11  Clauses / Reported Speech / Determiners [4 marks]
-  • Identify clause type, OR complete with correct determiner, OR convert reported speech
-  • 4 questions × 1 mark
+Q11  Sentence Transformation [4 × 1 = 4 marks]
+  • Rewrite as directed: Active↔Passive, Direct↔Indirect, combine using given conjunction,
+    degree of comparison, or split into two sentences
 
 SECTION D — LITERATURE [20 Marks]
 ━━━━━━━━━━━━━━━━━━
-Q12  Extract-based MCQs — Prose [5 marks]
-  • 1 passage extract from a prose lesson in the syllabus above
-  • 5 MCQs × 1 mark = 5 marks
-  • Test: context, inference, vocabulary, tone
+Q12  Extract-based Questions — Prose [5 marks]
+  • Extract from a prose lesson listed in the syllabus above
+  • 4 MCQs × 1 mark + 1 short answer × 1 mark = 5 marks
 
-Q13  Extract-based MCQs — Poetry [5 marks]
-  • 1 stanza extract from a poem in the syllabus above
-  • 5 MCQs × 1 mark = 5 marks
-  • Test: meaning, figure of speech, mood, theme
+Q13  Extract-based Questions — Poetry [5 marks]
+  • Extract (1–2 stanzas) from a poem listed in the syllabus above
+  • 4 MCQs × 1 mark + 1 short answer × 1 mark = 5 marks
 
 Q14  Short Answer Questions — Prose & Poetry [6 marks]
-  • 3 questions × 2 marks = 6 marks
-  • Each from a DIFFERENT prose/poetry text in the syllabus above
-  • Expected: 2–3 sentences per answer
+  • 3 questions × 2 marks each = 6 marks
+  • Each from a DIFFERENT text in the syllabus above
+  • Answer in 30–40 words (2–3 sentences)
 
-Q15  Long Answer Question — Literature [4 marks]
-  • 1 question from prose OR drama in the syllabus above
-  • Character analysis OR theme OR comparison between two texts
-  • Expected: 8–10 sentences (paragraph format)
+Q15  Long Answer — Prose / Drama [4 marks]
+  • 1 question requiring a paragraph-length answer (80–100 words)
+  • Theme analysis OR character sketch OR comparison between two texts
         `.trim();
 
-        // ── HINDI CBSE PATTERN ───────────────────────────────
+        // ── HINDI — CBSE Class 9/10 ──────────────────────────────────
+        // Official split: Reading 20 + Writing 20 + Grammar 20 + Literature 20 = 80
         const hindiSections = `
-SECTION A — READING [20 Marks]
+SECTION A — APATHIT GADYANSH / KAVYANSH (Unseen Reading) [20 Marks]
 ━━━━━━━━━━━━━━━━━━
-Q1  Unseen Passage 1 [10 marks] — 5 MCQs + 5 short answers
-Q2  Unseen Passage 2 [10 marks] — poem or prose extract — 5 MCQs + 5 short answers
+Q1  Apathit Gadyansh (Unseen Prose Passage) [10 marks]
+  • One unseen prose passage (300–350 words)
+  • (a) 5 MCQs × 1 mark = 5 marks
+  • (b) 5 short-answer questions × 1 mark = 5 marks
 
-SECTION B — WRITING [20 Marks]
-━━━━━━━━━━━━━━━━━━
-Q3  Patra Lekhan — औपचारिक या अनौपचारिक पत्र [5 marks]
-Q4  Anuched Lekhan — अनुच्छेद लेखन [5 marks]
-Q5  Suchna Lekhan / Sandesh Lekhan [5 marks]
-Q6  Vigyapan Lekhan OR Dialogue Writing [5 marks]
+Q2  Apathit Kavyansh (Unseen Poem Extract) [10 marks]
+  • One poem or poem extract (8–12 lines)
+  • (a) 5 MCQs × 1 mark = 5 marks
+  • (b) 5 short-answer questions × 1 mark = 5 marks
 
-SECTION C — GRAMMAR [20 Marks]
+SECTION B — LEKHAN (Writing) [20 Marks]
 ━━━━━━━━━━━━━━━━━━
-Q7   Ling Badlo (Gender) [3 marks]
-Q8   Vachan Badlo (Number) [3 marks]
-Q9   Kaal Badlo (Tense transformation) [3 marks]
-Q10  Muhavare / Lokoktiyan (Idioms / Proverbs) [3 marks]
-Q11  Sandhi / Samas [4 marks]
-Q12  Vilom / Paryayvachi Shabd [4 marks]
+Q3  Patra Lekhan — औपचारिक पत्र (Formal Letter) [5 marks]
+  • Write a formal letter: complaint / application / request
+  • To: Principal / Editor / Authority | 120–150 words
+  • Marks: Format 1 + Content 2 + Language/Expression 2
 
-SECTION D — LITERATURE [20 Marks]
+Q4  Anuched Lekhan (Paragraph Writing) [5 marks]
+  • Write a paragraph on a given topic with hints
+  • 80–100 words | Marks: Content 2 + Language 2 + Organisation 1
+
+Q5  Suchna Lekhan (Notice Writing) [5 marks]
+  • Write a formal notice for a school event or announcement
+  • 50–60 words | Strict format: संस्था का नाम, तिथि, शीर्षक, सामग्री, हस्ताक्षर
+
+Q6  Sandesh / Vigyapan Lekhan (Message / Advertisement) [5 marks]
+  • Write a formal message OR an advertisement
+  • 30–50 words | Follow standard box format
+
+SECTION C — VYAKARAN (Grammar) [20 Marks]
 ━━━━━━━━━━━━━━━━━━
-Q13  Gadyansh (Prose extract MCQs) [5 marks] — from syllabus above
-Q14  Kavyansh (Poetry extract MCQs) [5 marks] — from syllabus above
-Q15  Short Answer Questions — Prose [5 marks] — 3 questions × 1-2 marks
-Q16  Long Answer Question — Theme/Character [5 marks]
+Q7   Shabdalankar / Arth-bhed (Figures of Speech) [4 marks] — 4 × 1 mark
+Q8   Sandhi-Viched (Sandhi splitting) [4 marks] — 4 × 1 mark
+Q9   Samas-Vigraha (Compound word analysis) [4 marks] — 4 × 1 mark
+Q10  Muhavare / Lokoktiyan (Idioms/Proverbs — use in sentence) [4 marks] — 4 × 1 mark
+Q11  Vakya Bhed (Types of sentences — simple/compound/complex) [4 marks] — 4 × 1 mark
+
+SECTION D — PATHEN (Literature) [20 Marks]
+━━━━━━━━━━━━━━━━━━
+Q12  Gadyansh-adharit prashn (Prose extract questions) [5 marks]
+  • Extract from a prose lesson in the syllabus above
+  • 4 MCQs × 1 mark + 1 short answer × 1 mark
+
+Q13  Kavyansh-adharit prashn (Poetry extract questions) [5 marks]
+  • Extract from a poem in the syllabus above
+  • 4 MCQs × 1 mark + 1 short answer × 1 mark
+
+Q14  Laghu Uttariya Prashn (Short answer questions) [6 marks]
+  • 3 questions × 2 marks = 6 marks — from different texts above
+
+Q15  Dirgha Uttariya Prashn (Long answer question) [4 marks]
+  • 1 question: character / theme / central idea — 80–100 words
         `.trim();
 
-        // ── MATH CBSE PATTERN ────────────────────────────────
+        // ── MATHEMATICS — CBSE Class 9/10 ────────────────────────────
+        // Official: Section A(1m×20) + Section B(2m×5) + Section C(3m×6) + Section D(4m×4)
+        // + Section E(4m case study ×3) = 20+10+18+16+12 = 80... but for Class 9 SA/annual:
+        // Standard pattern used in schools: A(1m×20) + B(2m×5) + C(3m×6) + D(5m×6) = 80
         const mathSections = `
-SECTION A — Multiple Choice Questions [20 Marks]
+SECTION A — MCQ & Assertion-Reason [20 × 1 = 20 Marks]
 ━━━━━━━━━━━━━━━━━━
-Q1–Q20  MCQs [1 mark each]
-  • 4 options per MCQ: a) b) c) d)
-  • Cover ALL chapters — at least 1 question per chapter
-  • Mix: conceptual, calculation-based, graph/figure based
-  • Include HOTs: application, pattern recognition, reasoning
+Q1–Q18   MCQs [1 mark each]
+  • 4 options per question: a) b) c) d)
+  • Cover ALL chapters — minimum 1 question per chapter
+  • Types: direct formula, conceptual, calculation, graph/figure-based, HOTs
 
-SECTION B — Short Answer / Problems [30 Marks]
-━━━━━━━━━━━━━━━━━━
-Q21–Q30  [3 marks each]
-  • Numerical problems, proofs, constructions description, definitions
-  • Cover at least 8 different chapters
-  • Show full working expected — partial marks for correct method even if answer wrong
-  • At least 2 HOTs / application problems
+Q19–Q20  Assertion-Reason [1 mark each]
+  • Q19 and Q20 each have:
+      Assertion (A): [statement]
+      Reason    (R): [statement]
+  • Options:
+      a) Both A and R are true and R is the correct explanation of A
+      b) Both A and R are true but R is NOT the correct explanation of A
+      c) A is true but R is false
+      d) A is false but R is true
 
-SECTION C — Long Answer / Problems [30 Marks]
+SECTION B — Very Short Answer [5 × 2 = 10 Marks]
 ━━━━━━━━━━━━━━━━━━
-Q31–Q36  [5 marks each]
-  • Multi-step problems, theorem proofs, data analysis
-  • Cover different chapters — no repetition
-  • At least 1 statistics/probability question
-  • At least 1 geometry proof (with diagram description)
-  • Full working + reasoning expected
+Q21–Q25  [2 marks each]
+  • Short numerical or conceptual problems requiring 2–3 steps
+  • Cover 5 different chapters
+  • No sub-parts. Answer in 2–4 lines or steps.
+
+SECTION C — Short Answer [6 × 3 = 18 Marks]
+━━━━━━━━━━━━━━━━━━
+Q26–Q31  [3 marks each]
+  • Multi-step problems, short proofs, constructions with reasoning
+  • Cover 6 different chapters — no chapter repetition from Section B
+  • At least 1 HOT application problem
+
+SECTION D — Long Answer [4 × 5 = 20 Marks]
+━━━━━━━━━━━━━━━━━━
+Q32–Q35  [5 marks each]
+  • Full theorem proofs, complex multi-step problems, data analysis
+  • Each from a DIFFERENT chapter
+  • Q32 or Q33 must involve a Geometry theorem proof with diagram
+  • Q34 or Q35 must involve Statistics or Probability
+
+SECTION E — Case-Based / Source-Based [3 × 4 = 12 Marks]
+━━━━━━━━━━━━━━━━━━
+Q36  Case Study 1 [4 marks]
+  • Real-life scenario with a diagram or table
+  • (i) 1 mark + (ii) 1 mark + (iii) 2 marks  OR  (i) 2 marks + (ii) 2 marks
+
+Q37  Case Study 2 [4 marks]
+  • Real-life application of a different chapter
+  • (i) 1 mark + (ii) 1 mark + (iii) 2 marks  OR  (i) 2 marks + (ii) 2 marks
+
+Q38  Case Study 3 [4 marks]
+  • Data interpretation / pattern recognition scenario
+  • (i) 1 mark + (ii) 1 mark + (iii) 2 marks  OR  (i) 2 marks + (ii) 2 marks
         `.trim();
 
-        // ── STANDARD (Science / SST / etc.) ─────────────────
+        // ── SCIENCE — CBSE Class 9/10 ────────────────────────────────
+        // Official: Section A(1m×20) + Section B(2m×5) + Section C(3m×6) + Section D(5m×4) + Section E(4m×3) = 80
+        const scienceSections = `
+SECTION A — Objective [20 × 1 = 20 Marks]
+━━━━━━━━━━━━━━━━━━
+Q1–Q16   MCQs [1 mark each]
+  • 4 options: a) b) c) d) — one correct answer only
+  • Cover all 3 branches: Physics, Chemistry, Biology
+  • Types: definition-based, diagram-based, numerical, conceptual
+
+Q17–Q18  Assertion-Reason [1 mark each]
+  • Same format as Maths Assertion-Reason above (options a/b/c/d)
+  • One from Life Science, one from Physical Science
+
+Q19–Q20  Fill in the Blanks / Match the Following / One-Word Answer [1 mark each]
+  • Q19: Fill in the blank with the correct scientific term
+  • Q20: One-word or one-line answer
+
+SECTION B — Very Short Answer [5 × 2 = 10 Marks]
+━━━━━━━━━━━━━━━━━━
+Q21–Q25  [2 marks each]
+  • Answer in 2–3 sentences or show 2–3 working steps
+  • Cover at least 2 questions from Biology, 2 from Physics/Chemistry, 1 any
+  • No diagrams required (but can be added for clarity)
+
+SECTION C — Short Answer [6 × 3 = 18 Marks]
+━━━━━━━━━━━━━━━━━━
+Q26–Q31  [3 marks each]
+  • Answer in 4–5 sentences OR with a labelled diagram (where applicable)
+  • Must include at least:
+      → 2 Biology questions (cell / tissue / diversity / natural resources)
+      → 2 Physics questions (motion / force / sound / gravitation / work-energy)
+      → 2 Chemistry questions (matter / atoms / molecules / structure of atom)
+
+SECTION D — Long Answer [4 × 5 = 20 Marks]
+━━━━━━━━━━━━━━━━━━
+Q32–Q35  [5 marks each]
+  • Full detailed answer — 7–8 sentences minimum
+  • At least 1 must require a LABELLED DIAGRAM (e.g. animal cell, neuron, ear, eye)
+  • At least 1 must involve numerical calculation (e.g. speed/velocity/force/pressure)
+  • Cover all 3 branches across Q32–Q35
+
+SECTION E — Case-Based / Source-Based [3 × 4 = 12 Marks]
+━━━━━━━━━━━━━━━━━━
+Q36  Case Study — Biology [4 marks]
+  • A short paragraph or diagram about a biological process
+  • (i) 1 mark + (ii) 1 mark + (iii) 2 marks
+
+Q37  Case Study — Physics [4 marks]
+  • A real-life scenario involving a Physics concept with data
+  • (i) 1 mark + (ii) 1 mark + (iii) 2 marks
+
+Q38  Case Study — Chemistry [4 marks]
+  • A scenario involving a chemical concept or experiment
+  • (i) 1 mark + (ii) 1 mark + (iii) 2 marks
+        `.trim();
+
+        // ── SOCIAL SCIENCE — CBSE Class 9/10 ─────────────────────────
+        // Official: Section A MCQ(1m×20) + Section B SAQ(3m×4) + Section C LAQ(5m×5) + Section D Source(4m×3) + Section E Map(5m×2) = 80... 
+        // Adjusted: A(1m×20) + B(3m×6) + C(5m×5) + D Source(4m×3) + E Map(2m+3m) = 80
+        const sstSections = `
+SECTION A — Objective [20 × 1 = 20 Marks]
+━━━━━━━━━━━━━━━━━━
+Q1–Q16   MCQs [1 mark each]
+  • Spread evenly: 4 from History, 4 from Geography, 4 from Civics, 4 from Economics
+  • Types: date/event recall, term identification, conceptual, map-based identification
+
+Q17–Q18  Assertion-Reason [1 mark each]
+  • One from History/Civics, one from Geography/Economics
+  • Options a/b/c/d same as standard Assertion-Reason format
+
+Q19–Q20  Fill in the Blank / Match [1 mark each]
+
+SECTION B — Short Answer Questions [6 × 3 = 18 Marks]
+━━━━━━━━━━━━━━━━━━
+Q21–Q26  [3 marks each]
+  • Minimum 1 question from each: History, Geography, Civics, Economics
+  • Answer in 4–6 lines (80–100 words)
+  • No maps required in this section
+
+SECTION C — Long Answer Questions [5 × 5 = 25 Marks]
+━━━━━━━━━━━━━━━━━━
+Q27–Q31  [5 marks each]
+  • Minimum 1 question from each sub-subject (History / Geography / Civics / Economics)
+  • Answer in 8–10 lines (150–200 words)
+  • At least 1 must involve cause-and-effect analysis
+  • At least 1 must compare two concepts/events/regions
+
+SECTION D — Source-Based / Case-Based [3 × 4 = 12 Marks]
+━━━━━━━━━━━━━━━━━━
+Q32  Source — History [4 marks]
+  • An extract from an NCERT textbook passage or document
+  • 3 sub-questions: (i) 1 mark + (ii) 1 mark + (iii) 2 marks
+
+Q33  Source — Geography or Economics [4 marks]
+  • A data table, map extract, or passage
+  • 3 sub-questions: (i) 1 mark + (ii) 1 mark + (iii) 2 marks
+
+Q34  Source — Civics [4 marks]
+  • A passage about a democratic concept or case
+  • 3 sub-questions: (i) 1 mark + (ii) 1 mark + (iii) 2 marks
+
+SECTION E — Map-Based Questions [2 + 3 = 5 Marks]
+━━━━━━━━━━━━━━━━━━
+Q35  History Map [2 marks]
+  • Identify and label 2 places/events on an outline map of India or World
+  • (Each correct labelling = 1 mark)
+
+Q36  Geography Map [3 marks]
+  • Mark and label 3 features on an outline map of India
+  • Features from: rivers, mountains, states, natural vegetation, soil types, crops, industries
+  • (Each correct labelling = 1 mark)
+        `.trim();
+
+        // ── STANDARD (other subjects) ────────────────────────────────
         const standardSections = `
-SECTION A — Objective Type [20 Marks]
+SECTION A — Objective Type [20 × 1 = 20 Marks]
 ━━━━━━━━━━━━━━━━━━
-Q1–Q10  Multiple Choice Questions [1 mark each]
-  • 4 options per MCQ: a) b) c) d)
-  • Cover at least 8 different chapters from the list above
-  • Mix: 40% knowledge recall, 40% conceptual, 20% application/HOTs
+Q1–Q16   MCQs [1 mark each] — 4 options each
+Q17–Q18  Assertion-Reason [1 mark each]
+Q19–Q20  Fill in the Blank / One-word answer [1 mark each]
 
-Q11–Q15  Fill in the Blanks [1 mark each]
-  • Test key terms, dates, names, scientific names, or definitions
-  • One blank per sentence only
-
-Q16–Q20  True / False [1 mark each]
-  • Clear, unambiguous statements — no trick questions
-  • Include common student misconceptions from these chapters
-
-SECTION B — Short Answer Questions [30 Marks]
+SECTION B — Very Short Answer [5 × 2 = 10 Marks]
 ━━━━━━━━━━━━━━━━━━
-Q21–Q30  [3 marks each]
-  • Each question tests ONE concept from one chapter
-  • Spread across at least 8 different chapters from the list above
-  • Include these types (mix throughout):
-      → Define and explain with example
-      → Compare and contrast two concepts
-      → State cause and effect
-      → Explain significance or importance
-  • At least 2 HOTs (analysis/application level)
-  • Expected: 3–5 sentences OR 3 clearly labelled key points
+Q21–Q25  [2 marks each] — 2–3 sentence answers
 
-SECTION C — Long Answer Questions [30 Marks]
+SECTION C — Short Answer [6 × 3 = 18 Marks]
 ━━━━━━━━━━━━━━━━━━
-Q31–Q36  [5 marks each]
-  • Each question from a DIFFERENT chapter — no repetition
-  • Every answer must require all four components:
-      Introduction/context → Main explanation → Example/evidence → Conclusion
-  • Must include:
-      → At least 1 case study or real-world application question
-      → At least 1 compare/contrast of two major concepts
-        ${isSST  ? "→ At least 1 map-pointing question (rivers/mountains/states/places)" : ""}
-        ${!isMath && !isSST ? "→ At least 1 question requiring a labelled diagram" : ""}
+Q26–Q31  [3 marks each] — 4–5 sentence answers, spread across chapters
+
+SECTION D — Long Answer [4 × 5 = 20 Marks]
+━━━━━━━━━━━━━━━━━━
+Q32–Q35  [5 marks each] — detailed answers, each from a different chapter
+
+SECTION E — Case-Based [3 × 4 = 12 Marks]
+━━━━━━━━━━━━━━━━━━
+Q36–Q38  [4 marks each] — real-life scenario with 3 sub-questions
         `.trim();
 
         // Pick the correct section structure
@@ -1387,6 +1699,10 @@ Q31–Q36  [5 marks each]
           sectionBlocks = englishSections;
         } else if (isHindi) {
           sectionBlocks = hindiSections;
+        } else if (isSST) {
+          sectionBlocks = sstSections;
+        } else if (/science|physics|chemistry|biology/i.test(subjectName)) {
+          sectionBlocks = scienceSections;
         } else {
           sectionBlocks = standardSections;
         }
@@ -1396,26 +1712,20 @@ Q31–Q36  [5 marks each]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⚠️  CRITICAL — UPLOADED SYLLABUS COVERAGE:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-The syllabus above was uploaded by the student. It contains MULTIPLE sections/topics.
-You MUST generate questions from EVERY section listed — not just Literature.
-Specifically for English:
-  • Reading section topics → generate the Reading comprehension questions
-  • Writing Skills topics → generate the Writing section questions
-  • Grammar topics → generate the Grammar section questions
-  • Literature topics → generate the Literature section questions
-If the uploaded syllabus lists Section A / B / C / D or similar groupings,
-map them to the corresponding sections in the paper structure above.
-Do NOT skip any section. Do NOT generate only Literature questions.
+The syllabus above was uploaded by the student and may cover specific topics only.
+Generate questions ONLY from the topics listed — but still follow the section structure below.
+Map every uploaded topic to its correct section (Reading/Writing/Grammar/Literature for English, etc.).
+Do NOT skip any section. Do NOT generate only from one part of the syllabus.
         `.trim() : "";
 
         const paperPrompt = `
 You are an official CBSE Board question paper setter for Class ${cls}.
-THIS PAPER IS FOR: **${subjectName}** — follow the exact CBSE pattern for this subject.
-Generate a COMPLETE, FULL-LENGTH question paper STRICTLY based on the syllabus listed below.
-Output the paper ONLY. No commentary outside the paper itself.
+Subject: ${subjectName} | Board: ${board} | Maximum Marks: 80 | Time: 3 Hours
+Follow the EXACT official CBSE 2024-25 paper pattern for ${subjectName} as specified below.
+Output the complete question paper ONLY — no commentary, no preamble, no notes outside the paper.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PAPER HEADER (include exactly):
+PAPER HEADER (reproduce exactly):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Subject       : ${subjectName}
 Class         : ${cls}
@@ -1424,15 +1734,19 @@ Time Allowed  : 3 Hours
 Maximum Marks : 80
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 General Instructions:
-1. All questions are compulsory.
-2. Marks for each question are shown in [ ].
-3. Write well-structured answers.
-4. For Writing section — follow the standard format for each writing type.
-5. For Grammar — write complete corrected sentences.
-6. For Literature — refer to the texts listed in the syllabus only.
+1. This question paper contains ${isEnglish || isHindi ? "four" : "five"} sections — Section A, B, C, D${isEnglish || isHindi ? "" : ", and E"}.
+2. All questions are compulsory. Marks are indicated against each question.
+3. Attempt all parts of a question together.
+4. Write neat, well-structured answers.${isEnglish ? `
+5. For Section B — follow the prescribed format for each writing type.
+6. For Section C — write complete, grammatically correct sentences.` : ""}${isMath ? `
+5. Show all steps clearly. Marks are awarded for method even if the final answer is wrong.
+6. Use of calculator is not permitted.` : ""}${!isEnglish && !isHindi && !isMath ? `
+5. Draw neat, labelled diagrams wherever asked. Diagrams carry marks.
+6. For map questions — use a pencil and label clearly.` : ""}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-AUTHORISED SYLLABUS FOR THIS PAPER (use ONLY these topics):
+AUTHORISED SYLLABUS — Questions from ONLY these topics:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${chapterList}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1440,15 +1754,16 @@ ${chapterList}
 ${uploadCoverageNote ? uploadCoverageNote + "\n\n" : ""}${sectionBlocks}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-MANDATORY RULES:
+QUALITY RULES — NON-NEGOTIABLE:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• ALL sections of the paper must be present and complete
-• Every topic/chapter in the syllabus must appear at least once across all sections
-• No section may be skipped or left empty
-• Difficulty: 30% easy | 50% medium | 20% hard (HOTs)
-• Questions must be original, board-exam quality
-• Each question must clearly show its marks in [ ]
-• Do NOT repeat topics within the same section
+• Generate ALL sections completely — no section may be missing or short
+• Total marks MUST add up to exactly 80
+• Every chapter/topic in the syllabus must appear in at least one question
+• No chapter appears more than 3 times across the entire paper
+• Difficulty spread: 30% easy | 50% medium | 20% HOTs
+• Questions must be original CBSE board-quality — not copied from textbooks
+• Every question must show its mark value in [brackets]
+• Do NOT add any text after the last question — paper ends at the last question
         `.trim();
 
         const paper = await callAI(paperPrompt, [
