@@ -599,6 +599,10 @@ export async function POST(req: NextRequest) {
     const rawUploadedText: string = body?.uploadedText || "";
     const uploadType: "syllabus" | "answer" | undefined = body?.uploadType ?? undefined;
 
+    // ── NEW: read subject hint and lang from frontend (used by oral/teacher/practice/revision) ──
+    const bodySubject: string = body?.subject || "";
+    const bodyLang: string    = body?.lang    || "";
+
     let uploadedText: string = sanitiseUpload(rawUploadedText);
 
     if (rawUploadedText.includes("[IMAGE_BASE64]")) {
@@ -670,7 +674,20 @@ export async function POST(req: NextRequest) {
         ...history.slice(-12),
         { role: "user", content: message },
       ];
-      const reply = await callAI(systemPrompt("teacher"), teacherConversation);
+
+      // Detect Hindi for teacher mode
+      const teacherConversationText = [...history, { role: "user", content: message }]
+        .map((m) => m.content).join(" ");
+      const isHindiTeacher =
+        /hindi/i.test(bodySubject) ||
+        bodyLang === "hi-IN"       ||
+        /[\u0900-\u097F]{5,}/.test(teacherConversationText) ||
+        /hindi|हिंदी/i.test(teacherConversationText);
+
+      const reply = await callAI(
+        systemPrompt("teacher", isHindiTeacher ? "hindi" : undefined),
+        teacherConversation
+      );
       return NextResponse.json({ reply });
     }
 
@@ -691,20 +708,13 @@ export async function POST(req: NextRequest) {
       };
 
       // ── KEY-MISMATCH RECOVERY ──────────────────────────────
-      // If the primary lookup returned IDLE (or no session), hunt for any
-      // non-IDLE session for this student. Tries:
-      //   1. Query by student_name + student_class (most reliable)
-      //   2. Query by the name_class key directly (covers null-name uploads)
       if (session.status === "IDLE") {
         let recovered: ExamSession | null = null;
 
-        // Attempt 1: by name (only if name is non-empty)
         if (name) {
           recovered = await getSessionByStudent(name, cls);
         }
 
-        // Attempt 2: by the canonical name_class key (handles when name was set
-        // on upload but sessionId is being used now, or vice-versa)
         if (!recovered || recovered.status === "IDLE") {
           const nameClassKey = `${name || "anon"}_${cls}`;
           if (nameClassKey !== key) {
@@ -719,8 +729,6 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // ── FIX: Re-greeting a READY session — remind instead of falling through ──
-      // Guard: skip if an upload is present — process the upload instead of greeting
       if (isGreeting(lower) && session.status === "READY" && !uploadedText) {
         return NextResponse.json({
           reply:
@@ -730,12 +738,10 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // ── Re-greeting during an active exam — restore full UI state ──
       if (isGreeting(lower) && session.status === "IN_EXAM") {
         const elapsed = session.started_at
           ? formatDuration(Date.now() - session.started_at)
           : "—";
-        // Return paper + startTime so frontend can restore paper panel and timer
         return NextResponse.json({
           reply:
             `⏱️ Your **${session.subject}** exam is still in progress!\n\n` +
@@ -750,7 +756,6 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // ── FIX: Re-greeting a FAILED session ──
       if (isGreeting(lower) && session.status === "FAILED") {
         return NextResponse.json({
           reply:
@@ -759,9 +764,6 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // ── Greeting: fresh IDLE session ──────────────────────
-      // FIX: Only show greeting when there is NO upload present.
-      // If uploadedText is set, fall through to the upload handler below.
       if (isGreeting(lower) && session.status === "IDLE" && !uploadedText) {
         return NextResponse.json({
           reply:
@@ -773,23 +775,9 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // ── Guard: "start" typed — resolve subject from DB, confirmedSubject, or ask ──
-      //
-      // BUG FIX 1: The previous version scanned chat history for a fallback subject,
-      // which caused it to pick up subjects from PREVIOUS sessions still in the
-      // frontend's history array (e.g. "Social Science"), then overwrite a correctly
-      // saved session (e.g. an uploaded English syllabus) in Supabase.
-      //
-      // BUG FIX 2: When a syllabus is uploaded, the DB session is saved as READY.
-      // But if the frontend sends "start" without a sessionId (or with a different
-      // key), getSession returns null and the fallback session is constructed as IDLE.
-      // Fix: always re-fetch from DB by BOTH possible key formats and use whichever
-      // is READY, so an uploaded syllabus session is never lost.
       if (isStart(lower) && session.status === "IDLE") {
         const confirmedSubject: string = body?.confirmedSubject || "";
 
-        // ── Fallback: find any READY session for this student in DB ──
-        // Try by name first, then by name_class key directly.
         let readySession: ExamSession | null = null;
         if (name) {
           readySession = await getSessionByStudent(name, cls, "READY");
@@ -805,13 +793,11 @@ export async function POST(req: NextRequest) {
         console.log("[isStart+IDLE] readySession found:", readySession?.session_key, readySession?.subject);
 
         if (readySession) {
-          // Found a READY session — adopt it regardless of key format
           session.status               = "READY";
           session.subject              = readySession.subject;
           session.subject_request      = readySession.subject_request;
           session.syllabus_from_upload = readySession.syllabus_from_upload;
           session.session_key          = readySession.session_key;
-          // Fall through to isStart + READY paper generation below
         } else if (confirmedSubject) {
           const { subjectName } = getChaptersForSubject(confirmedSubject, cls);
           const recoveredSession: ExamSession = {
@@ -828,7 +814,6 @@ export async function POST(req: NextRequest) {
           session.status          = "READY";
           session.subject         = subjectName;
           session.subject_request = confirmedSubject;
-          // Fall through to isStart + READY paper generation below
         } else {
           return NextResponse.json({
             reply:
@@ -839,7 +824,6 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // ── Recovery: FAILED session ───────────────────────────
       if (session.status === "FAILED") {
         if (isSubmit(lower)) {
           session.status = "IN_EXAM";
@@ -852,7 +836,6 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // ── SUBMIT → full evaluation ───────────────────────────
       if (isSubmit(lower) && session.status === "IN_EXAM") {
         const endTime   = Date.now();
         const overtime  = isOverTime(session.started_at);
@@ -874,7 +857,6 @@ export async function POST(req: NextRequest) {
 
         const totalMarks = session.total_marks || 80;
 
-        // Determine subject type for evaluation
         const evalSubj      = (session.subject || "").toLowerCase();
         const evalIsEnglish = /english/i.test(evalSubj);
         const evalIsHindi   = /hindi/i.test(evalSubj);
@@ -882,7 +864,6 @@ export async function POST(req: NextRequest) {
         const evalIsSST     = /sst|social|history|geography|civics|economics/i.test(evalSubj);
         const evalIsScience = /science|physics|chemistry|biology/i.test(evalSubj);
 
-        // Build subject-specific marking rules
         const subjectMarkingRules = evalIsEnglish ? `
 SECTION A — READING [20 marks total]
 • Unseen passage MCQs (Q1a, Q2a): 1 mark each — correct = 1, wrong = 0
@@ -1211,7 +1192,6 @@ Study Tip   : [one specific, actionable improvement — e.g. "Practise Assertion
         });
       }
 
-      // ── Auto-expire: 3h elapsed ────────────────────────────
       if (session.status === "IN_EXAM" && isOverTime(session.started_at)) {
         return NextResponse.json({
           reply:
@@ -1222,7 +1202,6 @@ Study Tip   : [one specific, actionable improvement — e.g. "Practise Assertion
         });
       }
 
-      // ── IN EXAM: silently collect every message/upload ─────
       if (session.status === "IN_EXAM") {
         const parts: string[] = [];
 
@@ -1264,7 +1243,6 @@ Study Tip   : [one specific, actionable improvement — e.g. "Practise Assertion
         });
       }
 
-      // ── READY: syllabus upload override ───────────────────
       if (session.status === "READY" && !isStart(lower)) {
         const isSyllabusUpload =
           uploadType === "syllabus" ||
@@ -1282,7 +1260,6 @@ Study Tip   : [one specific, actionable improvement — e.g. "Practise Assertion
         });
       }
 
-      // ── IDLE: syllabus upload OR subject text ──────────────
       if (session.status === "IDLE" && !isGreeting(lower)) {
         const isSyllabusUpload =
           uploadType === "syllabus" ||
@@ -1326,14 +1303,10 @@ Study Tip   : [one specific, actionable improvement — e.g. "Practise Assertion
         });
       }
 
-      // ── IDLE: syllabus upload when message looks like a greeting ──
-      // FIX: If we reach here with uploadedText set and IDLE status,
-      // the greeting guard was bypassed — handle the upload now.
       if (session.status === "IDLE" && uploadedText.length > 30) {
         return handleSyllabusUpload(uploadedText, cls, board, key, name, "IDLE");
       }
 
-      // ── START: generate full paper ─────────────────────────
       if (isStart(lower) && session.status === "READY") {
         let subjectName: string;
         let chapterList: string;
@@ -1356,11 +1329,6 @@ Study Tip   : [one specific, actionable improvement — e.g. "Practise Assertion
         const isHindi   = /hindi/i.test(subjectName);
         const hasUploadedSyllabus = !!session.syllabus_from_upload;
 
-        // ═══════════════════════════════════════════════════════════
-        // SUBJECT-SPECIFIC CBSE PAPER PATTERNS (2024-25 official format)
-        // ═══════════════════════════════════════════════════════════
-
-        // ── ENGLISH Language & Literature — CBSE Class 9/10 ──────────
         const englishSections = `
 SECTION A — READING [20 Marks]
 ━━━━━━━━━━━━━━━━━━
@@ -1395,46 +1363,19 @@ Q6  Long Composition — Article / Speech / Story [5 marks]
 SECTION C — GRAMMAR [20 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q7  Gap Filling — Tenses / Modals / Voice [4 × 1 = 4 marks]
-  • 4 blanks in a passage — fill with the correct grammatical form
-  • Test: present/past/future tense, modals (can/could/should/must/will/would/may/might)
-
 Q8  Editing — Error Correction [4 × 1 = 4 marks]
-  • A passage of 8–10 lines with one error per line
-  • Errors: articles, prepositions, tense, concord, word form, spelling
-  • Student writes: [incorrect word] → [correct word] for each line
-
 Q9  Omission — Missing Words [4 × 1 = 4 marks]
-  • A passage with one word missing per line (shown by /)
-  • Student writes the missing word for each line
-
 Q10  Sentence Reordering [4 × 1 = 4 marks]
-  • 4 sets of jumbled words — reorder into a correct, meaningful sentence
-
 Q11  Sentence Transformation [4 × 1 = 4 marks]
-  • Rewrite as directed: Active↔Passive, Direct↔Indirect, combine using given conjunction,
-    degree of comparison, or split into two sentences
 
 SECTION D — LITERATURE [20 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q12  Extract-based Questions — Prose [5 marks]
-  • Extract from a prose lesson listed in the syllabus above
-  • 4 MCQs × 1 mark + 1 short answer × 1 mark = 5 marks
-
 Q13  Extract-based Questions — Poetry [5 marks]
-  • Extract (1–2 stanzas) from a poem listed in the syllabus above
-  • 4 MCQs × 1 mark + 1 short answer × 1 mark = 5 marks
-
 Q14  Short Answer Questions — Prose & Poetry [6 marks]
-  • 3 questions × 2 marks each = 6 marks
-  • Each from a DIFFERENT text in the syllabus above
-  • Answer in 30–40 words (2–3 sentences)
-
 Q15  Long Answer — Prose / Drama [4 marks]
-  • 1 question requiring a paragraph-length answer (80–100 words)
-  • Theme analysis OR character sketch OR comparison between two texts
         `.trim();
 
-        // ── HINDI — CBSE Class 9/10 ──────────────────────────────────
         const hindiSections = `
 SECTION A — APATHIT GADYANSH / KAVYANSH (Unseen Reading) [20 Marks]
 ━━━━━━━━━━━━━━━━━━
@@ -1451,21 +1392,9 @@ Q2  Apathit Kavyansh (Unseen Poem Extract) [10 marks]
 SECTION B — LEKHAN (Writing) [20 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q3  Patra Lekhan — औपचारिक पत्र (Formal Letter) [5 marks]
-  • Write a formal letter: complaint / application / request
-  • To: Principal / Editor / Authority | 120–150 words
-  • Marks: Format 1 + Content 2 + Language/Expression 2
-
 Q4  Anuched Lekhan (Paragraph Writing) [5 marks]
-  • Write a paragraph on a given topic with hints
-  • 80–100 words | Marks: Content 2 + Language 2 + Organisation 1
-
 Q5  Suchna Lekhan (Notice Writing) [5 marks]
-  • Write a formal notice for a school event or announcement
-  • 50–60 words | Strict format: संस्था का नाम, तिथि, शीर्षक, सामग्री, हस्ताक्षर
-
 Q6  Sandesh / Vigyapan Lekhan (Message / Advertisement) [5 marks]
-  • Write a formal message OR an advertisement
-  • 30–50 words | Follow standard box format
 
 SECTION C — VYAKARAN (Grammar) [20 Marks]
 ━━━━━━━━━━━━━━━━━━
@@ -1478,188 +1407,89 @@ Q11  Vakya Bhed (Types of sentences — simple/compound/complex) [4 marks] — 4
 SECTION D — PATHEN (Literature) [20 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q12  Gadyansh-adharit prashn (Prose extract questions) [5 marks]
-  • Extract from a prose lesson in the syllabus above
-  • 4 MCQs × 1 mark + 1 short answer × 1 mark
-
 Q13  Kavyansh-adharit prashn (Poetry extract questions) [5 marks]
-  • Extract from a poem in the syllabus above
-  • 4 MCQs × 1 mark + 1 short answer × 1 mark
-
 Q14  Laghu Uttariya Prashn (Short answer questions) [6 marks]
-  • 3 questions × 2 marks = 6 marks — from different texts above
-
 Q15  Dirgha Uttariya Prashn (Long answer question) [4 marks]
-  • 1 question: character / theme / central idea — 80–100 words
         `.trim();
 
-        // ── MATHEMATICS — CBSE Class 9/10 ────────────────────────────
         const mathSections = `
 SECTION A — MCQ & Assertion-Reason [20 × 1 = 20 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q1–Q18   MCQs [1 mark each]
-  • 4 options per question: a) b) c) d)
-  • Cover ALL chapters — minimum 1 question per chapter
-  • Types: direct formula, conceptual, calculation, graph/figure-based, HOTs
-
 Q19–Q20  Assertion-Reason [1 mark each]
-  • Q19 and Q20 each have:
-      Assertion (A): [statement]
-      Reason    (R): [statement]
-  • Options:
-      a) Both A and R are true and R is the correct explanation of A
-      b) Both A and R are true but R is NOT the correct explanation of A
-      c) A is true but R is false
-      d) A is false but R is true
 
 SECTION B — Very Short Answer [5 × 2 = 10 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q21–Q25  [2 marks each]
-  • Short numerical or conceptual problems requiring 2–3 steps
-  • Cover 5 different chapters
-  • No sub-parts. Answer in 2–4 lines or steps.
 
 SECTION C — Short Answer [6 × 3 = 18 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q26–Q31  [3 marks each]
-  • Multi-step problems, short proofs, constructions with reasoning
-  • Cover 6 different chapters — no chapter repetition from Section B
-  • At least 1 HOT application problem
 
 SECTION D — Long Answer [4 × 5 = 20 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q32–Q35  [5 marks each]
-  • Full theorem proofs, complex multi-step problems, data analysis
-  • Each from a DIFFERENT chapter
-  • Q32 or Q33 must involve a Geometry theorem proof with diagram
-  • Q34 or Q35 must involve Statistics or Probability
 
 SECTION E — Case-Based / Source-Based [3 × 4 = 12 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q36  Case Study 1 [4 marks]
-  • Real-life scenario with a diagram or table
-  • (i) 1 mark + (ii) 1 mark + (iii) 2 marks  OR  (i) 2 marks + (ii) 2 marks
-
 Q37  Case Study 2 [4 marks]
-  • Real-life application of a different chapter
-  • (i) 1 mark + (ii) 1 mark + (iii) 2 marks  OR  (i) 2 marks + (ii) 2 marks
-
 Q38  Case Study 3 [4 marks]
-  • Data interpretation / pattern recognition scenario
-  • (i) 1 mark + (ii) 1 mark + (iii) 2 marks  OR  (i) 2 marks + (ii) 2 marks
         `.trim();
 
-        // ── SCIENCE — CBSE Class 9/10 ────────────────────────────────
         const scienceSections = `
 SECTION A — Objective [20 × 1 = 20 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q1–Q16   MCQs [1 mark each]
-  • 4 options: a) b) c) d) — one correct answer only
-  • Cover all 3 branches: Physics, Chemistry, Biology
-  • Types: definition-based, diagram-based, numerical, conceptual
-
 Q17–Q18  Assertion-Reason [1 mark each]
-  • Same format as Maths Assertion-Reason above (options a/b/c/d)
-  • One from Life Science, one from Physical Science
-
-Q19–Q20  Fill in the Blanks / Match the Following / One-Word Answer [1 mark each]
-  • Q19: Fill in the blank with the correct scientific term
-  • Q20: One-word or one-line answer
+Q19–Q20  Fill in the Blanks / One-Word Answer [1 mark each]
 
 SECTION B — Very Short Answer [5 × 2 = 10 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q21–Q25  [2 marks each]
-  • Answer in 2–3 sentences or show 2–3 working steps
-  • Cover at least 2 questions from Biology, 2 from Physics/Chemistry, 1 any
-  • No diagrams required (but can be added for clarity)
 
 SECTION C — Short Answer [6 × 3 = 18 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q26–Q31  [3 marks each]
-  • Answer in 4–5 sentences OR with a labelled diagram (where applicable)
-  • Must include at least:
-      → 2 Biology questions (cell / tissue / diversity / natural resources)
-      → 2 Physics questions (motion / force / sound / gravitation / work-energy)
-      → 2 Chemistry questions (matter / atoms / molecules / structure of atom)
 
 SECTION D — Long Answer [4 × 5 = 20 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q32–Q35  [5 marks each]
-  • Full detailed answer — 7–8 sentences minimum
-  • At least 1 must require a LABELLED DIAGRAM (e.g. animal cell, neuron, ear, eye)
-  • At least 1 must involve numerical calculation (e.g. speed/velocity/force/pressure)
-  • Cover all 3 branches across Q32–Q35
 
 SECTION E — Case-Based / Source-Based [3 × 4 = 12 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q36  Case Study — Biology [4 marks]
-  • A short paragraph or diagram about a biological process
-  • (i) 1 mark + (ii) 1 mark + (iii) 2 marks
-
 Q37  Case Study — Physics [4 marks]
-  • A real-life scenario involving a Physics concept with data
-  • (i) 1 mark + (ii) 1 mark + (iii) 2 marks
-
 Q38  Case Study — Chemistry [4 marks]
-  • A scenario involving a chemical concept or experiment
-  • (i) 1 mark + (ii) 1 mark + (iii) 2 marks
         `.trim();
 
-        // ── SOCIAL SCIENCE — CBSE Class 9/10 ─────────────────────────
         const sstSections = `
 SECTION A — Objective [20 × 1 = 20 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q1–Q16   MCQs [1 mark each]
-  • Spread evenly: 4 from History, 4 from Geography, 4 from Civics, 4 from Economics
-  • Types: date/event recall, term identification, conceptual, map-based identification
-
 Q17–Q18  Assertion-Reason [1 mark each]
-  • One from History/Civics, one from Geography/Economics
-  • Options a/b/c/d same as standard Assertion-Reason format
-
 Q19–Q20  Fill in the Blank / Match [1 mark each]
 
 SECTION B — Short Answer Questions [6 × 3 = 18 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q21–Q26  [3 marks each]
-  • Minimum 1 question from each: History, Geography, Civics, Economics
-  • Answer in 4–6 lines (80–100 words)
-  • No maps required in this section
 
 SECTION C — Long Answer Questions [5 × 5 = 25 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q27–Q31  [5 marks each]
-  • Minimum 1 question from each sub-subject (History / Geography / Civics / Economics)
-  • Answer in 8–10 lines (150–200 words)
-  • At least 1 must involve cause-and-effect analysis
-  • At least 1 must compare two concepts/events/regions
 
 SECTION D — Source-Based / Case-Based [3 × 4 = 12 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q32  Source — History [4 marks]
-  • An extract from an NCERT textbook passage or document
-  • 3 sub-questions: (i) 1 mark + (ii) 1 mark + (iii) 2 marks
-
 Q33  Source — Geography or Economics [4 marks]
-  • A data table, map extract, or passage
-  • 3 sub-questions: (i) 1 mark + (ii) 1 mark + (iii) 2 marks
-
 Q34  Source — Civics [4 marks]
-  • A passage about a democratic concept or case
-  • 3 sub-questions: (i) 1 mark + (ii) 1 mark + (iii) 2 marks
 
 SECTION E — Map-Based Questions [2 + 3 = 5 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q35  History Map [2 marks]
-  • Identify and label 2 places/events on an outline map of India or World
-  • (Each correct labelling = 1 mark)
-
 Q36  Geography Map [3 marks]
-  • Mark and label 3 features on an outline map of India
-  • Features from: rivers, mountains, states, natural vegetation, soil types, crops, industries
-  • (Each correct labelling = 1 mark)
         `.trim();
 
-        // ── STANDARD (other subjects) ────────────────────────────────
         const standardSections = `
 SECTION A — Objective Type [20 × 1 = 20 Marks]
 ━━━━━━━━━━━━━━━━━━
@@ -1684,7 +1514,6 @@ SECTION E — Case-Based [3 × 4 = 12 Marks]
 Q36–Q38  [4 marks each] — real-life scenario with 3 sub-questions
         `.trim();
 
-        // Pick the correct section structure
         let sectionBlocks: string;
         if (isMath) {
           sectionBlocks = mathSections;
@@ -1700,7 +1529,6 @@ Q36–Q38  [4 marks each] — real-life scenario with 3 sub-questions
           sectionBlocks = standardSections;
         }
 
-        // For uploaded syllabuses, build an explicit coverage enforcement block
         const uploadCoverageNote = hasUploadedSyllabus ? `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⚠️  CRITICAL — UPLOADED SYLLABUS COVERAGE:
@@ -1801,7 +1629,6 @@ QUALITY RULES — NON-NEGOTIABLE:
         });
       }
 
-      // Fallback for examiner
       return NextResponse.json({
         reply:
           `Please tell me the **subject** you want to be tested on${callName}.\n` +
@@ -1811,7 +1638,7 @@ QUALITY RULES — NON-NEGOTIABLE:
     }
 
     // ═══════════════════════════════════════════════════════════
-    // ORAL MODE
+    // ORAL MODE  ← PATCHED: Hindi detection from bodySubject + bodyLang + Devanagari
     // ═══════════════════════════════════════════════════════════
     if (mode === "oral") {
       const contextPrimer: ChatMessage[] = name ? [
@@ -1823,7 +1650,25 @@ QUALITY RULES — NON-NEGOTIABLE:
         ...history.slice(-12),
         { role: "user", content: message },
       ];
-      const reply = await callAI(systemPrompt("oral"), oralConversation);
+
+      // Detect Hindi subject from 4 signals:
+      // 1. bodySubject sent by frontend ("hindi")
+      // 2. bodyLang sent by frontend ("hi-IN")
+      // 3. Devanagari characters in the message or history (5+ chars = confident Hindi)
+      // 4. The word "hindi" anywhere in the conversation
+      const oralConversationText = [...history, { role: "user", content: message }]
+        .map((m) => m.content).join(" ");
+
+      const isHindiOral =
+        /hindi/i.test(bodySubject)                  ||
+        bodyLang === "hi-IN"                         ||
+        /[\u0900-\u097F]{5,}/.test(oralConversationText) ||
+        /hindi|हिंदी/i.test(oralConversationText);
+
+      const reply = await callAI(
+        systemPrompt("oral", isHindiOral ? "hindi" : undefined),
+        oralConversation
+      );
       return NextResponse.json({ reply });
     }
 
@@ -1831,7 +1676,17 @@ QUALITY RULES — NON-NEGOTIABLE:
     // PRACTICE MODE
     // ═══════════════════════════════════════════════════════════
     if (mode === "practice") {
-      const reply = await callAI(systemPrompt("practice"), conversation);
+      const practiceConversationText = conversation.map((m) => m.content).join(" ");
+      const isHindiPractice =
+        /hindi/i.test(bodySubject)                       ||
+        bodyLang === "hi-IN"                              ||
+        /[\u0900-\u097F]{5,}/.test(practiceConversationText) ||
+        /hindi|हिंदी/i.test(practiceConversationText);
+
+      const reply = await callAI(
+        systemPrompt("practice", isHindiPractice ? "hindi" : undefined),
+        conversation
+      );
       return NextResponse.json({ reply });
     }
 
@@ -1839,7 +1694,17 @@ QUALITY RULES — NON-NEGOTIABLE:
     // REVISION MODE
     // ═══════════════════════════════════════════════════════════
     if (mode === "revision") {
-      const reply = await callAI(systemPrompt("revision"), conversation);
+      const revisionConversationText = conversation.map((m) => m.content).join(" ");
+      const isHindiRevision =
+        /hindi/i.test(bodySubject)                        ||
+        bodyLang === "hi-IN"                               ||
+        /[\u0900-\u097F]{5,}/.test(revisionConversationText) ||
+        /hindi|हिंदी/i.test(revisionConversationText);
+
+      const reply = await callAI(
+        systemPrompt("revision", isHindiRevision ? "hindi" : undefined),
+        conversation
+      );
       return NextResponse.json({ reply });
     }
 
