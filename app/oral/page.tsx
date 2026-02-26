@@ -99,10 +99,12 @@ export default function OralPage() {
   const [listening, setListening]   = useState(false);
   const [speaking, setSpeaking]     = useState(false);
   const [transcript, setTranscript] = useState("");
+  const transcriptRef = useRef(""); // ref always has current value for closures
   const [inputText, setInputText]   = useState("");
   const [lang, setLang]             = useState<Lang>("auto");
   const [gender, setGender]         = useState<Gender>("female");
   const [isLoading, setIsLoading]   = useState(false);
+  const sendingRef = useRef(false); // prevents double-send from stale closure
   const [studentName, setStudentName] = useState("");
 
   const { speak, stopAll } = useTTS(gender, lang);
@@ -156,8 +158,13 @@ export default function OralPage() {
         const t = e.results[i][0].transcript;
         if (e.results[i].isFinal) finalText += t; else interimText += t;
       }
-      if (finalText) setTranscript(prev => prev + finalText);
-      else if (interimText) setTranscript(interimText);
+      if (finalText) {
+          const next = transcriptRef.current + finalText;
+          transcriptRef.current = next;
+          setTranscript(next);
+        } else if (interimText) {
+          setTranscript(transcriptRef.current + interimText);
+        }
     };
     r.onend = () => setListening(false);
     r.onerror = () => setListening(false);
@@ -174,10 +181,15 @@ export default function OralPage() {
     if (listening) {
       recognitionRef.current?.stop();
       setListening(false);
-      const t = transcript.trim();
-      if (t) { handleSend(t); setTranscript(""); }
+      const t = transcriptRef.current.trim();
+      if (t && !isLoading) {
+        handleSend(t);
+        transcriptRef.current = "";
+        setTranscript("");
+      }
     } else {
       stopAll(); setSpeaking(false);
+      transcriptRef.current = "";
       setTranscript("");
       recognitionRef.current.lang = lang === "auto" ? "en-IN" : lang;
       try { recognitionRef.current.start(); setListening(true); }
@@ -187,7 +199,8 @@ export default function OralPage() {
 
   async function handleSend(text: string) {
     const trimmed = text.trim();
-    if (!trimmed || isLoading) return;
+    if (!trimmed || sendingRef.current) return;
+    sendingRef.current = true;
 
     const userMsg: Message = { role: "user", content: trimmed };
     const updated = [...messages, userMsg];
@@ -203,7 +216,6 @@ export default function OralPage() {
       board: student?.board || "CBSE",
     };
 
-    // History = all prior messages except first greeting
     const history = updated.slice(1, -1).map(m => ({ role: m.role, content: m.content }));
 
     try {
@@ -218,12 +230,19 @@ export default function OralPage() {
       setMessages([...updated, { role: "assistant", content: "⚠️ Network error. Please try again." }]);
     } finally {
       setIsLoading(false);
+      sendingRef.current = false;
     }
   }
 
   function handleTextSend() {
-    const t = inputText.trim() || transcript.trim();
-    if (t) { handleSend(t); setInputText(""); setTranscript(""); }
+    if (sendingRef.current) return;
+    const t = inputText.trim() || transcriptRef.current.trim();
+    if (t) {
+      handleSend(t);
+      setInputText("");
+      transcriptRef.current = "";
+      setTranscript("");
+    }
   }
 
   const micBg = listening ? "#ef4444" : gender === "female" ? "#db2777" : "#2563eb";

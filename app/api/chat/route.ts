@@ -697,14 +697,43 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // ── Guard: "start" typed before subject is set ─────────
+      // ── Guard: "start" typed — check history for subject if Supabase is stale ──
       if (isStart(lower) && session.status === "IDLE") {
-        return NextResponse.json({
-          reply:
-            `Please tell me the **subject** you want to be tested on first${callName}.\n\n` +
-            `Options: Science | Mathematics | SST | History | Geography | Civics | Economics | English | Hindi\n\n` +
-            `📎 Or **upload your syllabus** as a PDF or image for a custom paper.`,
-        });
+        // Race condition fix: Supabase write from previous message may not have committed yet.
+        // Try frontend's confirmed subject first, then history scan
+        const confirmedSubject: string = body?.confirmedSubject || "";
+
+        const subjectFromHistory = confirmedSubject || history
+          .filter(m => m.role === "user")
+          .map(m => m.content.trim())
+          .filter(t => t.length > 1 && !isGreeting(t) && !isStart(t) && !isSubmit(t))
+          .pop();
+
+        if (subjectFromHistory) {
+          const { subjectName } = getChaptersForSubject(subjectFromHistory, cls);
+          const recoveredSession: ExamSession = {
+            session_key:     key,
+            status:          "READY",
+            subject_request: subjectFromHistory,
+            subject:         subjectName,
+            answer_log:      [],
+            student_name:    name,
+            student_class:   cls,
+            student_board:   board,
+          };
+          await saveSession(recoveredSession);
+          session.status          = "READY";
+          session.subject         = subjectName;
+          session.subject_request = subjectFromHistory;
+          // Fall through to isStart + READY paper generation below
+        } else {
+          return NextResponse.json({
+            reply:
+              `Please tell me the **subject** you want to be tested on first${callName}.\n\n` +
+              `Options: Science | Mathematics | SST | History | Geography | Civics | Economics | English | Hindi\n\n` +
+              `📎 Or **upload your syllabus** as a PDF or image for a custom paper.`,
+          });
+        }
       }
 
       // ── Recovery: FAILED session ───────────────────────────

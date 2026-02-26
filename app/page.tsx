@@ -41,7 +41,7 @@ export default function HomePage() {
         }
         .sun {
           position: absolute;
-          top: 22%; left: 50%; transform: translate(-50%, -50%);
+          top: 38%; left: 50%; transform: translate(-50%, -50%);
           width: clamp(240px, 50vw, 520px); height: clamp(240px, 50vw, 520px);
           border-radius: 50%;
           background: radial-gradient(circle, rgba(255,215,120,1) 0%, rgba(255,180,60,0.6) 50%, transparent 80%);
@@ -51,7 +51,7 @@ export default function HomePage() {
         /* DESKTOP default — original absolute positioning */
         .content {
           position: absolute;
-          top: 22%; left: 50%; transform: translate(-50%, -50%);
+          top: 38%; left: 50%; transform: translate(-50%, -50%);
           z-index: 2; width: 100%; padding: 0 20px;
           display: flex; flex-direction: column;
           align-items: center; text-align: center; gap: 12px;
@@ -66,7 +66,7 @@ export default function HomePage() {
 
         .cta-wrap {
           position: absolute;
-          bottom: 220px; left: 50%; transform: translateX(-50%);
+          bottom: clamp(220px, 20.8vw, 400px); left: 50%; transform: translateX(-50%);
           z-index: 2; cursor: pointer;
         }
         .cta-btn {
