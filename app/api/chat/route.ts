@@ -123,26 +123,32 @@ async function getSessionByStudent(
 ): Promise<ExamSession | null> {
   if (!studentName) return null;
   try {
+    // IMPORTANT: all filters must come BEFORE .order() and .limit()
+    // otherwise Supabase query builder ignores them
     let query = supabase
       .from("exam_sessions")
       .select("*")
       .eq("student_name", studentName)
-      .eq("student_class", studentClass)
-      .order("updated_at", { ascending: false })
-      .limit(1);
+      .eq("student_class", studentClass);
 
     if (requiredStatus) {
       query = (query as any).eq("status", requiredStatus);
     }
 
-    const { data, error } = await query;
+    const { data, error } = await (query as any)
+      .order("updated_at", { ascending: false })
+      .limit(1);
+
+    console.log("[getSessionByStudent]", { studentName, studentClass, requiredStatus, found: data?.length, error: error?.message });
+
     if (error || !data || data.length === 0) return null;
 
     return {
       ...data[0],
       answer_log: Array.isArray(data[0].answer_log) ? data[0].answer_log : [],
     } as ExamSession;
-  } catch {
+  } catch (e) {
+    console.error("[getSessionByStudent] threw:", e);
     return null;
   }
 }
@@ -684,14 +690,31 @@ export async function POST(req: NextRequest) {
       };
 
       // ── KEY-MISMATCH RECOVERY ──────────────────────────────
-      // If the primary lookup returned an IDLE session (or nothing), check whether
-      // a non-IDLE session exists for this student under a different key.
-      // This handles the common case where the syllabus upload used key A
-      // (e.g. "abc_9") but the "start" request uses key B (sessionId-based).
-      if (session.status === "IDLE" && name) {
-        const existingSession = await getSessionByStudent(name, cls);
-        if (existingSession && existingSession.status !== "IDLE") {
-          session = existingSession;
+      // If the primary lookup returned IDLE (or no session), hunt for any
+      // non-IDLE session for this student. Tries:
+      //   1. Query by student_name + student_class (most reliable)
+      //   2. Query by the name_class key directly (covers null-name uploads)
+      if (session.status === "IDLE") {
+        let recovered: ExamSession | null = null;
+
+        // Attempt 1: by name (only if name is non-empty)
+        if (name) {
+          recovered = await getSessionByStudent(name, cls);
+        }
+
+        // Attempt 2: by the canonical name_class key (handles when name was set
+        // on upload but sessionId is being used now, or vice-versa)
+        if (!recovered || recovered.status === "IDLE") {
+          const nameClassKey = `${name || "anon"}_${cls}`;
+          if (nameClassKey !== key) {
+            const byKey = await getSession(nameClassKey);
+            if (byKey && byKey.status !== "IDLE") recovered = byKey;
+          }
+        }
+
+        if (recovered && recovered.status !== "IDLE") {
+          console.log("[KEY-MISMATCH] recovered session:", recovered.session_key, recovered.status);
+          session = recovered;
         }
       }
 
@@ -764,10 +787,21 @@ export async function POST(req: NextRequest) {
       if (isStart(lower) && session.status === "IDLE") {
         const confirmedSubject: string = body?.confirmedSubject || "";
 
-        // ── Primary fallback: query DB by student name+class for any READY session ──
-        // This is the most reliable recovery — it doesn't depend on key format matching.
-        // Covers all cases: sessionId vs name_class mismatch, page refresh, etc.
-        const readySession = await getSessionByStudent(name, cls, "READY");
+        // ── Fallback: find any READY session for this student in DB ──
+        // Try by name first, then by name_class key directly.
+        let readySession: ExamSession | null = null;
+        if (name) {
+          readySession = await getSessionByStudent(name, cls, "READY");
+        }
+        if (!readySession) {
+          const nameClassKey = `${name || "anon"}_${cls}`;
+          if (nameClassKey !== key) {
+            const byKey = await getSession(nameClassKey);
+            if (byKey?.status === "READY") readySession = byKey;
+          }
+        }
+
+        console.log("[isStart+IDLE] readySession found:", readySession?.session_key, readySession?.subject);
 
         if (readySession) {
           // Found a READY session — adopt it regardless of key format
