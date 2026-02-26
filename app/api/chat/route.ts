@@ -113,6 +113,40 @@ async function deleteSession(key: string): Promise<void> {
   }
 }
 
+// Fallback lookup: find ANY session for this student by name+class.
+// Used when the session_key computed at "start" time differs from the key
+// used when the syllabus was uploaded (sessionId vs name_class mismatch).
+async function getSessionByStudent(
+  studentName: string,
+  studentClass: string,
+  requiredStatus?: ExamSession["status"]
+): Promise<ExamSession | null> {
+  if (!studentName) return null;
+  try {
+    let query = supabase
+      .from("exam_sessions")
+      .select("*")
+      .eq("student_name", studentName)
+      .eq("student_class", studentClass)
+      .order("updated_at", { ascending: false })
+      .limit(1);
+
+    if (requiredStatus) {
+      query = (query as any).eq("status", requiredStatus);
+    }
+
+    const { data, error } = await query;
+    if (error || !data || data.length === 0) return null;
+
+    return {
+      ...data[0],
+      answer_log: Array.isArray(data[0].answer_log) ? data[0].answer_log : [],
+    } as ExamSession;
+  } catch {
+    return null;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────
 // SYLLABUS HELPERS
 // ─────────────────────────────────────────────────────────────
@@ -639,7 +673,8 @@ export async function POST(req: NextRequest) {
     if (mode === "examiner") {
       const key = getKey(student);
 
-      const session: ExamSession = (await getSession(key)) || {
+      // Primary key lookup
+      let session: ExamSession = (await getSession(key)) || {
         session_key:   key,
         status:        "IDLE",
         answer_log:    [],
@@ -647,6 +682,18 @@ export async function POST(req: NextRequest) {
         student_class: cls,
         student_board: board,
       };
+
+      // ── KEY-MISMATCH RECOVERY ──────────────────────────────
+      // If the primary lookup returned an IDLE session (or nothing), check whether
+      // a non-IDLE session exists for this student under a different key.
+      // This handles the common case where the syllabus upload used key A
+      // (e.g. "abc_9") but the "start" request uses key B (sessionId-based).
+      if (session.status === "IDLE" && name) {
+        const existingSession = await getSessionByStudent(name, cls);
+        if (existingSession && existingSession.status !== "IDLE") {
+          session = existingSession;
+        }
+      }
 
       // ── FIX: Re-greeting a READY session — remind instead of falling through ──
       // Guard: skip if an upload is present — process the upload instead of greeting
@@ -717,32 +764,13 @@ export async function POST(req: NextRequest) {
       if (isStart(lower) && session.status === "IDLE") {
         const confirmedSubject: string = body?.confirmedSubject || "";
 
-        // ── Secondary DB lookup: try alternate key formats in case sessionId
-        //    was not sent consistently between the upload and start requests ──
-        let readySession: ExamSession | null = null;
-
-        // Try ALL possible alternate keys for this student
-        const altKeys: string[] = [];
-        if (student?.sessionId && `${name || "anon"}_${cls}` !== key) {
-          // We used sessionId as key; also try name_class
-          altKeys.push(`${name || "anon"}_${cls}`);
-        }
-        if (!student?.sessionId && name) {
-          // We used name_class; also try any sessionId-based key isn't applicable here
-          // But try anon variant in case name was blank on upload
-          if (key !== `anon_${cls}`) altKeys.push(`anon_${cls}`);
-        }
-
-        for (const ak of altKeys) {
-          const candidate = await getSession(ak);
-          if (candidate?.status === "READY") {
-            readySession = candidate;
-            break;
-          }
-        }
+        // ── Primary fallback: query DB by student name+class for any READY session ──
+        // This is the most reliable recovery — it doesn't depend on key format matching.
+        // Covers all cases: sessionId vs name_class mismatch, page refresh, etc.
+        const readySession = await getSessionByStudent(name, cls, "READY");
 
         if (readySession) {
-          // Found a READY session under the alternate key — adopt it
+          // Found a READY session — adopt it regardless of key format
           session.status               = "READY";
           session.subject              = readySession.subject;
           session.subject_request      = readySession.subject_request;
