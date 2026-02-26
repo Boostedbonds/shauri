@@ -1,8 +1,33 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import ChatInput from "../components/ChatInput";
 
 type Message = { role: "user" | "assistant"; content: string };
+
+const CHAT_STORAGE_KEY = "shauri_chat_examiner";
+const MAX_SAVED_MSGS   = 10;
+
+// ─── Persist helpers ─────────────────────────────────────────
+function loadSavedMessages(): Message[] {
+  try {
+    const raw = localStorage.getItem(CHAT_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  return [];
+}
+
+function saveMessages(msgs: Message[]) {
+  try {
+    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(msgs.slice(-MAX_SAVED_MSGS)));
+  } catch {}
+}
+
+function clearSavedMessages() {
+  try { localStorage.removeItem(CHAT_STORAGE_KEY); } catch {}
+}
 
 // ─── Render markdown-lite ────────────────────────────────────
 function renderText(text: string): React.ReactNode {
@@ -14,7 +39,7 @@ function renderText(text: string): React.ReactNode {
   });
 }
 
-// ─── Chat bubble ────────────────────────────────────────────
+// ─── Chat bubble ─────────────────────────────────────────────
 function Bubble({ m }: { m: Message }) {
   const isUser = m.role === "user";
   return (
@@ -34,114 +59,344 @@ function Bubble({ m }: { m: Message }) {
   );
 }
 
-// ─── Paper overlay ──────────────────────────────────────────
-function PaperOverlay({ content, onClose, elapsed, subject, examActive }: {
-  content: string; onClose: () => void;
-  elapsed: string; subject?: string; examActive: boolean;
+// ─── Resume Banner ────────────────────────────────────────────
+function ResumeBanner({ subject, elapsed, onDismiss }: {
+  subject?: string;
+  elapsed: string;
+  onDismiss: () => void;
 }) {
   return (
-    <div
-      style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
-      onClick={onClose}
-    >
-      <div
-        style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 840, maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 80px rgba(0,0,0,0.4)" }}
-        onClick={e => e.stopPropagation()}
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      flexWrap: "wrap", gap: 8,
+      background: "#fefce8", border: "1.5px solid #fde047",
+      borderRadius: 10, padding: "10px 16px",
+      fontSize: 13, color: "#713f12",
+      flexShrink: 0,
+    }}>
+      <span>
+        ⚡ <strong>Exam restored</strong>
+        {subject ? ` — ${subject}` : ""}
+        {" · "}Time already elapsed: <strong>{elapsed}</strong>
+        {" · "}Your question paper is on the right. Keep writing!
+      </span>
+      <button
+        onClick={onDismiss}
+        style={{
+          background: "#fde047", border: "none", borderRadius: 6,
+          padding: "4px 12px", fontSize: 12, fontWeight: 700,
+          cursor: "pointer", color: "#713f12", flexShrink: 0,
+        }}
       >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: "1px solid #e2e8f0", flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: "#0f172a" }}>📄 {subject || "Question Paper"}</span>
-            {examActive && <span style={{ background: "#0f172a", color: "#38bdf8", padding: "4px 12px", borderRadius: 6, fontFamily: "monospace", fontSize: 13, fontWeight: 700 }}>⏱ {elapsed}</span>}
-          </div>
-          <button onClick={onClose} style={{ padding: "6px 16px", background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", color: "#374151" }}>✕ Close</button>
-        </div>
-        <div style={{ flex: 1, overflowY: "auto", padding: "24px 28px" }}>
-          <pre style={{ fontSize: 13, lineHeight: 2, color: "#0f172a", fontFamily: "monospace", whiteSpace: "pre-wrap", margin: 0, wordBreak: "break-word" }}>{content}</pre>
-        </div>
+        Got it ✕
+      </button>
+    </div>
+  );
+}
+
+// ─── Reconnecting Screen ─────────────────────────────────────
+function ReconnectingScreen() {
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 300,
+      background: "#0f172a",
+      display: "flex", flexDirection: "column",
+      alignItems: "center", justifyContent: "center", gap: 20,
+    }}>
+      <div style={{ fontSize: 42 }}>📋</div>
+      <div style={{ color: "#38bdf8", fontSize: 18, fontWeight: 700 }}>
+        Restoring your exam…
+      </div>
+      <div style={{ color: "#94a3b8", fontSize: 14 }}>
+        Checking for an active session
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        {[0, 1, 2].map(i => (
+          <div key={i} style={{
+            width: 10, height: 10, borderRadius: "50%", background: "#38bdf8",
+            animation: `bounce 1s ${i * 0.2}s infinite ease-in-out`,
+          }} />
+        ))}
       </div>
     </div>
   );
 }
 
-// ─── Session ID: stable across refresh ──────────────────────
+// ─── CBSE Print ──────────────────────────────────────────────
+function printCBSEPaper({
+  paperContent, subject, studentName, studentClass,
+}: {
+  paperContent: string; subject?: string;
+  studentName?: string; studentClass?: string;
+}) {
+  const marksMatch  = paperContent.match(/(?:Maximum\s*Marks|Total(?:\s*Marks)?)\s*[:\-]\s*(\d+)/i);
+  const timeMatch   = paperContent.match(/(?:Time\s*Allowed|Duration)\s*[:\-]\s*([^\n]+)/i);
+  const totalMarks  = marksMatch ? marksMatch[1] : "80";
+  const timeAllowed = timeMatch  ? timeMatch[1].trim() : "3 Hours";
+
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  const formattedBody = paperContent.split("\n").map(line => {
+    const escaped = esc(line);
+    const bolded  = escaped.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    if (/^SECTION\s+[A-Z]/i.test(line.trim())) return `<div class="section-header">${bolded}</div>`;
+    if (!line.trim()) return `<div class="spacer"></div>`;
+    return `<div class="line">${bolded}</div>`;
+  }).join("");
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>${esc(subject || "Question Paper")} – CBSE</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:"Times New Roman",Times,serif;font-size:13pt;color:#000;background:#fff}
+    .page{width:210mm;min-height:297mm;margin:0 auto;padding:18mm 20mm 20mm}
+    .cbse-header{text-align:center;border-bottom:3px double #000;padding-bottom:10px;margin-bottom:10px}
+    .cbse-header .board{font-size:11pt;letter-spacing:2px;text-transform:uppercase}
+    .cbse-header .title{font-size:17pt;font-weight:bold;margin:4px 0 2px;text-transform:uppercase}
+    .cbse-header .subject-line{font-size:13pt;font-weight:bold}
+    .meta-row{display:flex;justify-content:space-between;font-size:12pt;margin:8px 0 4px;font-weight:bold}
+    .student-fields{display:flex;gap:40px;margin:10px 0 6px;font-size:12pt}
+    .student-fields .field{flex:1;border-bottom:1px solid #000;padding-bottom:2px}
+    .student-fields .field span{font-weight:bold}
+    .instructions{border:1.5px solid #000;padding:8px 12px;margin:10px 0 14px;font-size:11pt;line-height:1.55}
+    .instructions .instr-title{font-weight:bold;font-size:12pt;margin-bottom:4px;text-transform:uppercase;text-decoration:underline}
+    .instructions ol{padding-left:18px}
+    .instructions li{margin-bottom:3px}
+    .paper-body{line-height:1.85}
+    .section-header{font-size:13pt;font-weight:bold;text-transform:uppercase;margin:16px 0 6px;border-bottom:1px solid #000;padding-bottom:2px}
+    .line{margin-bottom:1px}
+    .spacer{height:8px}
+    .answer-space{margin-top:20px;border-top:2px solid #000;padding-top:10px}
+    .footer{text-align:center;margin-top:18px;font-size:10pt;color:#444;border-top:1px solid #ccc;padding-top:6px}
+    @media print{
+      body{padding:0}.page{width:100%;padding:15mm 18mm 18mm}
+      .no-print{display:none!important}
+      @page{size:A4;margin:0}
+    }
+  </style>
+</head>
+<body>
+<div class="no-print" style="position:fixed;top:0;left:0;right:0;z-index:999;background:#1e293b;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:10px 20px;font-family:Arial,sans-serif;font-size:14px">
+  <span>📄 CBSE Question Paper — ready to print or save as PDF</span>
+  <div style="display:flex;gap:10px">
+    <button onclick="window.print()" style="background:#2563eb;color:#fff;border:none;padding:8px 20px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">🖨️ Print / Save as PDF</button>
+    <button onclick="window.close()" style="background:#475569;color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:13px;cursor:pointer">✕ Close</button>
+  </div>
+</div>
+<div class="no-print" style="height:52px"></div>
+<div class="page">
+  <div class="cbse-header">
+    <div class="board">Central Board of Secondary Education</div>
+    <div class="title">Annual Examination</div>
+    <div class="subject-line">${esc(subject || "Subject")}</div>
+  </div>
+  <div class="meta-row">
+    <span>Time Allowed: ${esc(timeAllowed)}</span>
+    <span>Maximum Marks: ${esc(totalMarks)}</span>
+  </div>
+  <div class="student-fields">
+    <div class="field"><span>Name: </span>${esc(studentName || "________________________________")}</div>
+    <div class="field"><span>Class &amp; Section: </span>${esc(studentClass || "__________")}</div>
+    <div class="field"><span>Roll No.: </span>____________</div>
+  </div>
+  <div class="instructions">
+    <div class="instr-title">General Instructions</div>
+    <ol>
+      <li>This question paper contains printed pages. Read all instructions carefully.</li>
+      <li>All questions are compulsory unless stated otherwise.</li>
+      <li>Do not write anything on the question paper except your name, class, and roll number.</li>
+      <li>Write your answers neatly in the answer booklet provided.</li>
+      <li>Draw diagrams wherever necessary and label them clearly.</li>
+      <li>In case of MCQs, write only the letter of the correct option (A/B/C/D).</li>
+      <li>Marks for each question are indicated against it.</li>
+      <li>Calculators and electronic devices are not permitted.</li>
+    </ol>
+  </div>
+  <div class="paper-body">${formattedBody}</div>
+  <div class="answer-space">
+    <div style="font-weight:bold;font-size:12pt;margin-bottom:8px;text-transform:uppercase">For Examiner's Use Only</div>
+    <div style="display:flex;gap:20px;font-size:11pt">
+      <div>Marks Obtained: ____________</div>
+      <div>Out of: ${esc(totalMarks)}</div>
+      <div>Examiner's Signature: ____________________</div>
+    </div>
+  </div>
+  <div class="footer">Generated by Shauri · CBSE Pattern · ${new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" })}</div>
+</div>
+</body></html>`;
+
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url  = URL.createObjectURL(blob);
+  const win  = window.open(url, "_blank");
+  if (!win) {
+    const a = document.createElement("a");
+    a.href = url; a.download = `${subject || "Question-Paper"}-CBSE.html`; a.click();
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+// ─── Session ID ───────────────────────────────────────────────
 function getOrCreateSessionId(): string {
   if (typeof window === "undefined") return "";
   let sid = localStorage.getItem("shauri_exam_sid");
-  if (!sid) {
-    sid = crypto.randomUUID();
-    localStorage.setItem("shauri_exam_sid", sid);
-  }
+  if (!sid) { sid = crypto.randomUUID(); localStorage.setItem("shauri_exam_sid", sid); }
   return sid;
 }
 
-// ─── Extract subject from any bot reply that confirms readiness ─
-// Handles both: typed subject confirmation AND syllabus upload confirmation
 function extractConfirmedSubject(reply: string): string {
-  // From syllabus upload: "Subject detected: English"
   const uploadMatch = reply.match(/\*?\*?Subject detected[:\*\s]+\*?\*?([^\n*]+)/i);
   if (uploadMatch) return uploadMatch[1].trim();
-
-  // From typed subject: "question paper for:\n**English – Class 9**"
   const paperMatch = reply.match(/question paper for[:\s]*\n?\*?\*?([^\n*]+)/i)
     || reply.match(/for:\s*\n\*?\*?([^\n*]+)/i);
   if (paperMatch) return paperMatch[1].trim();
-
-  // From subject set confirmation: "Subject is set to **English**"
   const setMatch = reply.match(/[Ss]ubject is set to\s+\*?\*?([^\n*]+)/i);
   if (setMatch) return setMatch[1].trim();
-
   return "";
 }
 
-// ─── Main page ───────────────────────────────────────────────
+// ─── Main page ────────────────────────────────────────────────
 export default function ExaminerPage() {
-  // Build greeting with student name
   function buildGreeting(name: string): string {
     const n = name ? `Hello ${name}!` : "Hello!";
     return `${n} 📋 I'm your strict CBSE Examiner.\n\nTell me the **subject** you want to be tested on:\nScience | Mathematics | SST | History | Geography | Civics | Economics | English | Hindi\n\n📎 **OR** upload your **syllabus as a PDF or image** and I'll generate a paper exactly based on it.\n\n⏱️ Your timer starts the moment you type **start**.`;
   }
 
-  const [messages, setMessages]   = useState<Message[]>([]);
-  const [paperContent, setPaper]  = useState("");
-  const [showPaper, setShowPaper] = useState(false);
-  const [examStarted, setStarted] = useState(false);
-  const [elapsedSec, setElapsed]  = useState(0);
-  const [isLoading, setLoading]   = useState(false);
-  const [examMeta, setMeta]       = useState<{
+  const [messages, setMessages]       = useState<Message[]>([]);
+  const [paperContent, setPaper]      = useState("");
+  const [examStarted, setStarted]     = useState(false);
+  const [elapsedSec, setElapsed]      = useState(0);
+  const [isLoading, setLoading]       = useState(false);
+  const [reconnecting, setReconnecting] = useState(true);  // show splash on mount
+  const [showResumeBanner, setResumeBanner] = useState(false);
+  const [examMeta, setMeta]           = useState<{
     examEnded?: boolean; marksObtained?: number; totalMarks?: number;
     percentage?: number; timeTaken?: string; subject?: string;
   }>({});
-  const [studentName, setStudentName] = useState("");
+  const [studentName,  setStudentName]  = useState("");
+  const [studentClass, setStudentClass] = useState("");
 
-  // ── THE FIX: confirmed subject ref — updated from EVERY relevant bot reply ──
   const confirmedSubjectRef = useRef<string>("");
-
-  const timerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
-  const startTsRef = useRef<number | null>(null);
-  const elapsedRef = useRef(0);
-  const sendingRef = useRef(false);
-  const bottomRef  = useRef<HTMLDivElement>(null);
-  const msgsRef    = useRef<Message[]>([]);
+  const timerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startTsRef  = useRef<number | null>(null);
+  const elapsedRef  = useRef(0);
+  const sendingRef  = useRef(false);
+  const bottomRef   = useRef<HTMLDivElement>(null);
+  const msgsRef     = useRef<Message[]>([]);
 
   useEffect(() => { msgsRef.current = messages; }, [messages]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
-  useEffect(() => { if (paperContent) setShowPaper(true); }, [paperContent]);
   useEffect(() => () => stopTimer(), []);
 
-  // On mount: load student name, show greeting from state (NO API call)
+  // ── Save messages to localStorage on every change ────────────
   useEffect(() => {
-    let name = "";
+    if (messages.length === 0) return;
+    saveMessages(messages);
+  }, [messages]);
+
+  // ── On mount: try to resume exam, else restore chat or show greeting ──
+  useEffect(() => {
+    let name = "", cls = "";
     try {
       const s = JSON.parse(localStorage.getItem("shauri_student") || "null");
       name = s?.name || "";
+      cls  = s?.class || "";
       setStudentName(name);
+      setStudentClass(cls);
     } catch {}
-    setMessages([{ role: "assistant", content: buildGreeting(name) }]);
+
+    const sid = localStorage.getItem("shauri_exam_sid");
+
+    // Only attempt resume if there's an active session ID
+    if (sid) {
+      attemptResume(name, cls, sid);
+    } else {
+      // No active exam — restore saved chat or show greeting
+      const saved = loadSavedMessages();
+      if (saved.length > 0) {
+        setMessages(saved);
+      } else {
+        setMessages([{ role: "assistant", content: buildGreeting(name) }]);
+      }
+      setReconnecting(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Attempt to resume an active exam from the server ─────────
+  async function attemptResume(name: string, cls: string, sid: string) {
+    try {
+      const student = { name, class: cls, board: "CBSE", sessionId: sid };
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "examiner",
+          message: "hi",
+          uploadedText: "",
+          uploadType: null,
+          history: [],
+          student,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data?.resumeExam === true && data?.startTime) {
+        // Active exam found on server — restore everything
+        startTimer(data.startTime);
+        setMeta(p => ({ ...p, subject: data.subject || p.subject }));
+        if (data.questionPaper) setPaper(data.questionPaper);
+
+        // Restore saved chat if any, else just show the resume message
+        const saved = loadSavedMessages();
+        const resumeMsg: Message = {
+          role: "assistant",
+          content: data.reply || `⚡ Exam restored — **${data.subject}**. Your question paper is on the right. Keep writing!`,
+        };
+        setMessages(saved.length > 0 ? [...saved, resumeMsg] : [resumeMsg]);
+        setResumeBanner(true);
+
+      } else if (data?.reply?.includes("exam is still in progress")) {
+        // Server has exam but returned as a normal reply
+        const saved = loadSavedMessages();
+        const msg: Message = { role: "assistant", content: data.reply };
+        setMessages(saved.length > 0 ? [...saved, msg] : [msg]);
+        if (data.questionPaper) setPaper(data.questionPaper);
+        if (data.startTime) startTimer(data.startTime);
+        setResumeBanner(true);
+
+      } else {
+        // No active exam on server — show saved chat or greeting
+        const saved = loadSavedMessages();
+        if (saved.length > 0) {
+          setMessages(saved);
+        } else {
+          setMessages([{ role: "assistant", content: buildGreeting(name) }]);
+        }
+      }
+    } catch {
+      // Network issue — still show saved chat or greeting
+      const saved = loadSavedMessages();
+      if (saved.length > 0) {
+        setMessages(saved);
+      } else {
+        setMessages([{ role: "assistant", content: buildGreeting(name) }]);
+      }
+    } finally {
+      setReconnecting(false);
+    }
+  }
 
   function startTimer(ts: number) {
     if (timerRef.current) return;
     startTsRef.current = ts;
+    // Immediately set elapsed so it's correct from the first frame
+    const initialElapsed = Math.floor((Date.now() - ts) / 1000);
+    elapsedRef.current = initialElapsed;
+    setElapsed(initialElapsed);
     setStarted(true);
     timerRef.current = setInterval(() => {
       if (!startTsRef.current) return;
@@ -160,7 +415,6 @@ export default function ExaminerPage() {
     return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m ${s % 60}s`;
   }
 
-  // ─── Call API ────────────────────────────────────────────────
   async function callAPI(text: string, uploadedText?: string, uploadType?: "syllabus" | "answer") {
     if (sendingRef.current) return;
     sendingRef.current = true;
@@ -169,7 +423,6 @@ export default function ExaminerPage() {
     let student: any = null;
     try { student = JSON.parse(localStorage.getItem("shauri_student") || "null"); } catch {}
 
-    // History = all messages EXCEPT the initial local greeting (index 0)
     const history = msgsRef.current
       .slice(1)
       .map(m => ({
@@ -190,8 +443,6 @@ export default function ExaminerPage() {
           uploadedText: uploadedText || "",
           uploadType: uploadType || null,
           history,
-          // Always send the cached confirmed subject — backend uses this as
-          // a last-resort fallback if DB session key lookup fails
           confirmedSubject: confirmedSubjectRef.current || undefined,
           student: {
             name: student?.name || "",
@@ -205,32 +456,29 @@ export default function ExaminerPage() {
       const data = await res.json();
       const reply: string = data?.reply ?? "";
 
-      // Exam resumed after page refresh
       if (data?.resumeExam === true && typeof data.startTime === "number") {
         startTimer(data.startTime);
         setMeta(p => ({ ...p, subject: data.subject || p.subject }));
         if (data.questionPaper) setPaper(data.questionPaper);
         if (reply) setMessages(p => [...p, { role: "assistant", content: reply }]);
+        setResumeBanner(true);
         return;
       }
 
-      // Paper generated — exam starts
       if (typeof data?.startTime === "number") {
         startTimer(data.startTime);
         const paper = data?.paper || reply;
         const subj  = paper.match(/Subject\s*[:\|]\s*([^\n]+)/i);
         setMeta(p => ({ ...p, subject: subj ? subj[1].trim() : data?.subject || p.subject }));
         setPaper(paper);
-        // Clear confirmed subject — exam is now active, no longer needed
         confirmedSubjectRef.current = "";
         setMessages(p => [...p, {
           role: "assistant",
-          content: reply || "✅ Paper ready! Tap **📄 View Paper** (top bar) to read it.\n\nType your answers here. When done, type **submit**.",
+          content: reply || "✅ Paper ready! It's displayed on the right panel.\n\nWrite your answers in your notebook and type them here when done. Type **submit** to finish.",
         }]);
         return;
       }
 
-      // Exam ended — evaluation
       if (data?.examEnded === true) {
         stopTimer();
         const taken = elapsedRef.current;
@@ -241,28 +489,21 @@ export default function ExaminerPage() {
         setMeta(p => ({
           ...p, examEnded: true,
           marksObtained: data?.marksObtained ?? 0,
-          totalMarks: data?.totalMarks ?? 0,
-          percentage: data?.percentage ?? 0,
-          timeTaken: data?.timeTaken ?? fmt(taken),
-          subject: data?.subject ?? p.subject,
+          totalMarks:    data?.totalMarks    ?? 0,
+          percentage:    data?.percentage    ?? 0,
+          timeTaken:     data?.timeTaken     ?? fmt(taken),
+          subject:       data?.subject       ?? p.subject,
         }));
+        // Exam over — clear saved session + chat
         localStorage.removeItem("shauri_exam_sid");
+        clearSavedMessages();
         confirmedSubjectRef.current = "";
         return;
       }
 
       if (reply) {
-        // ── THE FIX: extract and cache the confirmed subject from EVERY reply ──
-        // This runs on BOTH typed-subject confirmations AND syllabus upload replies.
-        // Previously it only ran when the reply contained "type start", and the
-        // regex didn't match the upload confirmation format — so confirmedSubject
-        // was always empty when "start" was typed after an upload.
         const extracted = extractConfirmedSubject(reply);
-        if (extracted) {
-          confirmedSubjectRef.current = extracted;
-          console.log("[frontend] confirmedSubject cached:", extracted);
-        }
-
+        if (extracted) confirmedSubjectRef.current = extracted;
         setMessages(p => [...p, { role: "assistant", content: reply }]);
       }
 
@@ -298,87 +539,202 @@ export default function ExaminerPage() {
         .ex-chat{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;background:#f8fafc}
         .ex-paper{width:50%;overflow-y:auto;background:#fff;border-left:1.5px solid #e2e8f0;padding:24px 28px}
         @media(max-width:699px){.ex-paper{display:none}.ex-chat{width:100%!important}}
+        .print-btn:hover{background:#1d4ed8!important}
       `}</style>
 
-      {/* TOP BAR */}
-      <div style={{ height: 52, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px", background: "#fff", borderBottom: "1px solid #e2e8f0", flexShrink: 0 }}>
-        <button onClick={() => window.location.href = "/modes"} style={{ padding: "7px 14px", background: "#f1f5f9", color: "#374151", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>← Back</button>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: "#0f172a" }}>
-            📋 Examiner Mode{studentName ? ` · ${studentName}` : ""}
-          </span>
+      {/* ── Full-screen reconnecting splash ── */}
+      {reconnecting && <ReconnectingScreen />}
+
+      {/* ── TOP BAR ── */}
+      <div style={{
+        height: 52, display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "0 16px", background: "#fff", borderBottom: "1px solid #e2e8f0", flexShrink: 0,
+      }}>
+        <button
+          onClick={() => window.location.href = "/modes"}
+          style={{ padding: "7px 14px", background: "#f1f5f9", color: "#374151", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13, cursor: "pointer", fontWeight: 600 }}
+        >
+          ← Back
+        </button>
+
+        <span style={{ fontSize: 15, fontWeight: 700, color: "#0f172a" }}>
+          📋 Examiner Mode{studentName ? ` · ${studentName}` : ""}
+        </span>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 80, justifyContent: "flex-end" }}>
           {paperContent && (
-            <button onClick={() => setShowPaper(true)} style={{ padding: "5px 12px", background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>📄 View Paper</button>
+            <button
+              className="print-btn"
+              onClick={() => printCBSEPaper({ paperContent, subject: examMeta.subject, studentName, studentClass })}
+              style={{
+                padding: "7px 14px", background: "#2563eb", color: "#fff",
+                border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700,
+                cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+                transition: "background 0.15s",
+              }}
+              title="Open printable CBSE question paper"
+            >
+              🖨️ Print Paper
+            </button>
+          )}
+          {examActive && (
+            <div style={{
+              background: "#0f172a", color: "#38bdf8",
+              padding: "6px 14px", borderRadius: 8,
+              fontFamily: "monospace", fontSize: 14, fontWeight: 700, flexShrink: 0,
+            }}>
+              ⏱ {elapsed}
+            </div>
           )}
         </div>
-        {examActive
-          ? <div style={{ background: "#0f172a", color: "#38bdf8", padding: "6px 14px", borderRadius: 8, fontFamily: "monospace", fontSize: 14, fontWeight: 700, flexShrink: 0 }}>⏱ {elapsed}</div>
-          : <div style={{ width: 80 }} />}
       </div>
 
-      {/* SPLIT */}
+      {/* ── SPLIT ── */}
       <div className="ex-split">
 
         {/* LEFT — chat */}
         <div className="ex-chat">
-          <div style={{ padding: "10px 16px", borderBottom: "1px solid #e2e8f0", background: "#fff", fontSize: 13, fontWeight: 600, color: "#475569", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+
+          {/* Sub-header */}
+          <div style={{
+            padding: "10px 16px", borderBottom: "1px solid #e2e8f0",
+            background: "#fff", fontSize: 13, fontWeight: 600, color: "#475569",
+            display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0,
+          }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ width: 8, height: 8, borderRadius: "50%", display: "inline-block", flexShrink: 0, background: examActive ? "#22c55e" : examMeta.examEnded ? "#f97316" : "#94a3b8", boxShadow: examActive ? "0 0 6px #22c55e" : "none" }} />
+              <span style={{
+                width: 8, height: 8, borderRadius: "50%", display: "inline-block", flexShrink: 0,
+                background: examActive ? "#22c55e" : examMeta.examEnded ? "#f97316" : "#94a3b8",
+                boxShadow: examActive ? "0 0 6px #22c55e" : "none",
+              }} />
               {examMeta.examEnded ? "Evaluation Complete" : examActive ? "Type your answers here" : "Examiner Chat"}
             </div>
+            {/* Mobile print button */}
             {paperContent && (
-              <button onClick={() => setShowPaper(true)} style={{ padding: "4px 10px", background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>📄 Paper</button>
+              <button
+                className="print-btn"
+                onClick={() => printCBSEPaper({ paperContent, subject: examMeta.subject, studentName, studentClass })}
+                style={{
+                  padding: "4px 10px", background: "#2563eb", color: "#fff",
+                  border: "none", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                  display: "none",
+                }}
+                id="mobile-print-btn"
+              >
+                🖨️ Print
+              </button>
             )}
           </div>
 
+          {/* Resume banner */}
+          {showResumeBanner && (
+            <div style={{ padding: "10px 14px", flexShrink: 0 }}>
+              <ResumeBanner
+                subject={examMeta.subject}
+                elapsed={elapsed}
+                onDismiss={() => setResumeBanner(false)}
+              />
+            </div>
+          )}
+
+          {/* Exam ended strip */}
           {examMeta.examEnded && (
-            <div style={{ background: "#f0fdf4", borderBottom: "1px solid #bbf7d0", padding: "10px 16px", fontSize: 13, flexShrink: 0 }}>
+            <div style={{
+              background: "#f0fdf4", borderBottom: "1px solid #bbf7d0",
+              padding: "10px 16px", fontSize: 13, flexShrink: 0,
+            }}>
               <strong style={{ color: "#15803d" }}>✅ Submitted</strong>
               {" · "}{examMeta.marksObtained}/{examMeta.totalMarks} ({examMeta.percentage}%)
               {" · "}{examMeta.timeTaken}
             </div>
           )}
 
+          {/* Messages */}
           <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px" }}>
             {messages.map((m, i) => <Bubble key={i} m={m} />)}
             {isLoading && (
               <div style={{ display: "flex", gap: 5, padding: "4px 8px", marginBottom: 6 }}>
-                {[0, 1, 2].map(i => <div key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: "#38bdf8", animation: `bounce 1s ${i * 0.15}s infinite ease-in-out` }} />)}
+                {[0, 1, 2].map(i => (
+                  <div key={i} style={{
+                    width: 8, height: 8, borderRadius: "50%", background: "#38bdf8",
+                    animation: `bounce 1s ${i * 0.15}s infinite ease-in-out`,
+                  }} />
+                ))}
               </div>
             )}
             <div ref={bottomRef} />
           </div>
 
           <div style={{ padding: "10px 12px", borderTop: "1px solid #e2e8f0", background: "#fff", flexShrink: 0 }}>
-            <ChatInput onSend={handleSend} examStarted={examStarted} disabled={isLoading} inline={true} />
+            <ChatInput onSend={handleSend} examStarted={examStarted} disabled={isLoading || reconnecting} inline={true} />
           </div>
         </div>
 
-        {/* RIGHT — paper */}
+        {/* RIGHT — paper panel */}
         <div className="ex-paper">
           {paperContent ? (
             <>
-              {examActive && (
-                <div style={{ position: "sticky", top: 0, zIndex: 5, background: "#0f172a", color: "#38bdf8", padding: "7px 14px", borderRadius: 8, marginBottom: 16, fontFamily: "monospace", fontSize: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span>⏱ {elapsed}</span>
-                  {examMeta.subject && <span style={{ opacity: 0.7, fontSize: 11 }}>📚 {examMeta.subject}</span>}
+              <div style={{
+                position: "sticky", top: 0, zIndex: 5,
+                background: "#fff", borderBottom: "1px solid #e2e8f0",
+                padding: "10px 0 12px",
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                marginBottom: 16,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  {examActive && (
+                    <div style={{
+                      background: "#0f172a", color: "#38bdf8",
+                      padding: "5px 12px", borderRadius: 7,
+                      fontFamily: "monospace", fontSize: 12, fontWeight: 700,
+                    }}>
+                      ⏱ {elapsed}
+                    </div>
+                  )}
+                  {examMeta.subject && (
+                    <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>
+                      📚 {examMeta.subject}
+                    </span>
+                  )}
                 </div>
-              )}
-              <pre style={{ fontSize: 13, lineHeight: 1.95, color: "#0f172a", fontFamily: "monospace", whiteSpace: "pre-wrap", margin: 0, wordBreak: "break-word" }}>{paperContent}</pre>
+                <button
+                  className="print-btn"
+                  onClick={() => printCBSEPaper({ paperContent, subject: examMeta.subject, studentName, studentClass })}
+                  style={{
+                    padding: "7px 16px", background: "#2563eb", color: "#fff",
+                    border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700,
+                    cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+                    transition: "background 0.15s",
+                  }}
+                  title="Print question paper or save as PDF"
+                >
+                  🖨️ Print / Save PDF
+                </button>
+              </div>
+
+              <pre style={{
+                fontSize: 13, lineHeight: 1.95, color: "#0f172a",
+                fontFamily: "monospace", whiteSpace: "pre-wrap",
+                margin: 0, wordBreak: "break-word",
+              }}>
+                {paperContent}
+              </pre>
             </>
           ) : (
             <div style={{ color: "#94a3b8", fontSize: 14, textAlign: "center", paddingTop: 60, lineHeight: 1.9 }}>
               Question paper will appear here.<br />
-              Tell the examiner your subject, then type <strong style={{ color: "#0f172a" }}>start</strong>.
+              Tell the examiner your subject, then type <strong style={{ color: "#0f172a" }}>start</strong>.<br /><br />
+              <span style={{ fontSize: 12 }}>You can then 🖨️ print it and write answers in your notebook.</span>
             </div>
           )}
         </div>
-
       </div>
 
-      {showPaper && paperContent && (
-        <PaperOverlay content={paperContent} onClose={() => setShowPaper(false)} elapsed={elapsed} subject={examMeta.subject} examActive={examActive} />
-      )}
+      <style>{`
+        @media(max-width:699px){
+          #mobile-print-btn { display: flex !important; }
+        }
+      `}</style>
     </div>
   );
 }
