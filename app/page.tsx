@@ -11,6 +11,15 @@ const orbitron = Orbitron({
 
 const ACCESS_CODE = "0330";
 
+// Mountain peak is at y=480 in a 0-800 viewBox (60% down = 40% from top)
+// This keeps it well below the title text which sits at ~30% of screen
+// foreignObject centered on (720, 480): x=720-200=520, y=480-30=450
+const PEAK_Y = 480;
+const FO_W = 400;
+const FO_H = 60;
+const FO_X = 720 - FO_W / 2;   // = 520
+const FO_Y = PEAK_Y - FO_H / 2; // = 450
+
 export default function HomePage() {
   const [entered, setEntered] = useState(false);
   const [warp, setWarp] = useState(false);
@@ -22,7 +31,7 @@ export default function HomePage() {
   const [error, setError] = useState("");
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
-  // Reveal button after delay
+  // Reveal button after entrance delay
   useState(() => {
     const t = setTimeout(() => setShowBtn(true), 1100);
     return () => clearTimeout(t);
@@ -66,19 +75,19 @@ export default function HomePage() {
       <style>{`
         @keyframes shimmer {
           0%   { transform: translateX(-100%); }
-          100% { transform: translateX(200%); }
+          100% { transform: translateX(250%); }
         }
         .ascent-btn {
           position: relative;
-          padding: 14px 42px;
+          padding: 13px 36px;
           border-radius: 999px;
           border: 1px solid rgba(255,215,0,0.5);
           overflow: hidden;
           color: #FFD700;
-          letter-spacing: 0.35em;
-          font-size: clamp(10px, 2vw, 14px);
+          letter-spacing: 0.3em;
+          font-size: 13px;
           white-space: nowrap;
-          background: rgba(0,8,20,0.55);
+          background: rgba(0,8,20,0.65);
           cursor: pointer;
           font-family: inherit;
           transition: transform 0.15s, box-shadow 0.15s;
@@ -127,7 +136,7 @@ export default function HomePage() {
               }} />
             ))}
 
-            {/* Sun glow */}
+            {/* Sun glow — centered at 30% from top */}
             <div style={{
               position: "absolute",
               top: "30%",
@@ -140,7 +149,7 @@ export default function HomePage() {
               filter: "blur(12px)",
             }} />
 
-            {/* Title */}
+            {/* Title block — sits at 30% from top */}
             <div style={{
               position: "absolute",
               top: "30%",
@@ -182,14 +191,12 @@ export default function HomePage() {
             </div>
 
             {/*
-              THE DEFINITIVE FIX:
-              The SVG covers the full viewport (position: absolute, inset: 0).
-              The viewBox is 1440×800. The mountain peak is at (720, 300) —
-              exactly the center horizontally.
-              We place a <foreignObject> centered on that exact point.
-              Because the SVG itself is full-width/height, the foreignObject
-              coordinates map 1:1 with the viewBox percentage, so there are
-              zero offset issues regardless of scrollbar or device.
+              Full-viewport SVG.
+              ViewBox: 0 0 1440 800
+              Mountain peak at (720, 480) — that's 60% down the viewBox.
+              At a typical 800px tall window, this maps to 480px from top,
+              well below the title block which ends around ~55% (440px).
+              The button foreignObject is centered exactly on (720, 480).
             */}
             <svg
               viewBox="0 0 1440 800"
@@ -202,20 +209,31 @@ export default function HomePage() {
                 overflow: "visible",
               }}
             >
-              {/* Mountain — bottom 55% of the 800-unit viewBox = starts at y=360 */}
-              {/* We clip by only drawing the mountain in the lower portion */}
-              <path
-                d="M0,750 C360,680 660,580 720,300 C780,580 1080,680 1440,750 L1440,800 L0,800 Z"
+              {/* 
+                Mountain path — peak at (720, 480).
+                Wide, gentle slopes so it looks natural.
+              */}
+              <motion.path
+                d="M0,800 C200,780 500,700 720,480 C940,700 1240,780 1440,800 L1440,800 L0,800 Z"
                 fill="black"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.2, duration: 0.8 }}
               />
 
               {/*
-                foreignObject centered on peak (720, 300).
-                Width 400 viewBox units, height 80 viewBox units.
-                x = 720 - 200 = 520, y = 300 - 40 = 260
-                The button inside uses margin:auto + text-align:center to self-center.
+                Button lives inside a foreignObject centered on the peak.
+                x = 720 - 200 = 520
+                y = 480 - 30  = 450
+                width = 400, height = 60
               */}
-              <foreignObject x="520" y="260" width="400" height="80" style={{ overflow: "visible" }}>
+              <foreignObject
+                x={FO_X}
+                y={FO_Y}
+                width={FO_W}
+                height={FO_H}
+                style={{ overflow: "visible" }}
+              >
                 <div
                   // @ts-ignore
                   xmlns="http://www.w3.org/1999/xhtml"
@@ -226,7 +244,7 @@ export default function HomePage() {
                     alignItems: "center",
                     justifyContent: "center",
                     opacity: showBtn ? 1 : 0,
-                    transform: showBtn ? "translateY(0)" : "translateY(10px)",
+                    transform: showBtn ? "translateY(0)" : "translateY(8px)",
                     transition: "opacity 0.6s ease, transform 0.6s ease",
                   }}
                 >
