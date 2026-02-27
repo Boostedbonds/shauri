@@ -17,7 +17,7 @@ export default function HomePage() {
 
   const [name, setName] = useState("");
   const [studentClass, setStudentClass] = useState("");
-  const [board, setBoard] = useState("CBSE");
+  const board = "CBSE";
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
 
@@ -165,12 +165,12 @@ export default function HomePage() {
               />
             </svg>
 
-            {/* CTA BUTTON */}
+            {/* CTA BUTTON — positioned at mountain peak */}
             <motion.div
               onClick={handleEnter}
               style={{
                 position: "absolute",
-                bottom: "200px",
+                bottom: "28%",
                 left: "50%",
                 transform: "translateX(-50%)",
                 cursor: "pointer",
@@ -292,40 +292,21 @@ export default function HomePage() {
               ))}
             </select>
 
-            {/* Board */}
-            <div style={{ display: "flex", gap: 8 }}>
-              {["CBSE", "ICSE", "IB"].map((b) => (
-                <button
-                  key={b}
-                  type="button"
-                  onClick={() => setBoard(b)}
-                  style={{
-                    flex: 1,
-                    padding: "10px 0",
-                    borderRadius: 10,
-                    border: `1.5px solid ${board === b ? "#d4af37" : "#e2c97e"}`,
-                    background: board === b ? "rgba(212,175,55,0.18)" : "transparent",
-                    color: board === b ? "#7c4f00" : "#78716c",
-                    fontSize: 12,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    fontFamily: "inherit",
-                    letterSpacing: "0.06em",
-                    transition: "all 0.15s",
-                  }}
-                >
-                  {b}
-                </button>
-              ))}
-            </div>
-
-            {/* Access Code */}
+            {/* Access Code — star masked */}
             <input
-              type="password"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
+              type="text"
+              inputMode="numeric"
+              value={"★".repeat(code.length)}
+              onChange={(e) => {
+                if (e.target.value.length < code.length) {
+                  setCode((prev) => prev.slice(0, -1));
+                } else {
+                  const newChar = e.target.value.replace(/★/g, "");
+                  setCode((prev) => prev + newChar);
+                }
+              }}
               placeholder="Access Code"
-              style={inputStyle}
+              style={{ ...inputStyle, letterSpacing: "0.4em", fontSize: 18 }}
             />
 
             {error && (
