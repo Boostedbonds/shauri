@@ -19,23 +19,26 @@ export default function HomePage() {
   const board = "CBSE";
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
+  const [focusedField, setFocusedField] = useState<string | null>(null);
 
-  // We'll measure the SVG's bounding rect and compute the peak's screen Y
-  const svgRef = useRef<SVGSVGElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [peakTop, setPeakTop] = useState<number | null>(null);
 
   useEffect(() => {
     function measure() {
-      if (!svgRef.current) return;
-      const rect = svgRef.current.getBoundingClientRect();
-      // Peak in viewBox: y=300 out of 800 → 37.5% from top of SVG element
-      const peakY = rect.top + rect.height * (300 / 800);
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      // SVG is 55% height, bottom-anchored. Peak is at y=300 out of 800 viewBox from top of SVG.
+      // SVG top = rect.bottom - svgHeight
+      const svgHeight = rect.height * 0.55;
+      const svgTop = rect.bottom - svgHeight;
+      const peakY = svgTop + svgHeight * (300 / 800);
       setPeakTop(peakY);
     }
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
-  }, [entered]); // re-measure if screen changes
+  }, [entered]);
 
   function handleEnter() {
     setWarp(true);
@@ -60,12 +63,25 @@ export default function HomePage() {
     window.location.href = "/modes";
   }
 
+  const getInputStyle = (fieldName: string): React.CSSProperties => ({
+    ...inputStyle,
+    border: focusedField === fieldName
+      ? "1.5px solid #d4af37"
+      : "1px solid #d4af37",
+    boxShadow: focusedField === fieldName
+      ? "0 0 0 3px rgba(212,175,55,0.25), 0 0 12px rgba(212,175,55,0.15)"
+      : "none",
+    background: focusedField === fieldName ? "#fffef8" : "#f8fafc",
+    transition: "border 0.18s, box-shadow 0.18s, background 0.18s",
+  });
+
   return (
     <div className={orbitron.className} style={{ minHeight: "100vh" }}>
 
       <AnimatePresence>
         {!entered && (
           <motion.div
+            ref={containerRef}
             style={{
               position: "fixed",
               inset: 0,
@@ -144,9 +160,8 @@ export default function HomePage() {
               </motion.p>
             </div>
 
-            {/* Mountain SVG — full width, bottom-anchored, tall */}
+            {/* Mountain SVG — full width, bottom-anchored */}
             <svg
-              ref={svgRef}
               viewBox="0 0 1440 800"
               preserveAspectRatio="none"
               style={{
@@ -155,16 +170,17 @@ export default function HomePage() {
                 left: 0,
                 width: "100%",
                 height: "55%",
+                display: "block",
               }}
             >
-              {/* Peak tip at x=720 y=300 */}
+              {/* Peak tip at x=720 y=300 — exactly center */}
               <path
                 d="M0,750 C360,680 660,580 720,300 C780,580 1080,680 1440,750 L1440,800 L0,800 Z"
                 fill="black"
               />
             </svg>
 
-            {/* Button — pinned to measured peak position */}
+            {/* Button — pinned to measured peak position, always centered */}
             {peakTop !== null && (
               <motion.div
                 onClick={handleEnter}
@@ -175,6 +191,7 @@ export default function HomePage() {
                   transform: "translate(-50%, -50%)",
                   cursor: "pointer",
                   zIndex: 10,
+                  width: "max-content",
                 }}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -239,6 +256,10 @@ export default function HomePage() {
           <style>{`
             .shauri-select { appearance: none; -webkit-appearance: none; }
             .shauri-select option { color: #0f172a !important; background: #f8fafc; }
+            .shauri-input-wrap input:hover,
+            .shauri-input-wrap select:hover {
+              border-color: #b8860b !important;
+            }
           `}</style>
 
           <motion.div
@@ -262,6 +283,7 @@ export default function HomePage() {
 
           <motion.form
             onSubmit={handleSubmit}
+            className="shauri-input-wrap"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.25, duration: 0.5 }}
@@ -270,16 +292,20 @@ export default function HomePage() {
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
+              onFocus={() => setFocusedField("name")}
+              onBlur={() => setFocusedField(null)}
               placeholder="Student Name"
-              style={inputStyle}
+              style={getInputStyle("name")}
             />
 
             <select
               value={studentClass}
               onChange={(e) => setStudentClass(e.target.value)}
+              onFocus={() => setFocusedField("class")}
+              onBlur={() => setFocusedField(null)}
               className="shauri-select"
               style={{
-                ...inputStyle,
+                ...getInputStyle("class"),
                 color: studentClass ? "#0f172a" : "#94a3b8",
                 backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23b8a060' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
                 backgroundRepeat: "no-repeat",
@@ -298,6 +324,8 @@ export default function HomePage() {
               inputMode="numeric"
               autoComplete="off"
               value={"★".repeat(code.length)}
+              onFocus={() => setFocusedField("code")}
+              onBlur={() => setFocusedField(null)}
               onChange={(e) => {
                 if (e.target.value.length < code.length) {
                   setCode((prev) => prev.slice(0, -1));
@@ -308,7 +336,7 @@ export default function HomePage() {
               }}
               placeholder="Access Code"
               style={{
-                ...inputStyle,
+                ...getInputStyle("code"),
                 letterSpacing: code.length > 0 ? "0.45em" : "0.02em",
                 fontSize: code.length > 0 ? 18 : 14,
               }}
@@ -322,9 +350,13 @@ export default function HomePage() {
 
             <motion.button
               type="submit"
-              whileHover={{ scale: 1.02 }}
+              whileHover={{
+                scale: 1.02,
+                boxShadow: "0 0 0 3px rgba(212,175,55,0.3), 0 0 16px rgba(212,175,55,0.2)",
+                borderColor: "#b8860b",
+              }}
               whileTap={{ scale: 0.97 }}
-              style={{ ...buttonStyle, fontFamily: "inherit", letterSpacing: "0.2em", fontSize: 13, fontWeight: 700, marginTop: 4 }}
+              style={{ ...buttonStyle, fontFamily: "inherit", letterSpacing: "0.2em", fontSize: 13, fontWeight: 700, marginTop: 4, transition: "border-color 0.18s" }}
             >
               STEP IN
             </motion.button>
