@@ -63,6 +63,7 @@ export default function HomePage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
+            {/* Stars */}
             {Array.from({ length: 60 }).map((_, i) => (
               <div
                 key={i}
@@ -73,16 +74,17 @@ export default function HomePage() {
                   borderRadius: "50%",
                   background: "white",
                   opacity: Math.random() * 0.7 + 0.2,
-                  top: `${Math.random() * 60}%`,
+                  top: `${Math.random() * 65}%`,
                   left: `${Math.random() * 100}%`,
                 }}
               />
             ))}
 
+            {/* Sun glow */}
             <div
               style={{
                 position: "absolute",
-                top: "22%",
+                top: "18%",
                 left: "50%",
                 transform: "translate(-50%, -50%)",
                 width: 520,
@@ -93,10 +95,11 @@ export default function HomePage() {
               }}
             />
 
+            {/* Title block — sits in upper 40% */}
             <div
               style={{
                 position: "absolute",
-                top: "22%",
+                top: "18%",
                 width: "100%",
                 textAlign: "center",
                 transform: "translateY(-50%)",
@@ -148,11 +151,18 @@ export default function HomePage() {
               </motion.p>
             </div>
 
-            {/* MOUNTAIN — occupies bottom 42% of screen, peak at top of that = 58% from top of viewport */}
+            {/* Mountain — tall, fills bottom 60% of screen.
+                SVG viewBox 0 0 1440 800, peak at y=500 → 500/800=62.5% from top of SVG.
+                SVG height=60vh → peak from bottom = 60vh*(800-500)/800 = 60*0.375 = 22.5vh */}
             <svg
               viewBox="0 0 1440 800"
               preserveAspectRatio="none"
-              style={{ position: "absolute", bottom: 0, width: "100%", height: "42%" }}
+              style={{
+                position: "absolute",
+                bottom: 0,
+                width: "100%",
+                height: "60vh",
+              }}
             >
               <path
                 d="M0,730 C400,650 700,600 720,500 C740,600 1000,650 1440,720 L1440,800 L0,800 Z"
@@ -160,13 +170,12 @@ export default function HomePage() {
               />
             </svg>
 
-            {/* Button — peak of svg is at y=500/800=62.5% from top of svg.
-                svg height=42vh. Peak from bottom of viewport = 42vh*(1-0.625) = 42*0.375 = 15.75vh */}
+            {/* Button — pinned to peak: bottom = 22.5vh, nudge up ~20px for visual centering */}
             <motion.div
               onClick={handleEnter}
               style={{
                 position: "absolute",
-                bottom: "15.5%",
+                bottom: "calc(22.5vh - 20px)",
                 left: "50%",
                 transform: "translateX(-50%)",
                 cursor: "pointer",
@@ -189,7 +198,7 @@ export default function HomePage() {
                   letterSpacing: "0.35em",
                   fontSize: "clamp(10px, 2vw, 14px)",
                   whiteSpace: "nowrap",
-                  background: "rgba(0,8,20,0.5)",
+                  background: "rgba(0,8,20,0.55)",
                 }}
               >
                 <motion.div
@@ -220,6 +229,7 @@ export default function HomePage() {
         )}
       </AnimatePresence>
 
+      {/* ACCESS SCREEN */}
       {entered && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -270,7 +280,6 @@ export default function HomePage() {
             transition={{ delay: 0.25, duration: 0.5 }}
             style={{ display: "grid", gap: 14, width: "100%", maxWidth: 300 }}
           >
-            {/* Student Name */}
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -278,7 +287,6 @@ export default function HomePage() {
               style={inputStyle}
             />
 
-            {/* Class dropdown — custom chevron, dark text always */}
             <select
               value={studentClass}
               onChange={(e) => setStudentClass(e.target.value)}
@@ -298,7 +306,6 @@ export default function HomePage() {
               ))}
             </select>
 
-            {/* Access Code — star masked, font consistent, only size/spacing changes on entry */}
             <input
               type="text"
               inputMode="numeric"
