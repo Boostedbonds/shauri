@@ -74,32 +74,33 @@ export default function HomePage() {
                   borderRadius: "50%",
                   background: "white",
                   opacity: Math.random() * 0.7 + 0.2,
-                  top: `${Math.random() * 65}%`,
+                  top: `${Math.random() * 60}%`,
                   left: `${Math.random() * 100}%`,
                 }}
               />
             ))}
 
-            {/* Sun glow */}
+            {/* Sun glow — centred at 28% from top */}
             <div
               style={{
                 position: "absolute",
-                top: "18%",
+                top: "28%",
                 left: "50%",
                 transform: "translate(-50%, -50%)",
                 width: 520,
                 height: 520,
                 borderRadius: "50%",
-                background: "radial-gradient(circle, rgba(255,215,120,1) 0%, rgba(255,180,60,0.6) 50%, transparent 80%)",
+                background:
+                  "radial-gradient(circle, rgba(255,215,120,1) 0%, rgba(255,180,60,0.6) 50%, transparent 80%)",
                 filter: "blur(12px)",
               }}
             />
 
-            {/* Title block — sits in upper 40% */}
+            {/* Title — centred on the sun */}
             <div
               style={{
                 position: "absolute",
-                top: "18%",
+                top: "28%",
                 width: "100%",
                 textAlign: "center",
                 transform: "translateY(-50%)",
@@ -115,7 +116,8 @@ export default function HomePage() {
                   fontWeight: 700,
                   color: "#FFD700",
                   margin: 0,
-                  textShadow: "0 0 20px rgba(255,215,120,0.9), 0 0 40px rgba(255,200,80,0.6), 0 2px 6px rgba(0,0,0,0.8)",
+                  textShadow:
+                    "0 0 20px rgba(255,215,120,0.9), 0 0 40px rgba(255,200,80,0.6), 0 2px 6px rgba(0,0,0,0.8)",
                 }}
               >
                 SHAURI
@@ -151,9 +153,24 @@ export default function HomePage() {
               </motion.p>
             </div>
 
-            {/* Mountain — tall, fills bottom 60% of screen.
-                SVG viewBox 0 0 1440 800, peak at y=500 → 500/800=62.5% from top of SVG.
-                SVG height=60vh → peak from bottom = 60vh*(800-500)/800 = 60*0.375 = 22.5vh */}
+            {/* Mountain SVG
+                - fills bottom 55% of viewport (height: 55vh)
+                - viewBox 1440×800, peak tip at x=720 y=500
+                - peak from bottom of viewport = 55vh × (800-500)/800 = 55 × 0.375 = 20.625vh
+                - sun bottom edge ≈ 28% + 13% (half of ~260px glow radius at 100vh) ≈ 41% from top
+                - peak from top = 100vh - 20.625vh = 79.375vh → needs to be ~58-62% from top
+                - so we need mountain height such that peak sits at ~60% from top
+                  peak_from_top = 100 - height_vh*0.375
+                  60 = 100 - h*0.375  →  h = 40/0.375 = 106.67vh → too tall
+                  Let's target peak at ~63% from top (matching reference image):
+                  63 = 100 - h*0.375  →  h = 37/0.375 = 98.67vh → still too tall
+                  
+                  Better approach: reshape the SVG path so peak is higher up.
+                  Move peak to y=300 (instead of 500) in a viewBox of 800 height:
+                  peak_fraction = 300/800 = 37.5% from top of SVG
+                  With height=55vh: peak_from_bottom = 55*(1-0.375) = 55*0.625 = 34.375vh
+                  peak_from_top = 100 - 34.375 = 65.625% ✓ matches reference
+            */}
             <svg
               viewBox="0 0 1440 800"
               preserveAspectRatio="none"
@@ -161,21 +178,24 @@ export default function HomePage() {
                 position: "absolute",
                 bottom: 0,
                 width: "100%",
-                height: "60vh",
+                height: "55vh",
               }}
             >
+              {/* Peak moved up to y=300 for a taller, sharper mountain */}
               <path
-                d="M0,730 C400,650 700,600 720,500 C740,600 1000,650 1440,720 L1440,800 L0,800 Z"
+                d="M0,750 C360,680 660,580 720,300 C780,580 1080,680 1440,750 L1440,800 L0,800 Z"
                 fill="black"
               />
             </svg>
 
-            {/* Button — pinned to peak: bottom = 22.5vh, nudge up ~20px for visual centering */}
+            {/* Button pinned to peak
+                peak from bottom = 55vh × (800-300)/800 = 55 × 0.625 = 34.375vh
+                Button centre should be just above the tip → bottom: 34vh */}
             <motion.div
               onClick={handleEnter}
               style={{
                 position: "absolute",
-                bottom: "calc(22.5vh - 20px)",
+                bottom: "34vh",
                 left: "50%",
                 transform: "translateX(-50%)",
                 cursor: "pointer",
@@ -208,7 +228,8 @@ export default function HomePage() {
                     left: "-100%",
                     width: "100%",
                     height: "100%",
-                    background: "linear-gradient(90deg, transparent, rgba(255,215,0,0.6), transparent)",
+                    background:
+                      "linear-gradient(90deg, transparent, rgba(255,215,0,0.6), transparent)",
                   }}
                   animate={{ left: ["-100%", "100%"] }}
                   transition={{ duration: 2, repeat: Infinity }}
