@@ -109,7 +109,6 @@ export default function TeacherPage() {
   useEffect(() => { msgsRef.current = messages; }, [messages]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  // On mount: load student data and show greeting from state — NO API call
   useEffect(() => {
     let student: any = null;
     try { student = JSON.parse(localStorage.getItem("shauri_student") || "null"); } catch {}
@@ -118,7 +117,6 @@ export default function TeacherPage() {
     const cls   = student?.class ? ` Class ${student.class}` : "";
     setName(name);
     setData(student);
-    // Greeting built locally — no API call, no double-fire possible
     const greeting = name
       ? `Hi ${name}! 👋 I'm Shauri, your ${board}${cls} teacher.\n\nWhat would you like to learn today?`
       : `Hi! 👋 I'm Shauri, your ${board} teacher.\n\nWhat would you like to learn today?`;
@@ -135,7 +133,6 @@ export default function TeacherPage() {
       try { student = JSON.parse(localStorage.getItem("shauri_student") || "null"); } catch {}
     }
 
-    // History = all messages except the local greeting (index 0)
     const history = msgsRef.current.slice(1).map(m => ({ role: m.role, content: m.content }));
 
     try {
@@ -186,7 +183,7 @@ export default function TeacherPage() {
       <div style={{ height: 52, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", background: "#fff", borderBottom: "1px solid #e2e8f0", flexShrink: 0 }}>
         <button onClick={() => window.location.href = "/modes"} style={{ padding: "7px 14px", background: "#f1f5f9", color: "#374151", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>← Back</button>
         <span style={{ fontSize: 15, fontWeight: 700, color: "#0f172a" }}>
-          📚 Teacher Mode{studentName ? ` · ${studentName}` : ""}
+          📚 Teacher Mode
         </span>
         <div style={{ width: 80 }} />
       </div>

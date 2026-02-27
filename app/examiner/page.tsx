@@ -8,17 +8,6 @@ const CHAT_STORAGE_KEY = "shauri_chat_examiner";
 const MAX_SAVED_MSGS   = 10;
 
 // ─── Persist helpers ─────────────────────────────────────────
-function loadSavedMessages(): Message[] {
-  try {
-    const raw = localStorage.getItem(CHAT_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-  } catch {}
-  return [];
-}
-
 function saveMessages(msgs: Message[]) {
   try {
     localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(msgs.slice(-MAX_SAVED_MSGS)));
@@ -90,34 +79,6 @@ function ResumeBanner({ subject, elapsed, onDismiss }: {
       >
         Got it ✕
       </button>
-    </div>
-  );
-}
-
-// ─── Reconnecting Screen ─────────────────────────────────────
-function ReconnectingScreen() {
-  return (
-    <div style={{
-      position: "fixed", inset: 0, zIndex: 300,
-      background: "#0f172a",
-      display: "flex", flexDirection: "column",
-      alignItems: "center", justifyContent: "center", gap: 20,
-    }}>
-      <div style={{ fontSize: 42 }}>📋</div>
-      <div style={{ color: "#38bdf8", fontSize: 18, fontWeight: 700 }}>
-        Restoring your exam…
-      </div>
-      <div style={{ color: "#94a3b8", fontSize: 14 }}>
-        Checking for an active session
-      </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        {[0, 1, 2].map(i => (
-          <div key={i} style={{
-            width: 10, height: 10, borderRadius: "50%", background: "#38bdf8",
-            animation: `bounce 1s ${i * 0.2}s infinite ease-in-out`,
-          }} />
-        ))}
-      </div>
     </div>
   );
 }
@@ -239,10 +200,10 @@ function printCBSEPaper({
 }
 
 // ─── Session ID ───────────────────────────────────────────────
-function getOrCreateSessionId(): string {
+function createNewSessionId(): string {
   if (typeof window === "undefined") return "";
-  let sid = localStorage.getItem("shauri_exam_sid");
-  if (!sid) { sid = crypto.randomUUID(); localStorage.setItem("shauri_exam_sid", sid); }
+  const sid = crypto.randomUUID();
+  localStorage.setItem("shauri_exam_sid", sid);
   return sid;
 }
 
@@ -269,7 +230,6 @@ export default function ExaminerPage() {
   const [examStarted, setStarted]     = useState(false);
   const [elapsedSec, setElapsed]      = useState(0);
   const [isLoading, setLoading]       = useState(false);
-  const [reconnecting, setReconnecting] = useState(true);  // show splash on mount
   const [showResumeBanner, setResumeBanner] = useState(false);
   const [examMeta, setMeta]           = useState<{
     examEnded?: boolean; marksObtained?: number; totalMarks?: number;
@@ -285,19 +245,26 @@ export default function ExaminerPage() {
   const sendingRef  = useRef(false);
   const bottomRef   = useRef<HTMLDivElement>(null);
   const msgsRef     = useRef<Message[]>([]);
+  const sessionIdRef = useRef<string>("");
 
   useEffect(() => { msgsRef.current = messages; }, [messages]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
   useEffect(() => () => stopTimer(), []);
 
-  // ── Save messages to localStorage on every change ────────────
   useEffect(() => {
     if (messages.length === 0) return;
     saveMessages(messages);
   }, [messages]);
 
-  // ── On mount: try to resume exam, else restore chat or show greeting ──
+  // ── On mount: always start fresh ─────────────────────────────
   useEffect(() => {
+    // Clear all previous exam state so we always get a clean screen
+    clearSavedMessages();
+    localStorage.removeItem("shauri_exam_sid");
+
+    // Create a fresh session ID
+    sessionIdRef.current = createNewSessionId();
+
     let name = "", cls = "";
     try {
       const s = JSON.parse(localStorage.getItem("shauri_student") || "null");
@@ -307,93 +274,14 @@ export default function ExaminerPage() {
       setStudentClass(cls);
     } catch {}
 
-    const sid = localStorage.getItem("shauri_exam_sid");
-
-    // Only attempt resume if there's an active session ID
-    if (sid) {
-      attemptResume(name, cls, sid);
-    } else {
-      // No active exam — restore saved chat or show greeting
-      const saved = loadSavedMessages();
-      if (saved.length > 0) {
-        setMessages(saved);
-      } else {
-        setMessages([{ role: "assistant", content: buildGreeting(name) }]);
-      }
-      setReconnecting(false);
-    }
+    // Always show fresh greeting
+    setMessages([{ role: "assistant", content: buildGreeting(name) }]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // ── Attempt to resume an active exam from the server ─────────
-  async function attemptResume(name: string, cls: string, sid: string) {
-    try {
-      const student = { name, class: cls, board: "CBSE", sessionId: sid };
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mode: "examiner",
-          message: "hi",
-          uploadedText: "",
-          uploadType: null,
-          history: [],
-          student,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (data?.resumeExam === true && data?.startTime) {
-        // Active exam found on server — restore everything
-        startTimer(data.startTime);
-        setMeta(p => ({ ...p, subject: data.subject || p.subject }));
-        if (data.questionPaper) setPaper(data.questionPaper);
-
-        // Restore saved chat if any, else just show the resume message
-        const saved = loadSavedMessages();
-        const resumeMsg: Message = {
-          role: "assistant",
-          content: data.reply || `⚡ Exam restored — **${data.subject}**. Your question paper is on the right. Keep writing!`,
-        };
-        setMessages(saved.length > 0 ? [...saved, resumeMsg] : [resumeMsg]);
-        setResumeBanner(true);
-
-      } else if (data?.reply?.includes("exam is still in progress")) {
-        // Server has exam but returned as a normal reply
-        const saved = loadSavedMessages();
-        const msg: Message = { role: "assistant", content: data.reply };
-        setMessages(saved.length > 0 ? [...saved, msg] : [msg]);
-        if (data.questionPaper) setPaper(data.questionPaper);
-        if (data.startTime) startTimer(data.startTime);
-        setResumeBanner(true);
-
-      } else {
-        // No active exam on server — show saved chat or greeting
-        const saved = loadSavedMessages();
-        if (saved.length > 0) {
-          setMessages(saved);
-        } else {
-          setMessages([{ role: "assistant", content: buildGreeting(name) }]);
-        }
-      }
-    } catch {
-      // Network issue — still show saved chat or greeting
-      const saved = loadSavedMessages();
-      if (saved.length > 0) {
-        setMessages(saved);
-      } else {
-        setMessages([{ role: "assistant", content: buildGreeting(name) }]);
-      }
-    } finally {
-      setReconnecting(false);
-    }
-  }
 
   function startTimer(ts: number) {
     if (timerRef.current) return;
     startTsRef.current = ts;
-    // Immediately set elapsed so it's correct from the first frame
     const initialElapsed = Math.floor((Date.now() - ts) / 1000);
     elapsedRef.current = initialElapsed;
     setElapsed(initialElapsed);
@@ -448,7 +336,7 @@ export default function ExaminerPage() {
             name: student?.name || "",
             class: student?.class || "",
             board: student?.board || "CBSE",
-            sessionId: getOrCreateSessionId(),
+            sessionId: sessionIdRef.current,
           },
         }),
       });
@@ -494,7 +382,6 @@ export default function ExaminerPage() {
           timeTaken:     data?.timeTaken     ?? fmt(taken),
           subject:       data?.subject       ?? p.subject,
         }));
-        // Exam over — clear saved session + chat
         localStorage.removeItem("shauri_exam_sid");
         clearSavedMessages();
         confirmedSubjectRef.current = "";
@@ -542,9 +429,6 @@ export default function ExaminerPage() {
         .print-btn:hover{background:#1d4ed8!important}
       `}</style>
 
-      {/* ── Full-screen reconnecting splash ── */}
-      {reconnecting && <ReconnectingScreen />}
-
       {/* ── TOP BAR ── */}
       <div style={{
         height: 52, display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -558,7 +442,7 @@ export default function ExaminerPage() {
         </button>
 
         <span style={{ fontSize: 15, fontWeight: 700, color: "#0f172a" }}>
-          📋 Examiner Mode{studentName ? ` · ${studentName}` : ""}
+          📋 Examiner Mode
         </span>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 80, justifyContent: "flex-end" }}>
@@ -609,7 +493,6 @@ export default function ExaminerPage() {
               }} />
               {examMeta.examEnded ? "Evaluation Complete" : examActive ? "Type your answers here" : "Examiner Chat"}
             </div>
-            {/* Mobile print button */}
             {paperContent && (
               <button
                 className="print-btn"
@@ -657,7 +540,7 @@ export default function ExaminerPage() {
                 {[0, 1, 2].map(i => (
                   <div key={i} style={{
                     width: 8, height: 8, borderRadius: "50%", background: "#38bdf8",
-                    animation: `bounce 1s ${i * 0.15}s infinite ease-in-out`,
+                    animation: `bounce 1s ${i * 0.2}s infinite ease-in-out`,
                   }} />
                 ))}
               </div>
@@ -666,7 +549,7 @@ export default function ExaminerPage() {
           </div>
 
           <div style={{ padding: "10px 12px", borderTop: "1px solid #e2e8f0", background: "#fff", flexShrink: 0 }}>
-            <ChatInput onSend={handleSend} examStarted={examStarted} disabled={isLoading || reconnecting} inline={true} />
+            <ChatInput onSend={handleSend} examStarted={examStarted} disabled={isLoading} inline={true} />
           </div>
         </div>
 
