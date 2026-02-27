@@ -80,11 +80,11 @@ export default function HomePage() {
               />
             ))}
 
-            {/* Sun glow — centred at 28% from top */}
+            {/* Sun glow — centred at 30% from top */}
             <div
               style={{
                 position: "absolute",
-                top: "28%",
+                top: "30%",
                 left: "50%",
                 transform: "translate(-50%, -50%)",
                 width: 520,
@@ -100,7 +100,7 @@ export default function HomePage() {
             <div
               style={{
                 position: "absolute",
-                top: "28%",
+                top: "30%",
                 width: "100%",
                 textAlign: "center",
                 transform: "translateY(-50%)",
@@ -153,90 +153,92 @@ export default function HomePage() {
               </motion.p>
             </div>
 
-            {/* Mountain SVG
-                - fills bottom 55% of viewport (height: 55vh)
-                - viewBox 1440×800, peak tip at x=720 y=500
-                - peak from bottom of viewport = 55vh × (800-500)/800 = 55 × 0.375 = 20.625vh
-                - sun bottom edge ≈ 28% + 13% (half of ~260px glow radius at 100vh) ≈ 41% from top
-                - peak from top = 100vh - 20.625vh = 79.375vh → needs to be ~58-62% from top
-                - so we need mountain height such that peak sits at ~60% from top
-                  peak_from_top = 100 - height_vh*0.375
-                  60 = 100 - h*0.375  →  h = 40/0.375 = 106.67vh → too tall
-                  Let's target peak at ~63% from top (matching reference image):
-                  63 = 100 - h*0.375  →  h = 37/0.375 = 98.67vh → still too tall
-                  
-                  Better approach: reshape the SVG path so peak is higher up.
-                  Move peak to y=300 (instead of 500) in a viewBox of 800 height:
-                  peak_fraction = 300/800 = 37.5% from top of SVG
-                  With height=55vh: peak_from_bottom = 55*(1-0.375) = 55*0.625 = 34.375vh
-                  peak_from_top = 100 - 34.375 = 65.625% ✓ matches reference
+            {/*
+              MOUNTAIN + BUTTON WRAPPER
+              The mountain SVG and button live inside the same absolutely-positioned
+              container so the button can be positioned relative to the SVG peak
+              without any vh arithmetic.
+
+              Container: bottom-aligned, full width, height = 55% of viewport.
+              SVG viewBox 1440×800, peak at x=720 y=300 → 37.5% from top of SVG.
+              So peak from TOP of this container = 55vh × 37.5% = 20.625vh ≈ 20.6%
+              → button top = 20.6% of container — expressed as percentage inside container.
             */}
-            <svg
-              viewBox="0 0 1440 800"
-              preserveAspectRatio="none"
+            <div
               style={{
                 position: "absolute",
                 bottom: 0,
-                width: "100%",
-                height: "55vh",
+                left: 0,
+                right: 0,
+                height: "55%",   /* container height */
               }}
             >
-              {/* Peak moved up to y=300 for a taller, sharper mountain */}
-              <path
-                d="M0,750 C360,680 660,580 720,300 C780,580 1080,680 1440,750 L1440,800 L0,800 Z"
-                fill="black"
-              />
-            </svg>
-
-            {/* Button pinned to peak
-                peak from bottom = 55vh × (800-300)/800 = 55 × 0.625 = 34.375vh
-                Button centre should be just above the tip → bottom: 34vh */}
-            <motion.div
-              onClick={handleEnter}
-              style={{
-                position: "absolute",
-                bottom: "34vh",
-                left: "50%",
-                transform: "translateX(-50%)",
-                cursor: "pointer",
-                zIndex: 10,
-              }}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1.1, duration: 0.6 }}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.97 }}
-            >
-              <div
-                style={{
-                  position: "relative",
-                  padding: "14px 42px",
-                  borderRadius: 999,
-                  border: "1px solid rgba(255,215,0,0.5)",
-                  overflow: "hidden",
-                  color: "#FFD700",
-                  letterSpacing: "0.35em",
-                  fontSize: "clamp(10px, 2vw, 14px)",
-                  whiteSpace: "nowrap",
-                  background: "rgba(0,8,20,0.55)",
-                }}
+              {/* Mountain */}
+              <svg
+                viewBox="0 0 1440 800"
+                preserveAspectRatio="none"
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
               >
-                <motion.div
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: "-100%",
-                    width: "100%",
-                    height: "100%",
-                    background:
-                      "linear-gradient(90deg, transparent, rgba(255,215,0,0.6), transparent)",
-                  }}
-                  animate={{ left: ["-100%", "100%"] }}
-                  transition={{ duration: 2, repeat: Infinity }}
+                {/* Peak at y=300 = 37.5% from top of viewBox */}
+                <path
+                  d="M0,750 C360,680 660,580 720,300 C780,580 1080,680 1440,750 L1440,800 L0,800 Z"
+                  fill="black"
                 />
-                BEGIN THE ASCENT
-              </div>
-            </motion.div>
+              </svg>
+
+              {/*
+                Button: position relative to container.
+                Peak is at 37.5% from top of container.
+                Centre button on the peak → top: 37.5%, transform centres it.
+                Nudge up by ~24px (half button height) so tip points into button.
+              */}
+              <motion.div
+                onClick={handleEnter}
+                style={{
+                  position: "absolute",
+                  top: "37.5%",
+                  left: "50%",
+                  transform: "translate(-50%, -50%)",
+                  cursor: "pointer",
+                  zIndex: 10,
+                }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 1.1, duration: 0.6 }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.97 }}
+              >
+                <div
+                  style={{
+                    position: "relative",
+                    padding: "14px 42px",
+                    borderRadius: 999,
+                    border: "1px solid rgba(255,215,0,0.5)",
+                    overflow: "hidden",
+                    color: "#FFD700",
+                    letterSpacing: "0.35em",
+                    fontSize: "clamp(10px, 2vw, 14px)",
+                    whiteSpace: "nowrap",
+                    background: "rgba(0,8,20,0.55)",
+                  }}
+                >
+                  <motion.div
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: "-100%",
+                      width: "100%",
+                      height: "100%",
+                      background:
+                        "linear-gradient(90deg, transparent, rgba(255,215,0,0.6), transparent)",
+                    }}
+                    animate={{ left: ["-100%", "100%"] }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                  />
+                  BEGIN THE ASCENT
+                </div>
+              </motion.div>
+            </div>
 
             {warp && (
               <motion.div
