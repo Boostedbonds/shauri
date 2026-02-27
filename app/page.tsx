@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Orbitron } from "next/font/google";
 
@@ -20,25 +20,6 @@ export default function HomePage() {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [focusedField, setFocusedField] = useState<string | null>(null);
-
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [peakTop, setPeakTop] = useState<number | null>(null);
-
-  useEffect(() => {
-    function measure() {
-      if (!containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      // SVG is 55% height, bottom-anchored. Peak is at y=300 out of 800 viewBox from top of SVG.
-      // SVG top = rect.bottom - svgHeight
-      const svgHeight = rect.height * 0.55;
-      const svgTop = rect.bottom - svgHeight;
-      const peakY = svgTop + svgHeight * (300 / 800);
-      setPeakTop(peakY);
-    }
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [entered]);
 
   function handleEnter() {
     setWarp(true);
@@ -65,9 +46,7 @@ export default function HomePage() {
 
   const getInputStyle = (fieldName: string): React.CSSProperties => ({
     ...inputStyle,
-    border: focusedField === fieldName
-      ? "1.5px solid #d4af37"
-      : "1px solid #d4af37",
+    border: focusedField === fieldName ? "1.5px solid #d4af37" : "1px solid #d4af37",
     boxShadow: focusedField === fieldName
       ? "0 0 0 3px rgba(212,175,55,0.25), 0 0 12px rgba(212,175,55,0.15)"
       : "none",
@@ -81,7 +60,6 @@ export default function HomePage() {
       <AnimatePresence>
         {!entered && (
           <motion.div
-            ref={containerRef}
             style={{
               position: "fixed",
               inset: 0,
@@ -160,33 +138,43 @@ export default function HomePage() {
               </motion.p>
             </div>
 
-            {/* Mountain SVG — full width, bottom-anchored */}
-            <svg
-              viewBox="0 0 1440 800"
-              preserveAspectRatio="none"
-              style={{
-                position: "absolute",
-                bottom: 0,
-                left: 0,
-                width: "100%",
-                height: "55%",
-                display: "block",
-              }}
-            >
-              {/* Peak tip at x=720 y=300 — exactly center */}
-              <path
-                d="M0,750 C360,680 660,580 720,300 C780,580 1080,680 1440,750 L1440,800 L0,800 Z"
-                fill="black"
-              />
-            </svg>
+            {/*
+              KEY FIX: wrap SVG in a relative-positioned div that matches the SVG dimensions.
+              The button is then absolutely positioned inside this wrapper at
+              left: 50% (= x=720/1440) and top: 37.5% (= y=300/800).
+              This is pure CSS — no JS measurement, no viewport offset issues.
+            */}
+            <div style={{
+              position: "absolute",
+              bottom: 0,
+              left: 0,
+              width: "100%",
+              height: "55%",
+              // no overflow:hidden so button can visually protrude upward if needed
+            }}>
+              <svg
+                viewBox="0 0 1440 800"
+                preserveAspectRatio="none"
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  display: "block",
+                }}
+              >
+                <path
+                  d="M0,750 C360,680 660,580 720,300 C780,580 1080,680 1440,750 L1440,800 L0,800 Z"
+                  fill="black"
+                />
+              </svg>
 
-            {/* Button — pinned to measured peak position, always centered */}
-            {peakTop !== null && (
+              {/* Button sits exactly at the SVG peak: 50% from left, 37.5% from top */}
               <motion.div
                 onClick={handleEnter}
                 style={{
-                  position: "fixed",
-                  top: peakTop,
+                  position: "absolute",
+                  top: "37.5%",
                   left: "50%",
                   transform: "translate(-50%, -50%)",
                   cursor: "pointer",
@@ -223,7 +211,7 @@ export default function HomePage() {
                   BEGIN THE ASCENT
                 </div>
               </motion.div>
-            )}
+            </div>
 
             {warp && (
               <motion.div
@@ -256,10 +244,6 @@ export default function HomePage() {
           <style>{`
             .shauri-select { appearance: none; -webkit-appearance: none; }
             .shauri-select option { color: #0f172a !important; background: #f8fafc; }
-            .shauri-input-wrap input:hover,
-            .shauri-input-wrap select:hover {
-              border-color: #b8860b !important;
-            }
           `}</style>
 
           <motion.div
@@ -283,7 +267,6 @@ export default function HomePage() {
 
           <motion.form
             onSubmit={handleSubmit}
-            className="shauri-input-wrap"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.25, duration: 0.5 }}
@@ -353,10 +336,9 @@ export default function HomePage() {
               whileHover={{
                 scale: 1.02,
                 boxShadow: "0 0 0 3px rgba(212,175,55,0.3), 0 0 16px rgba(212,175,55,0.2)",
-                borderColor: "#b8860b",
               }}
               whileTap={{ scale: 0.97 }}
-              style={{ ...buttonStyle, fontFamily: "inherit", letterSpacing: "0.2em", fontSize: 13, fontWeight: 700, marginTop: 4, transition: "border-color 0.18s" }}
+              style={{ ...buttonStyle, fontFamily: "inherit", letterSpacing: "0.2em", fontSize: 13, fontWeight: 700, marginTop: 4 }}
             >
               STEP IN
             </motion.button>
