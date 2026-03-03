@@ -428,7 +428,6 @@ ${safe}
   const subjectMatch = extracted.match(/^SUBJECT:\s*(.+)$/im);
   const subjectName  = subjectMatch ? subjectMatch[1].trim() : "Custom Subject";
 
-  // FIX 3: Strongly worded chapterList header — no "retrieve from NCERT" escape hatch
   return {
     subjectName,
     chapterList:
@@ -829,6 +828,10 @@ export async function POST(req: NextRequest) {
           session.syllabus_from_upload = readySession.syllabus_from_upload;
           session.session_key          = readySession.session_key;
         } else if (confirmedSubject) {
+          // confirmedSubject was sent from the frontend — either from an explicit
+          // subject selection reply OR from a syllabus upload detection.
+          // This is the key fix for anonymous users who upload a syllabus:
+          // the frontend now sends uploadedSubjectRef.current as confirmedSubject.
           const { subjectName } = getChaptersForSubject(confirmedSubject, cls);
           const recoveredSession: ExamSession = {
             session_key:     key,
@@ -845,12 +848,26 @@ export async function POST(req: NextRequest) {
           session.subject         = subjectName;
           session.subject_request = confirmedSubject;
         } else {
-          return NextResponse.json({
-            reply:
-              `Please tell me the **subject** you want to be tested on first${callName}.\n\n` +
-              `Options: Science | Mathematics | SST | History | Geography | Civics | Economics | English | Hindi\n\n` +
-              `📎 Or **upload your syllabus** as a PDF or image for a custom paper.`,
-          });
+          // Last resort: re-query Supabase directly by the current key with no status filter.
+          // This catches the case where the session IS in Supabase as READY but all
+          // name/class recovery strategies missed it (e.g. anonymous user, no name set,
+          // and Supabase had a brief write delay during the upload save).
+          const directLookup = await getSession(key);
+          if (directLookup && directLookup.status === "READY") {
+            session.status               = "READY";
+            session.subject              = directLookup.subject;
+            session.subject_request      = directLookup.subject_request;
+            session.syllabus_from_upload = directLookup.syllabus_from_upload;
+            session.session_key          = directLookup.session_key;
+            console.log("[isStart+IDLE] direct key re-lookup found READY session:", directLookup.session_key);
+          } else {
+            return NextResponse.json({
+              reply:
+                `Please tell me the **subject** you want to be tested on first${callName}.\n\n` +
+                `Options: Science | Mathematics | SST | History | Geography | Civics | Economics | English | Hindi\n\n` +
+                `📎 Or **upload your syllabus** as a PDF or image for a custom paper.`,
+            });
+          }
         }
       }
 
@@ -1310,9 +1327,6 @@ Study Tip   : [one specific, actionable improvement — e.g. "Practise Assertion
         }
 
         // GUARD: never treat exam command words as subject names.
-        // If the user types submit/done/finish/start/answers when IDLE,
-        // they are confused about state — guide them instead of creating a
-        // bogus session named "SUBMIT" or "ANSWERS".
         const isExamCommand = /^(submit|done|finish|finished|start|answers?)\s*$/i.test(message.trim());
         if (isExamCommand) {
           return NextResponse.json({
@@ -1367,7 +1381,6 @@ Study Tip   : [one specific, actionable improvement — e.g. "Practise Assertion
         let subjectName: string;
         let chapterList: string;
 
-        // FIX 1 & 2: Explicit logging + guaranteed carry-over of uploaded syllabus
         console.log("[EXAM START DEBUG]", {
           sessionKey: session.session_key,
           status: session.status,
@@ -1596,7 +1609,6 @@ Q36–Q38  [4 marks each] — real-life scenario with 3 sub-questions
           sectionBlocks = standardSections;
         }
 
-        // FIX 2 & 4: Dramatically strengthened uploaded syllabus enforcement block
         const uploadCoverageNote = hasUploadedSyllabus ? `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🚨 ABSOLUTE RESTRICTION — UPLOADED SYLLABUS IS THE ONLY SOURCE 🚨

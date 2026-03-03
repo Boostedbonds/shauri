@@ -189,7 +189,7 @@ function createNewSessionId(): string {
   return sid;
 }
 
-// FIX 6: Only extract confirmed subject from the very first "subject set" reply.
+// Only extract confirmed subject from the very first "subject set" reply.
 // Never extract from upload responses (which set subject to the detected name),
 // because that stale value then overrides later subject choices.
 function extractConfirmedSubject(reply: string): string {
@@ -200,6 +200,15 @@ function extractConfirmedSubject(reply: string): string {
   const setMatch = reply.match(/[Ss]ubject is set to\s+\*?\*?([^\n*]+)/i);
   if (setMatch) return setMatch[1].trim();
   return "";
+}
+
+// Extract detected subject from a syllabus upload confirmation reply.
+// The upload reply contains lines like "**Subject detected:** English"
+function extractUploadedSubject(reply: string): string {
+  const match =
+    reply.match(/\*\*Subject detected:\*\*\s*([^\n]+)/i) ||
+    reply.match(/Subject detected:\s*([^\n]+)/i);
+  return match ? match[1].trim() : "";
 }
 
 // ─── Main page ────────────────────────────────────────────────
@@ -222,8 +231,12 @@ export default function ExaminerPage() {
   const [studentName,  setStudentName]  = useState("");
   const [studentClass, setStudentClass] = useState("");
 
-  // FIX 6: confirmedSubjectRef is cleared after exam starts AND after upload detection
+  // confirmedSubjectRef: set when user explicitly picks a subject via text
   const confirmedSubjectRef = useRef<string>("");
+  // uploadedSubjectRef: set when a syllabus upload is detected — kept separately
+  // so it's always available as a fallback when the user types "start"
+  const uploadedSubjectRef  = useRef<string>("");
+
   const timerRef     = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTsRef   = useRef<number | null>(null);
   const elapsedRef   = useRef(0);
@@ -311,11 +324,12 @@ export default function ExaminerPage() {
           mode:         "examiner",
           message:      text,
           uploadedText: uploadedText || "",
-          // FIX 7: Always send a string, never null — backend uses ?? undefined
           uploadType:   uploadType || "",
           history,
-          // FIX 6: Only send confirmedSubject if it's actually needed (non-empty)
-          confirmedSubject: confirmedSubjectRef.current || undefined,
+          // Send whichever subject ref is populated — uploaded subject is the
+          // critical one that ensures "start" works after a syllabus upload
+          confirmedSubject:
+            confirmedSubjectRef.current || uploadedSubjectRef.current || undefined,
           student: {
             name:      student?.name  || "",
             class:     student?.class || "",
@@ -328,9 +342,7 @@ export default function ExaminerPage() {
       const data = await res.json();
       const reply: string = data?.reply ?? "";
 
-      // ── FIX 3 & 4: Handle resumeExam FIRST, with safe startTime check ──
-      // Backend always sets started_at when exam begins, but guard against
-      // it being stored as string in Supabase (BIGINT can come back as string)
+      // ── Handle resumeExam FIRST ──────────────────────────────
       if (data?.resumeExam === true) {
         const ts = typeof data.startTime === "number"
           ? data.startTime
@@ -342,7 +354,6 @@ export default function ExaminerPage() {
           startTimer(ts);
         }
         setMeta(p => ({ ...p, subject: data.subject || p.subject }));
-        // FIX 4: Use questionPaper key for resume (not paper key)
         if (data.questionPaper) setPaper(data.questionPaper);
         if (reply) setMessages(p => [...p, { role: "assistant", content: reply }]);
         setResumeBanner(true);
@@ -350,16 +361,15 @@ export default function ExaminerPage() {
       }
 
       // ── Exam just started: backend returns { reply, paper, startTime } ──
-      // FIX 1: Check data.paper explicitly — never fall back to reply for paper content
       if (typeof data?.startTime === "number" && data?.paper) {
         startTimer(data.startTime);
-        const paper = data.paper; // always use data.paper, never reply
-        // Extract subject from paper header for display
+        const paper = data.paper;
         const subjMatch = paper.match(/Subject\s*[:\|]\s*([^\n]+)/i);
         setMeta(p => ({ ...p, subject: subjMatch ? subjMatch[1].trim() : data?.subject || p.subject }));
         setPaper(paper);
-        // FIX 6: Clear confirmedSubject now that exam has started
+        // Clear both subject refs now that the exam has started
         confirmedSubjectRef.current = "";
+        uploadedSubjectRef.current  = "";
         setMessages(p => [...p, {
           role: "assistant",
           content: reply || "✅ Paper ready! Displayed on the right. Write answers and type **submit** when done.",
@@ -386,20 +396,30 @@ export default function ExaminerPage() {
         }));
         localStorage.removeItem("shauri_exam_sid");
         clearSavedMessages();
-        // FIX 6: Clear confirmedSubject on exam end
+        // Clear both subject refs on exam end
         confirmedSubjectRef.current = "";
+        uploadedSubjectRef.current  = "";
         return;
       }
 
       // ── Regular chat reply ──
       if (reply) {
-        // FIX 6: Only extract confirmed subject from subject-setting replies,
-        // NOT from upload confirmation replies (those contain "Subject detected:")
-        const isUploadConfirmation = reply.includes("Syllabus") && reply.includes("uploaded successfully");
+        const isUploadConfirmation =
+          reply.includes("Syllabus") && reply.includes("uploaded successfully");
+
         if (!isUploadConfirmation) {
+          // Extract subject from explicit subject-selection replies
           const extracted = extractConfirmedSubject(reply);
           if (extracted) confirmedSubjectRef.current = extracted;
+        } else {
+          // Extract the detected subject from upload confirmation so it's
+          // available as confirmedSubject when the user types "start".
+          // This is the critical fix: without this, anonymous users who upload
+          // a syllabus and then type "start" would get "please tell me subject".
+          const detected = extractUploadedSubject(reply);
+          if (detected) uploadedSubjectRef.current = detected;
         }
+
         setMessages(p => [...p, { role: "assistant", content: reply }]);
       }
 
