@@ -19,22 +19,6 @@ type StudentContext = {
   sessionId?: string;
 };
 
-// Mirrors the `exam_sessions` table in Supabase:
-// CREATE TABLE exam_sessions (
-//   session_key   TEXT PRIMARY KEY,
-//   status        TEXT NOT NULL DEFAULT 'IDLE',
-//   subject_request TEXT,
-//   subject       TEXT,
-//   question_paper TEXT,
-//   answer_log    JSONB NOT NULL DEFAULT '[]',
-//   started_at    BIGINT,
-//   total_marks   INT,
-//   syllabus_from_upload TEXT,
-//   student_name  TEXT,
-//   student_class TEXT,
-//   student_board TEXT,
-//   updated_at    TIMESTAMPTZ DEFAULT NOW()
-// );
 type ExamSession = {
   session_key: string;
   status: "IDLE" | "READY" | "IN_EXAM" | "FAILED";
@@ -113,7 +97,6 @@ async function deleteSession(key: string): Promise<void> {
   }
 }
 
-// Fallback lookup: find ANY session for this student by name+class.
 async function getSessionByStudent(
   studentName: string,
   studentClass: string,
@@ -121,7 +104,6 @@ async function getSessionByStudent(
 ): Promise<ExamSession | null> {
   if (!studentName) return null;
 
-  // Helper to run a query with optional status filter
   async function runQuery(nameVal: string, classVal?: string): Promise<ExamSession | null> {
     try {
       let q = supabase
@@ -129,7 +111,6 @@ async function getSessionByStudent(
         .select("*")
         .eq("student_name", nameVal);
 
-      // Only filter by class if we have one — avoids missing sessions saved with empty class
       if (classVal) {
         q = (q as any).eq("student_class", classVal);
       }
@@ -154,11 +135,9 @@ async function getSessionByStudent(
     }
   }
 
-  // Try 1: exact name + class match
   const r1 = await runQuery(studentName, studentClass);
   if (r1) return r1;
 
-  // Try 2: name only (catches sessions saved when class was empty or different)
   if (studentClass) {
     const r2 = await runQuery(studentName);
     if (r2) return r2;
@@ -655,10 +634,12 @@ export async function POST(req: NextRequest) {
           reply: `Hi ${greetName}! 👋 I'm Shauri, your ${board} teacher${cls ? ` for Class ${cls}` : ""}. What would you like to learn today?`,
         });
       }
+
       const contextPrimer: ChatMessage[] = name ? [
         { role: "user", content: `My name is ${name}${cls ? `, I'm in Class ${cls}` : ""}${board ? `, ${board} board` : ""}.` },
         { role: "assistant", content: `Got it! I'll call you ${name}${cls ? ` (Class ${cls})` : ""}. How can I help you today?` },
       ] : [];
+
       const teacherConversation: ChatMessage[] = [
         ...contextPrimer,
         ...history.slice(-12),
@@ -667,14 +648,30 @@ export async function POST(req: NextRequest) {
 
       const teacherConversationText = [...history, { role: "user", content: message }]
         .map((m) => m.content).join(" ");
+
+      // ── Detect subject for the correct system prompt variant ──
       const isHindiTeacher =
         /hindi/i.test(bodySubject) ||
-        bodyLang === "hi-IN"       ||
+        bodyLang === "hi-IN" ||
         /[\u0900-\u097F]{5,}/.test(teacherConversationText) ||
         /hindi|हिंदी/i.test(teacherConversationText);
 
+      // Detect maths from bodySubject OR any maths keyword in the conversation
+      const isMathTeacher =
+        !isHindiTeacher && (
+          /math/i.test(bodySubject) ||
+          /\b(mathematics|maths?|algebra|calculus|geometry|trigonometry|statistics|probability|polynomials?|coordinate geometry|quadrilateral|heron'?s? formula|surface area|volume|number system|linear equation|circles?|triangles?|constructions?|pythagoras|mensuration)\b/i.test(teacherConversationText)
+        );
+
+      // Hindi takes priority; pass "mathematics" if maths detected; else undefined
+      const subjectOverride = isHindiTeacher
+        ? "hindi"
+        : isMathTeacher
+          ? "mathematics"
+          : undefined;
+
       const reply = await callAI(
-        systemPrompt("teacher", isHindiTeacher ? "hindi" : undefined),
+        systemPrompt("teacher", subjectOverride),
         teacherConversation
       );
       return NextResponse.json({ reply });
@@ -686,7 +683,6 @@ export async function POST(req: NextRequest) {
     if (mode === "examiner") {
       const key = getKey(student);
 
-      // Primary key lookup
       let session: ExamSession = (await getSession(key)) || {
         session_key:   key,
         status:        "IDLE",
@@ -697,17 +693,13 @@ export async function POST(req: NextRequest) {
       };
 
       // ── KEY-MISMATCH RECOVERY ──────────────────────────────
-      // Runs whenever primary key lookup returned IDLE (i.e. session not found by sessionId).
-      // Tries multiple strategies to find an existing READY/IN_EXAM/FAILED session.
       if (session.status === "IDLE") {
         let recovered: ExamSession | null = null;
 
-        // Strategy 1: name + class (or name-only fallback inside getSessionByStudent)
         if (name) {
           recovered = await getSessionByStudent(name, cls);
         }
 
-        // Strategy 2: try the classic name_class composite key
         if (!recovered || recovered.status === "IDLE") {
           const nameClassKey = `${name || "anon"}_${cls}`;
           if (nameClassKey !== key) {
@@ -716,7 +708,6 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // Strategy 3: try name_x (when class was empty during upload)
         if (!recovered || recovered.status === "IDLE") {
           const nameXKey = `${name || "anon"}_x`;
           if (nameXKey !== key) {
@@ -725,7 +716,6 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // Strategy 4: try anon_class and anon_x if name is empty
         if ((!recovered || recovered.status === "IDLE") && !name) {
           for (const anonKey of [`anon_${cls}`, `anon_x`]) {
             if (anonKey !== key) {
@@ -790,7 +780,6 @@ export async function POST(req: NextRequest) {
       if (isStart(lower) && session.status === "IDLE") {
         const confirmedSubject: string = body?.confirmedSubject || "";
 
-        // Use same 4-strategy recovery as above — all strategies filter for READY status
         let readySession: ExamSession | null = null;
 
         if (name) {
@@ -828,10 +817,6 @@ export async function POST(req: NextRequest) {
           session.syllabus_from_upload = readySession.syllabus_from_upload;
           session.session_key          = readySession.session_key;
         } else if (confirmedSubject) {
-          // confirmedSubject was sent from the frontend — either from an explicit
-          // subject selection reply OR from a syllabus upload detection.
-          // This is the key fix for anonymous users who upload a syllabus:
-          // the frontend now sends uploadedSubjectRef.current as confirmedSubject.
           const { subjectName } = getChaptersForSubject(confirmedSubject, cls);
           const recoveredSession: ExamSession = {
             session_key:     key,
@@ -848,10 +833,6 @@ export async function POST(req: NextRequest) {
           session.subject         = subjectName;
           session.subject_request = confirmedSubject;
         } else {
-          // Last resort: re-query Supabase directly by the current key with no status filter.
-          // This catches the case where the session IS in Supabase as READY but all
-          // name/class recovery strategies missed it (e.g. anonymous user, no name set,
-          // and Supabase had a brief write delay during the upload save).
           const directLookup = await getSession(key);
           if (directLookup && directLookup.status === "READY") {
             session.status               = "READY";
@@ -1178,7 +1159,7 @@ Your Grade: [grade + label]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Strengths   : [specific sections/chapters where ${name || "the student"} performed well]
 Weaknesses  : [specific sections/chapters to work on]
-Study Tip   : [one specific, actionable improvement — e.g. "Practise Assertion-Reason daily" or "Work on Letter format"]
+Study Tip   : [one specific, actionable improvement]
         `.trim();
 
         await saveSession({ ...session, status: "FAILED" });
@@ -1299,7 +1280,6 @@ Study Tip   : [one specific, actionable improvement — e.g. "Practise Assertion
           return handleSyllabusUpload(uploadedText, cls, board, key, name, "READY");
         }
 
-        // Guard: if user types submit/done/finish before the exam has started, guide them
         if (isSubmit(lower)) {
           return NextResponse.json({
             reply:
@@ -1326,7 +1306,6 @@ Study Tip   : [one specific, actionable improvement — e.g. "Practise Assertion
           return handleSyllabusUpload(uploadedText, cls, board, key, name, "IDLE");
         }
 
-        // GUARD: never treat exam command words as subject names.
         const isExamCommand = /^(submit|done|finish|finished|start|answers?)\s*$/i.test(message.trim());
         if (isExamCommand) {
           return NextResponse.json({
@@ -1423,51 +1402,31 @@ Q2  Unseen Passage — Literary / Poem extract [10 marks]
 SECTION B — WRITING SKILLS [20 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q3  Descriptive Paragraph / Bio-sketch / Dialogue [5 marks]
-  • Write a paragraph OR bio-sketch OR dialogue on a given prompt
-  • 100–120 words | Marks: Content 2 + Expression 2 + Accuracy 1
-
 Q4  Notice / Message / Advertisement [5 marks]
-  • Write a formal Notice OR a short Message OR an Advertisement
-  • Strictly follow the standard CBSE format for whichever type
-  • 50–80 words
-
 Q5  Letter Writing [5 marks]
-  • Formal letter (complaint / request / application to principal or editor)
-    OR Informal letter to a friend/relative
-  • 120–150 words | Marks: Format 1 + Content 2 + Expression 2
-
 Q6  Long Composition — Article / Speech / Story [5 marks]
-  • Write an article OR speech OR story on a given topic with a hint
-  • 150–200 words | Marks: Content 2 + Expression 2 + Accuracy/Organisation 1
 
 SECTION C — GRAMMAR [20 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q7  Gap Filling — Tenses / Modals / Voice [4 × 1 = 4 marks]
 Q8  Editing — Error Correction [4 × 1 = 4 marks]
 Q9  Omission — Missing Words [4 × 1 = 4 marks]
-Q10  Sentence Reordering [4 × 1 = 4 marks]
-Q11  Sentence Transformation [4 × 1 = 4 marks]
+Q10 Sentence Reordering [4 × 1 = 4 marks]
+Q11 Sentence Transformation [4 × 1 = 4 marks]
 
 SECTION D — LITERATURE [20 Marks]
 ━━━━━━━━━━━━━━━━━━
-Q12  Extract-based Questions — Prose [5 marks]
-Q13  Extract-based Questions — Poetry [5 marks]
-Q14  Short Answer Questions — Prose & Poetry [6 marks]
-Q15  Long Answer — Prose / Drama [4 marks]
+Q12 Extract-based Questions — Prose [5 marks]
+Q13 Extract-based Questions — Poetry [5 marks]
+Q14 Short Answer Questions — Prose & Poetry [6 marks]
+Q15 Long Answer — Prose / Drama [4 marks]
         `.trim();
 
         const hindiSections = `
 SECTION A — APATHIT GADYANSH / KAVYANSH (Unseen Reading) [20 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q1  Apathit Gadyansh (Unseen Prose Passage) [10 marks]
-  • One unseen prose passage (300–350 words)
-  • (a) 5 MCQs × 1 mark = 5 marks
-  • (b) 5 short-answer questions × 1 mark = 5 marks
-
 Q2  Apathit Kavyansh (Unseen Poem Extract) [10 marks]
-  • One poem or poem extract (8–12 lines)
-  • (a) 5 MCQs × 1 mark = 5 marks
-  • (b) 5 short-answer questions × 1 mark = 5 marks
 
 SECTION B — LEKHAN (Writing) [20 Marks]
 ━━━━━━━━━━━━━━━━━━
@@ -1478,18 +1437,18 @@ Q6  Sandesh / Vigyapan Lekhan (Message / Advertisement) [5 marks]
 
 SECTION C — VYAKARAN (Grammar) [20 Marks]
 ━━━━━━━━━━━━━━━━━━
-Q7   Shabdalankar / Arth-bhed (Figures of Speech) [4 marks] — 4 × 1 mark
-Q8   Sandhi-Viched (Sandhi splitting) [4 marks] — 4 × 1 mark
-Q9   Samas-Vigraha (Compound word analysis) [4 marks] — 4 × 1 mark
-Q10  Muhavare / Lokoktiyan (Idioms/Proverbs — use in sentence) [4 marks] — 4 × 1 mark
-Q11  Vakya Bhed (Types of sentences — simple/compound/complex) [4 marks] — 4 × 1 mark
+Q7  Shabdalankar / Arth-bhed [4 marks]
+Q8  Sandhi-Viched [4 marks]
+Q9  Samas-Vigraha [4 marks]
+Q10 Muhavare / Lokoktiyan [4 marks]
+Q11 Vakya Bhed [4 marks]
 
 SECTION D — PATHEN (Literature) [20 Marks]
 ━━━━━━━━━━━━━━━━━━
-Q12  Gadyansh-adharit prashn (Prose extract questions) [5 marks]
-Q13  Kavyansh-adharit prashn (Poetry extract questions) [5 marks]
-Q14  Laghu Uttariya Prashn (Short answer questions) [6 marks]
-Q15  Dirgha Uttariya Prashn (Long answer question) [4 marks]
+Q12 Gadyansh-adharit prashn [5 marks]
+Q13 Kavyansh-adharit prashn [5 marks]
+Q14 Laghu Uttariya Prashn [6 marks]
+Q15 Dirgha Uttariya Prashn [4 marks]
         `.trim();
 
         const mathSections = `
@@ -1536,7 +1495,7 @@ SECTION D — Long Answer [4 × 5 = 20 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q32–Q35  [5 marks each]
 
-SECTION E — Case-Based / Source-Based [3 × 4 = 12 Marks]
+SECTION E — Case-Based [3 × 4 = 12 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q36  Case Study — Biology [4 marks]
 Q37  Case Study — Physics [4 marks]
@@ -1558,7 +1517,7 @@ SECTION C — Long Answer Questions [5 × 5 = 25 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q27–Q31  [5 marks each]
 
-SECTION D — Source-Based / Case-Based [3 × 4 = 12 Marks]
+SECTION D — Source-Based [3 × 4 = 12 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q32  Source — History [4 marks]
 Q33  Source — Geography or Economics [4 marks]
@@ -1573,25 +1532,25 @@ Q36  Geography Map [3 marks]
         const standardSections = `
 SECTION A — Objective Type [20 × 1 = 20 Marks]
 ━━━━━━━━━━━━━━━━━━
-Q1–Q16   MCQs [1 mark each] — 4 options each
+Q1–Q16   MCQs [1 mark each]
 Q17–Q18  Assertion-Reason [1 mark each]
-Q19–Q20  Fill in the Blank / One-word answer [1 mark each]
+Q19–Q20  Fill in the Blank [1 mark each]
 
 SECTION B — Very Short Answer [5 × 2 = 10 Marks]
 ━━━━━━━━━━━━━━━━━━
-Q21–Q25  [2 marks each] — 2–3 sentence answers
+Q21–Q25  [2 marks each]
 
 SECTION C — Short Answer [6 × 3 = 18 Marks]
 ━━━━━━━━━━━━━━━━━━
-Q26–Q31  [3 marks each] — 4–5 sentence answers, spread across chapters
+Q26–Q31  [3 marks each]
 
 SECTION D — Long Answer [4 × 5 = 20 Marks]
 ━━━━━━━━━━━━━━━━━━
-Q32–Q35  [5 marks each] — detailed answers, each from a different chapter
+Q32–Q35  [5 marks each]
 
 SECTION E — Case-Based [3 × 4 = 12 Marks]
 ━━━━━━━━━━━━━━━━━━
-Q36–Q38  [4 marks each] — real-life scenario with 3 sub-questions
+Q36–Q38  [4 marks each]
         `.trim();
 
         let sectionBlocks: string;
@@ -1613,20 +1572,9 @@ Q36–Q38  [4 marks each] — real-life scenario with 3 sub-questions
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🚨 ABSOLUTE RESTRICTION — UPLOADED SYLLABUS IS THE ONLY SOURCE 🚨
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-This student uploaded their own custom syllabus. The topics listed above under
-"UPLOADED SYLLABUS — STRICT BOUNDARY" are the ONLY topics that exist for this exam.
-
-YOU MUST FOLLOW THESE RULES WITHOUT EXCEPTION:
-1. Every single question on this paper MUST come from a topic explicitly listed in the uploaded syllabus above.
-2. Do NOT include any chapter, unit, or concept that is absent from the uploaded list — even if it appears in the standard NCERT textbook.
-3. Do NOT use NCERT or CBSE default chapter lists. The uploaded list replaces them entirely.
-4. Do NOT "fill in" missing sections with NCERT chapters to meet question counts. Instead, write additional questions on the listed topics.
-5. If a section (e.g. Case Study) seems hard to fill with the given topics — still do it using only the listed topics.
-6. Before writing each question, mentally verify: "Is this topic in the uploaded list?" If NO → do not write that question.
-
-SELF-CHECK BEFORE FINALISING THE PAPER:
-For every question you have written, confirm its topic appears word-for-word or by clear implication in the uploaded syllabus list.
-Delete and replace any question whose topic is NOT in the uploaded list.
+Every single question MUST come from a topic explicitly listed in the uploaded syllabus above.
+Do NOT include any chapter, unit, or concept absent from the uploaded list.
+Do NOT use NCERT or CBSE default chapter lists — the uploaded list replaces them entirely.
         `.trim() : "";
 
         const paperPrompt = `
@@ -1645,41 +1593,30 @@ Time Allowed  : 3 Hours
 Maximum Marks : 80
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 General Instructions:
-1. This question paper contains ${isEnglish || isHindi ? "four" : "five"} sections — Section A, B, C, D${isEnglish || isHindi ? "" : ", and E"}.
+1. This question paper contains ${isEnglish || isHindi ? "four" : "five"} sections.
 2. All questions are compulsory. Marks are indicated against each question.
 3. Attempt all parts of a question together.
-4. Write neat, well-structured answers.${isEnglish ? `
-5. For Section B — follow the prescribed format for each writing type.
-6. For Section C — write complete, grammatically correct sentences.` : ""}${isMath ? `
+4. Write neat, well-structured answers.${isMath ? `
 5. Show all steps clearly. Marks are awarded for method even if the final answer is wrong.
-6. Use of calculator is not permitted.` : ""}${!isEnglish && !isHindi && !isMath ? `
-5. Draw neat, labelled diagrams wherever asked. Diagrams carry marks.
-6. For map questions — use a pencil and label clearly.` : ""}
+6. Use of calculator is not permitted.` : ""}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ${hasUploadedSyllabus
   ? `AUTHORISED TOPICS — ALL QUESTIONS MUST COME FROM THIS LIST ONLY:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${chapterList}`
-  : `AUTHORISED SYLLABUS — Questions from ONLY these topics:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${chapterList}`
+  : `AUTHORISED SYLLABUS:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${chapterList}`
 }
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ${uploadCoverageNote ? uploadCoverageNote + "\n\n" : ""}${sectionBlocks}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-QUALITY RULES — NON-NEGOTIABLE:
+QUALITY RULES:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 • Generate ALL sections completely — no section may be missing or short
 • Total marks MUST add up to exactly 80
-• ${hasUploadedSyllabus
-    ? "Every question MUST come from the uploaded topic list above — NO EXCEPTIONS"
-    : "Every chapter/topic in the syllabus must appear in at least one question"}
-• ${hasUploadedSyllabus
-    ? "Do NOT add any NCERT default chapters absent from the uploaded list"
-    : "No chapter appears more than 3 times across the entire paper"}
-• Difficulty spread: 30% easy | 50% medium | 20% HOTs
-• Questions must be original CBSE board-quality — not copied from textbooks
 • Every question must show its mark value in [brackets]
-• Do NOT add any text after the last question — paper ends at the last question
+• Difficulty spread: 30% easy | 50% medium | 20% HOTs
+• Do NOT add any text after the last question
         `.trim();
 
         const paper = await callAI(paperPrompt, [
@@ -1750,8 +1687,8 @@ QUALITY RULES — NON-NEGOTIABLE:
         .map((m) => m.content).join(" ");
 
       const isHindiOral =
-        /hindi/i.test(bodySubject)                  ||
-        bodyLang === "hi-IN"                         ||
+        /hindi/i.test(bodySubject) ||
+        bodyLang === "hi-IN" ||
         /[\u0900-\u097F]{5,}/.test(oralConversationText) ||
         /hindi|हिंदी/i.test(oralConversationText);
 
@@ -1768,13 +1705,21 @@ QUALITY RULES — NON-NEGOTIABLE:
     if (mode === "practice") {
       const practiceConversationText = conversation.map((m) => m.content).join(" ");
       const isHindiPractice =
-        /hindi/i.test(bodySubject)                       ||
-        bodyLang === "hi-IN"                              ||
+        /hindi/i.test(bodySubject) ||
+        bodyLang === "hi-IN" ||
         /[\u0900-\u097F]{5,}/.test(practiceConversationText) ||
         /hindi|हिंदी/i.test(practiceConversationText);
 
+      const isMathPractice =
+        !isHindiPractice && (
+          /math/i.test(bodySubject) ||
+          /\b(mathematics|maths?|algebra|calculus|geometry|trigonometry|statistics|probability|polynomials?|coordinate|quadrilateral|heron|surface area|volume|number system|linear equation)\b/i.test(practiceConversationText)
+        );
+
+      const practiceOverride = isHindiPractice ? "hindi" : isMathPractice ? "mathematics" : undefined;
+
       const reply = await callAI(
-        systemPrompt("practice", isHindiPractice ? "hindi" : undefined),
+        systemPrompt("practice", practiceOverride),
         conversation
       );
       return NextResponse.json({ reply });
@@ -1786,13 +1731,21 @@ QUALITY RULES — NON-NEGOTIABLE:
     if (mode === "revision") {
       const revisionConversationText = conversation.map((m) => m.content).join(" ");
       const isHindiRevision =
-        /hindi/i.test(bodySubject)                        ||
-        bodyLang === "hi-IN"                               ||
+        /hindi/i.test(bodySubject) ||
+        bodyLang === "hi-IN" ||
         /[\u0900-\u097F]{5,}/.test(revisionConversationText) ||
         /hindi|हिंदी/i.test(revisionConversationText);
 
+      const isMathRevision =
+        !isHindiRevision && (
+          /math/i.test(bodySubject) ||
+          /\b(mathematics|maths?|algebra|calculus|geometry|trigonometry|statistics|probability|polynomials?|coordinate|quadrilateral|heron|surface area|volume|number system|linear equation)\b/i.test(revisionConversationText)
+        );
+
+      const revisionOverride = isHindiRevision ? "hindi" : isMathRevision ? "mathematics" : undefined;
+
       const reply = await callAI(
-        systemPrompt("revision", isHindiRevision ? "hindi" : undefined),
+        systemPrompt("revision", revisionOverride),
         conversation
       );
       return NextResponse.json({ reply });
@@ -1829,15 +1782,13 @@ OUTPUT RULES — follow exactly, no exceptions:
 - Output EXACTLY 4 lines, each starting with its emoji prefix
 - No preamble, no sign-off, no extra lines whatsoever
 - Every line must name a specific subject — never say "a subject"
-- Be precise and blunt — no filler phrases like "keep it up" or "great job"
+- Be precise and blunt — no filler phrases
 
 LINE FORMAT (output all 4, in this exact order):
 💪 Strongest:  [subject] — [score]% ([grade]) — one specific reason why
-⚠️  Weakest:   [subject] — [score]% — [one specific thing to fix, e.g. "revise Chapter 3 definitions"]
-📈 Trend:      [subject showing biggest positive delta, or "No improvement data yet" if all first attempts]
+⚠️  Weakest:   [subject] — [score]% — [one specific thing to fix]
+📈 Trend:      [subject showing biggest positive delta, or "No improvement data yet"]
 🎯 Next target: [subject closest to next grade] — [X] more marks → [next grade label]
-
-If only one subject exists, adapt gracefully but still output all 4 lines.
       `.trim();
 
       const reply = await callAI(progressPrompt, [

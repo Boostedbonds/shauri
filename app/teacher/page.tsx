@@ -32,12 +32,55 @@ function Bubble({ m }: { m: Message }) {
   );
 }
 
-function DictionaryPanel() {
+// ─── Math symbol button ───────────────────────────────────────
+function MathSymBtn({ sym, onClick }: { sym: { display: string; insert: string }; onClick: () => void }) {
+  const [hover, setHover] = useState(false);
+  const [flash, setFlash] = useState(false);
+
+  function handle() {
+    onClick();
+    setFlash(true);
+    setTimeout(() => setFlash(false), 400);
+  }
+
+  return (
+    <button
+      onClick={handle}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      title={`Copy: ${sym.insert}`}
+      style={{
+        minWidth: 38, height: 36, padding: "2px 5px",
+        background: flash ? "#dcfce7" : hover ? "#eff6ff" : "#f8fafc",
+        border: `1.5px solid ${flash ? "#86efac" : hover ? "#93c5fd" : "#e2e8f0"}`,
+        borderRadius: 7, fontSize: 15, cursor: "pointer",
+        fontFamily: "math, 'Times New Roman', serif",
+        color: "#0f172a", transition: "all 0.1s",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}
+    >{sym.display}</button>
+  );
+}
+
+// ─── Dictionary + Math Panel ──────────────────────────────────
+function DictionaryPanel({ subject }: { subject?: string }) {
+  const isMathSubject = !!(subject && /math/i.test(subject));
+
   const [query, setQuery]   = useState("");
   const [result, setResult] = useState<string | null>(null);
   const [loading, setLoad]  = useState(false);
-  const [mode, setMode]     = useState<"dictionary" | "thesaurus">("dictionary");
+  const [mode, setMode]     = useState<"dictionary" | "thesaurus" | "math">(
+    isMathSubject ? "math" : "dictionary"
+  );
   const [history, setHist]  = useState<{ word: string; result: string; mode: string }[]>([]);
+  const [mathHistory, setMathHist] = useState<{ display: string; insert: string }[]>([]);
+  const [mathSearch, setMathSearch] = useState("");
+  const [activeCategory, setActiveCategory] = useState(0);
+
+  // Auto-switch to math tab when subject changes to maths
+  useEffect(() => {
+    if (isMathSubject) setMode("math");
+  }, [isMathSubject]);
 
   async function lookup() {
     const word = query.trim();
@@ -47,7 +90,11 @@ function DictionaryPanel() {
       ? `Define "${word}": part of speech, meaning, one example sentence. Max 60 words, plain text.`
       : `Synonyms/antonyms for "${word}". Format: SYNONYMS: w1, w2, w3 | ANTONYMS: w1, w2. Max 50 words.`;
     try {
-      const res  = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "teacher", message: prompt, history: [], student: { name: "lookup", class: "tool" } }) });
+      const res  = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "teacher", message: prompt, history: [], student: { name: "lookup", class: "tool" } }),
+      });
       const data = await res.json();
       const text = data?.reply || "No result.";
       setResult(text);
@@ -56,51 +103,255 @@ function DictionaryPanel() {
     setLoad(false);
   }
 
+  // ── Math categories ───────────────────────────────────────
+  const MATH_CATS = [
+    { label: "Basic", icon: "±", symbols: [
+      { display: "±", insert: "±" }, { display: "×", insert: "×" }, { display: "÷", insert: "÷" },
+      { display: "≠", insert: "≠" }, { display: "≤", insert: "≤" }, { display: "≥", insert: "≥" },
+      { display: "≈", insert: "≈" }, { display: "∞", insert: "∞" }, { display: "√", insert: "√(" },
+      { display: "∛", insert: "∛(" }, { display: "x²", insert: "²" }, { display: "x³", insert: "³" },
+      { display: "xⁿ", insert: "^" }, { display: "|x|", insert: "|  |" }, { display: "%", insert: "%" },
+      { display: "½", insert: "½" }, { display: "¼", insert: "¼" }, { display: "¾", insert: "¾" },
+    ]},
+    { label: "Greek", icon: "α", symbols: [
+      { display: "α", insert: "α" }, { display: "β", insert: "β" }, { display: "γ", insert: "γ" },
+      { display: "Γ", insert: "Γ" }, { display: "δ", insert: "δ" }, { display: "Δ", insert: "Δ" },
+      { display: "ε", insert: "ε" }, { display: "ζ", insert: "ζ" }, { display: "η", insert: "η" },
+      { display: "θ", insert: "θ" }, { display: "Θ", insert: "Θ" }, { display: "λ", insert: "λ" },
+      { display: "Λ", insert: "Λ" }, { display: "μ", insert: "μ" }, { display: "π", insert: "π" },
+      { display: "Π", insert: "Π" }, { display: "ρ", insert: "ρ" }, { display: "σ", insert: "σ" },
+      { display: "Σ", insert: "Σ" }, { display: "τ", insert: "τ" }, { display: "φ", insert: "φ" },
+      { display: "Φ", insert: "Φ" }, { display: "χ", insert: "χ" }, { display: "ψ", insert: "ψ" },
+      { display: "Ψ", insert: "Ψ" }, { display: "ω", insert: "ω" }, { display: "Ω", insert: "Ω" },
+    ]},
+    { label: "Calc", icon: "∫", symbols: [
+      { display: "∫", insert: "∫" }, { display: "∬", insert: "∬" }, { display: "∮", insert: "∮" },
+      { display: "∂", insert: "∂" }, { display: "d/dx", insert: "d/dx(" }, { display: "dy/dx", insert: "dy/dx" },
+      { display: "lim", insert: "lim(x→" }, { display: "→", insert: "→" },
+      { display: "∑", insert: "∑" }, { display: "∏", insert: "∏" }, { display: "∇", insert: "∇" },
+    ]},
+    { label: "Trig", icon: "sin", symbols: [
+      { display: "sin", insert: "sin(" }, { display: "cos", insert: "cos(" }, { display: "tan", insert: "tan(" },
+      { display: "sin⁻¹", insert: "sin⁻¹(" }, { display: "cos⁻¹", insert: "cos⁻¹(" }, { display: "tan⁻¹", insert: "tan⁻¹(" },
+      { display: "sec", insert: "sec(" }, { display: "cosec", insert: "cosec(" }, { display: "cot", insert: "cot(" },
+      { display: "°", insert: "°" }, { display: "rad", insert: " rad" },
+    ]},
+    { label: "Sets", icon: "∈", symbols: [
+      { display: "∈", insert: "∈" }, { display: "∉", insert: "∉" }, { display: "⊂", insert: "⊂" },
+      { display: "⊃", insert: "⊃" }, { display: "∪", insert: "∪" }, { display: "∩", insert: "∩" },
+      { display: "∅", insert: "∅" }, { display: "ℝ", insert: "ℝ" }, { display: "ℤ", insert: "ℤ" },
+      { display: "ℕ", insert: "ℕ" }, { display: "ℚ", insert: "ℚ" }, { display: "ℂ", insert: "ℂ" },
+      { display: "∀", insert: "∀" }, { display: "∃", insert: "∃" },
+      { display: "⟹", insert: "⟹" }, { display: "⟺", insert: "⟺" },
+    ]},
+    { label: "Sub/Sup", icon: "xₙ", symbols: [
+      { display: "²", insert: "²" }, { display: "³", insert: "³" }, { display: "ⁿ", insert: "ⁿ" },
+      { display: "⁻¹", insert: "⁻¹" }, { display: "₀", insert: "₀" }, { display: "₁", insert: "₁" },
+      { display: "₂", insert: "₂" }, { display: "₃", insert: "₃" }, { display: "ₙ", insert: "ₙ" },
+      { display: "ᵢ", insert: "ᵢ" }, { display: "×10^", insert: "×10^" },
+    ]},
+    { label: "Logic", icon: "∧", symbols: [
+      { display: "∧", insert: "∧" }, { display: "∨", insert: "∨" }, { display: "¬", insert: "¬" },
+      { display: "⊕", insert: "⊕" }, { display: "∴", insert: "∴" }, { display: "∵", insert: "∵" },
+      { display: "≡", insert: "≡" }, { display: "⊢", insert: "⊢" },
+    ]},
+  ];
+
+  const allSyms = MATH_CATS.flatMap(c => c.symbols);
+  const filteredSyms = mathSearch.trim()
+    ? allSyms.filter(s =>
+        s.display.toLowerCase().includes(mathSearch.toLowerCase()) ||
+        s.insert.toLowerCase().includes(mathSearch.toLowerCase())
+      )
+    : null;
+  const currentSyms = filteredSyms
+    ? filteredSyms
+    : activeCategory === -1
+      ? mathHistory
+      : MATH_CATS[activeCategory]?.symbols || [];
+
+  function insertSymbol(sym: { display: string; insert: string }) {
+    navigator.clipboard?.writeText(sym.insert).catch(() => {});
+    setMathHist(prev => [sym, ...prev.filter(s => s.insert !== sym.insert)].slice(0, 12));
+  }
+
   return (
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: "#fafbff" }}>
-      <div style={{ padding: "14px 14px 10px", borderBottom: "1px solid #e2e8f0", background: "#fff", flexShrink: 0 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", marginBottom: 8, letterSpacing: "0.08em" }}>📖 REFERENCE</div>
-        <div style={{ display: "flex", gap: 3, marginBottom: 8, background: "#f1f5f9", borderRadius: 8, padding: 3 }}>
-          {(["dictionary", "thesaurus"] as const).map(m => (
-            <button key={m} onClick={() => setMode(m)} style={{ flex: 1, padding: "5px 0", background: mode === m ? "#2563eb" : "transparent", color: mode === m ? "#fff" : "#64748b", border: "none", borderRadius: 5, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
-              {m === "dictionary" ? "Dict" : "Thesaurus"}
+
+      {/* ── Header: 3 tabs ── */}
+      <div style={{ padding: "10px 10px 0", borderBottom: "1px solid #e2e8f0", background: "#fff", flexShrink: 0 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: "#64748b", marginBottom: 7, letterSpacing: "0.08em" }}>
+          📖 REFERENCE
+        </div>
+        <div style={{ display: "flex", gap: 3, background: "#f1f5f9", borderRadius: 8, padding: 3, marginBottom: 8 }}>
+          {(["dictionary", "thesaurus", "math"] as const).map(m => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              style={{
+                flex: 1, padding: "5px 2px", position: "relative",
+                background: mode === m ? (m === "math" ? "#0f172a" : "#2563eb") : "transparent",
+                color: mode === m ? "#fff" : "#64748b",
+                border: "none", borderRadius: 5,
+                fontSize: m === "math" ? 10 : 11,
+                fontWeight: 700, cursor: "pointer",
+                transition: "all 0.15s",
+              }}
+            >
+              {m === "dictionary" ? "Dict" : m === "thesaurus" ? "Thesaurus" : "Math ∑"}
+              {/* Blue dot badge when subject is maths and this is the math tab but not active */}
+              {m === "math" && isMathSubject && mode !== "math" && (
+                <span style={{
+                  position: "absolute", top: 3, right: 4,
+                  width: 5, height: 5, borderRadius: "50%",
+                  background: "#38bdf8", display: "block",
+                }} />
+              )}
             </button>
           ))}
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
-          <input value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === "Enter" && lookup()} placeholder="Search word…" style={{ flex: 1, padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 14, outline: "none", background: "#f8fafc", minWidth: 0 }} />
-          <button onClick={lookup} disabled={loading} style={{ padding: "8px 12px", background: loading ? "#94a3b8" : "#2563eb", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", flexShrink: 0 }}>
-            {loading ? "…" : "Go"}
-          </button>
-        </div>
       </div>
-      <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px" }}>
-        {loading && <div style={{ color: "#64748b", fontSize: 13 }}>Looking up <em>{query}</em>…</div>}
-        {result && !loading && (
-          <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#2563eb", marginBottom: 6 }}>{query}</div>
-            <div style={{ fontSize: 13, color: "#334155", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{result}</div>
+
+      {/* ── MATH TAB ── */}
+      {mode === "math" && (
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+
+          {/* Search */}
+          <div style={{ padding: "8px 10px 4px", flexShrink: 0 }}>
+            <input
+              value={mathSearch}
+              onChange={e => setMathSearch(e.target.value)}
+              placeholder="Search… theta, integral, pi"
+              style={{
+                width: "100%", padding: "6px 9px", border: "1px solid #e2e8f0",
+                borderRadius: 7, fontSize: 11, outline: "none", background: "#f8fafc",
+              }}
+            />
           </div>
-        )}
-        {!result && !loading && history.length === 0 && (
-          <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>Look up any word for definitions & synonyms.</div>
-        )}
-        {!loading && history.map((h, i) => (
-          <button key={i} onClick={() => { setQuery(h.word); setResult(h.result); setMode(h.mode as any); }} style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 10px", marginBottom: 4, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 12, color: "#475569", cursor: "pointer" }}>
-            <strong>{h.word}</strong>
-            <span style={{ opacity: 0.45, marginLeft: 6, fontSize: 10 }}>{h.mode}</span>
-          </button>
-        ))}
-      </div>
+
+          {/* Category sub-tabs */}
+          <div style={{ display: "flex", overflowX: "auto", gap: 3, padding: "0 10px 6px", flexShrink: 0 }}>
+            {mathHistory.length > 0 && (
+              <button
+                onClick={() => { setActiveCategory(-1); setMathSearch(""); }}
+                style={{
+                  padding: "3px 8px", border: "none", borderRadius: 5, fontSize: 10,
+                  fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+                  background: activeCategory === -1 && !mathSearch ? "#0f172a" : "#f1f5f9",
+                  color: activeCategory === -1 && !mathSearch ? "#fff" : "#475569",
+                }}
+              >⏱ Recent</button>
+            )}
+            {MATH_CATS.map((c, i) => (
+              <button
+                key={i}
+                onClick={() => { setActiveCategory(i); setMathSearch(""); }}
+                style={{
+                  padding: "3px 8px", border: "none", borderRadius: 5, fontSize: 10,
+                  fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+                  background: activeCategory === i && !mathSearch ? "#0f172a" : "#f1f5f9",
+                  color: activeCategory === i && !mathSearch ? "#fff" : "#475569",
+                }}
+              >{c.icon} {c.label}</button>
+            ))}
+          </div>
+
+          {/* Symbol grid */}
+          <div style={{
+            flex: 1, overflowY: "auto", padding: "4px 10px 8px",
+            display: "flex", flexWrap: "wrap", gap: 5, alignContent: "flex-start",
+          }}>
+            {currentSyms.length === 0 && (
+              <div style={{ color: "#94a3b8", fontSize: 11, padding: "8px 0" }}>No symbols found.</div>
+            )}
+            {currentSyms.map((s, i) => (
+              <MathSymBtn key={i} sym={s} onClick={() => insertSymbol(s)} />
+            ))}
+          </div>
+
+          {/* Footer hint */}
+          <div style={{
+            padding: "5px 10px 7px", fontSize: 9, color: "#94a3b8",
+            borderTop: "1px solid #f1f5f9", background: "#fafbff",
+            flexShrink: 0, lineHeight: 1.6, textAlign: "center",
+          }}>
+            Click symbol → copied ✓ → paste in chat with <strong>Ctrl+V</strong>
+          </div>
+        </div>
+      )}
+
+      {/* ── DICT / THESAURUS TAB ── */}
+      {mode !== "math" && (
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <div style={{ padding: "10px 10px 8px", flexShrink: 0 }}>
+            <div style={{ display: "flex", gap: 6 }}>
+              <input
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && lookup()}
+                placeholder="Search word…"
+                style={{
+                  flex: 1, padding: "8px 10px", border: "1px solid #e2e8f0",
+                  borderRadius: 8, fontSize: 13, outline: "none", background: "#f8fafc", minWidth: 0,
+                }}
+              />
+              <button
+                onClick={lookup}
+                disabled={loading}
+                style={{
+                  padding: "8px 12px", background: loading ? "#94a3b8" : "#2563eb",
+                  color: "#fff", border: "none", borderRadius: 8, fontSize: 13,
+                  fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", flexShrink: 0,
+                }}
+              >{loading ? "…" : "Go"}</button>
+            </div>
+          </div>
+
+          <div style={{ flex: 1, overflowY: "auto", padding: "0 10px 10px" }}>
+            {loading && <div style={{ color: "#64748b", fontSize: 13 }}>Looking up <em>{query}</em>…</div>}
+            {result && !loading && (
+              <div style={{
+                background: "#fff", border: "1px solid #e2e8f0",
+                borderRadius: 10, padding: "10px 12px", marginBottom: 12,
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#2563eb", marginBottom: 6 }}>{query}</div>
+                <div style={{ fontSize: 13, color: "#334155", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{result}</div>
+              </div>
+            )}
+            {!result && !loading && history.length === 0 && (
+              <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>
+                Look up any word for definitions & synonyms.
+              </div>
+            )}
+            {!loading && history.map((h, i) => (
+              <button
+                key={i}
+                onClick={() => { setQuery(h.word); setResult(h.result); setMode(h.mode as any); }}
+                style={{
+                  display: "block", width: "100%", textAlign: "left",
+                  padding: "7px 10px", marginBottom: 4, background: "#fff",
+                  border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 12,
+                  color: "#475569", cursor: "pointer",
+                }}
+              >
+                <strong>{h.word}</strong>
+                <span style={{ opacity: 0.45, marginLeft: 6, fontSize: 10 }}>{h.mode}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
+// ─── Main Teacher Page ─────────────────────────────────────────
 export default function TeacherPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setLoading] = useState(false);
   const [studentName, setName]  = useState("");
   const [studentData, setData]  = useState<any>(null);
+  const [currentSubject, setCurrentSubject] = useState("");
 
   const sendingRef = useRef(false);
   const bottomRef  = useRef<HTMLDivElement>(null);
@@ -112,7 +363,7 @@ export default function TeacherPage() {
   useEffect(() => {
     let student: any = null;
     try { student = JSON.parse(localStorage.getItem("shauri_student") || "null"); } catch {}
-    const name  = student?.name || "";
+    const name  = student?.name  || "";
     const board = student?.board || "CBSE";
     const cls   = student?.class ? ` Class ${student.class}` : "";
     setName(name);
@@ -122,6 +373,14 @@ export default function TeacherPage() {
       : `Hi! 👋 I'm Shauri, your ${board} teacher.\n\nWhat would you like to learn today?`;
     setMessages([{ role: "assistant", content: greeting }]);
   }, []);
+
+  // Detect subject from assistant replies so DictionaryPanel can auto-switch
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== "assistant") return;
+    const mathMatch = last.content.match(/\b(mathematics|maths?)\b/i);
+    if (mathMatch) setCurrentSubject("mathematics");
+  }, [messages]);
 
   async function callAPI(text: string, uploadedText?: string, uploadType?: "syllabus" | "answer") {
     if (sendingRef.current) return;
@@ -146,7 +405,7 @@ export default function TeacherPage() {
           uploadType: uploadType || null,
           history,
           student: {
-            name: student?.name || "",
+            name:  student?.name  || "",
             class: student?.class || "",
             board: student?.board || "CBSE",
           },
@@ -166,6 +425,10 @@ export default function TeacherPage() {
   async function handleSend(text: string, uploadedText?: string, uploadType?: "syllabus" | "answer") {
     if (!text.trim() && !uploadedText) return;
     if (sendingRef.current) return;
+
+    // Detect if user is asking about maths to pre-switch the panel
+    if (/\b(mathematics|maths?)\b/i.test(text)) setCurrentSubject("mathematics");
+
     setMessages(p => [...p, { role: "user", content: text.trim() }]);
     await callAPI(text, uploadedText, uploadType);
   }
@@ -179,16 +442,22 @@ export default function TeacherPage() {
         @media(min-width:700px){.dict-panel{display:flex!important;flex-direction:column}}
       `}</style>
 
-      {/* TOP BAR */}
-      <div style={{ height: 52, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", background: "#fff", borderBottom: "1px solid #e2e8f0", flexShrink: 0 }}>
-        <button onClick={() => window.location.href = "/modes"} style={{ padding: "7px 14px", background: "#f1f5f9", color: "#374151", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>← Back</button>
+      {/* ── TOP BAR ── */}
+      <div style={{
+        height: 52, display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "0 20px", background: "#fff", borderBottom: "1px solid #e2e8f0", flexShrink: 0,
+      }}>
+        <button
+          onClick={() => window.location.href = "/modes"}
+          style={{ padding: "7px 14px", background: "#f1f5f9", color: "#374151", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13, cursor: "pointer", fontWeight: 600 }}
+        >← Back</button>
         <span style={{ fontSize: 15, fontWeight: 700, color: "#0f172a" }}>
           📚 Teacher Mode
         </span>
         <div style={{ width: 80 }} />
       </div>
 
-      {/* BODY */}
+      {/* ── BODY ── */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
 
         {/* CHAT */}
@@ -197,7 +466,12 @@ export default function TeacherPage() {
             {messages.map((m, i) => <Bubble key={i} m={m} />)}
             {isLoading && (
               <div style={{ display: "flex", gap: 5, padding: "4px 8px", marginBottom: 8 }}>
-                {[0, 1, 2].map(i => <div key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: "#38bdf8", animation: `bounce 1s ${i * 0.15}s infinite ease-in-out` }} />)}
+                {[0, 1, 2].map(i => (
+                  <div key={i} style={{
+                    width: 8, height: 8, borderRadius: "50%", background: "#38bdf8",
+                    animation: `bounce 1s ${i * 0.15}s infinite ease-in-out`,
+                  }} />
+                ))}
               </div>
             )}
             <div ref={bottomRef} />
@@ -207,9 +481,9 @@ export default function TeacherPage() {
           </div>
         </div>
 
-        {/* DICTIONARY — desktop only */}
+        {/* REFERENCE PANEL — desktop only */}
         <div className="dict-panel" style={{ width: 244, flexShrink: 0, borderLeft: "1.5px solid #e2e8f0" }}>
-          <DictionaryPanel />
+          <DictionaryPanel subject={currentSubject} />
         </div>
       </div>
     </div>
