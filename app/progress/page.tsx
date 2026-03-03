@@ -3,7 +3,11 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import Header from "../components/Header";
 
+// ─── Types ────────────────────────────────────────────────────
+// ExamAttempt accepts BOTH the frontend camelCase shape AND the raw
+// Supabase snake_case shape so merging never silently drops rows.
 type ExamAttempt = {
+  // canonical fields (used everywhere in the UI)
   id: string;
   date: string;
   mode: "examiner";
@@ -12,6 +16,16 @@ type ExamAttempt = {
   timeTakenSeconds: number;
   rawAnswerText: string;
   scorePercent?: number;
+
+  // raw Supabase fields that may arrive un-mapped from /api/progress
+  percentage?: number;
+  marks_obtained?: number;
+  total_marks?: number;
+  time_taken?: string;
+  evaluation_text?: string;
+  created_at?: string;
+  student_name?: string;
+  class?: string;
 };
 
 type SubjectStat = {
@@ -27,6 +41,7 @@ type SubjectStat = {
 
 type SyncState = "idle" | "loading" | "success" | "error";
 
+// ─── Helpers ──────────────────────────────────────────────────
 const GRADES = [
   { min: 90, label: "A1", color: "#059669" },
   { min: 75, label: "A2", color: "#0d9488" },
@@ -53,6 +68,51 @@ function getTrend(scores: number[]): { label: string; color: string; delta: numb
   if (delta > 0) return { label: `+${delta}% vs last`, color: "#059669", delta };
   if (delta < 0) return { label: `${delta}% vs last`,  color: "#dc2626", delta };
   return           { label: "No change",               color: "#d97706", delta: 0 };
+}
+
+// Parse "1h 2m 3s" / "2m 3s" / "45s" → seconds number
+function parseTimeTaken(raw: string | number | undefined): number {
+  if (typeof raw === "number") return raw;
+  if (!raw) return 0;
+  let secs = 0;
+  const h = raw.match(/(\d+)\s*h/i);
+  const m = raw.match(/(\d+)\s*m/i);
+  const s = raw.match(/(\d+)\s*s/i);
+  if (h) secs += parseInt(h[1]) * 3600;
+  if (m) secs += parseInt(m[1]) * 60;
+  if (s) secs += parseInt(s[1]);
+  return secs;
+}
+
+// Normalise a raw DB row OR an already-mapped ExamAttempt into the
+// canonical ExamAttempt shape so the UI always gets consistent fields.
+function normaliseAttempt(raw: any): ExamAttempt {
+  // scorePercent: prefer the camelCase key, fall back to DB "percentage"
+  const scorePercent =
+    typeof raw.scorePercent === "number" ? raw.scorePercent :
+    typeof raw.percentage   === "number" ? raw.percentage   :
+    undefined;
+
+  return {
+    id:               raw.id ?? raw.created_at ?? String(Math.random()),
+    date:             raw.date ?? raw.created_at ?? new Date().toISOString(),
+    mode:             "examiner",
+    subject:          raw.subject ?? "Unknown",
+    chapters:         Array.isArray(raw.chapters) ? raw.chapters : [],
+    timeTakenSeconds: parseTimeTaken(raw.timeTakenSeconds ?? raw.time_taken),
+    rawAnswerText:    raw.rawAnswerText ?? raw.evaluation_text ?? "",
+    scorePercent,
+
+    // keep originals for reference
+    percentage:       raw.percentage,
+    marks_obtained:   raw.marks_obtained,
+    total_marks:      raw.total_marks,
+    time_taken:       raw.time_taken,
+    evaluation_text:  raw.evaluation_text,
+    created_at:       raw.created_at,
+    student_name:     raw.student_name,
+    class:            raw.class,
+  };
 }
 
 const SUBJECT_COLORS = ["#2563eb","#0d9488","#7c3aed","#ea580c","#4f46e5","#059669"];
@@ -113,12 +173,15 @@ function loadLocalAttempts(): ExamAttempt[] {
     const raw = localStorage.getItem("shauri_exam_attempts");
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map(normaliseAttempt);
+      }
     }
   } catch {}
   return [];
 }
 
+// ─── Main page ────────────────────────────────────────────────
 export default function ProgressPage() {
   const [attempts, setAttempts]     = useState<ExamAttempt[]>([]);
   const [aiSummary, setAiSummary]   = useState("");
@@ -146,7 +209,7 @@ export default function ProgressPage() {
     } catch {}
 
     // No student info — just use local
-    if (!name || !cls) {
+    if (!name && !cls) {
       setSyncState(local.length > 0 ? "success" : "idle");
       if (local.length > 0) setLastSynced(new Date());
       return;
@@ -154,9 +217,11 @@ export default function ProgressPage() {
 
     // Fetch from server
     try {
-      const res = await fetch(
-        `/api/progress?name=${encodeURIComponent(name)}&class=${encodeURIComponent(cls)}`
-      );
+      const params = new URLSearchParams();
+      if (name) params.set("name", name);
+      if (cls)  params.set("class", cls);
+
+      const res = await fetch(`/api/progress?${params.toString()}`);
 
       if (!res.ok) {
         throw new Error(`Server error: ${res.status}`);
@@ -168,7 +233,12 @@ export default function ProgressPage() {
         throw new Error(data.error);
       }
 
-      const remote: ExamAttempt[] = data.attempts || [];
+      // Normalise every row regardless of whether /api/progress already
+      // mapped field names or returned raw Supabase snake_case rows.
+      const rawRemote: any[] = data.attempts ?? data.data ?? data ?? [];
+      const remote: ExamAttempt[] = Array.isArray(rawRemote)
+        ? rawRemote.map(normaliseAttempt)
+        : [];
 
       if (remote.length > 0) {
         // Merge: remote takes priority, keep any local-only entries not yet synced
@@ -190,7 +260,6 @@ export default function ProgressPage() {
       console.error("[Progress] fetch error:", err);
       setErrorMsg(err?.message || "Could not sync. Showing local data.");
       setSyncState("error");
-      // Keep whatever is already shown (local data)
     }
   }, []);
 
@@ -202,9 +271,16 @@ export default function ProgressPage() {
   const subjects: SubjectStat[] = useMemo(() => {
     const map: Record<string, number[]> = {};
     attempts.forEach((a) => {
-      if (typeof a.scorePercent === "number" && !isNaN(a.scorePercent)) {
+      // Accept scorePercent OR percentage — normaliseAttempt should have unified
+      // them but guard here as a second safety net
+      const score =
+        typeof a.scorePercent === "number" ? a.scorePercent :
+        typeof a.percentage   === "number" ? a.percentage   :
+        NaN;
+
+      if (!isNaN(score)) {
         map[a.subject] ??= [];
-        map[a.subject].push(a.scorePercent);
+        map[a.subject].push(score);
       }
     });
     return Object.entries(map).map(([subject, scores], idx) => {
@@ -285,7 +361,7 @@ export default function ProgressPage() {
     reader.onload = () => {
       try {
         const parsed = JSON.parse(reader.result as string);
-        if (Array.isArray(parsed)) setAttempts(parsed);
+        if (Array.isArray(parsed)) setAttempts(parsed.map(normaliseAttempt));
       } catch { alert("Invalid file format."); }
     };
     reader.readAsText(file);
@@ -340,6 +416,11 @@ export default function ProgressPage() {
           {syncState === "success" && lastSynced && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: "8px 14px", fontSize: 12, color: "#15803d" }}>
               ✅ Synced at {lastSynced.toLocaleTimeString()}
+              {attempts.length > 0 && (
+                <span style={{ color: "#64748b", marginLeft: 8 }}>
+                  · {attempts.length} exam{attempts.length !== 1 ? "s" : ""} found
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -363,7 +444,9 @@ export default function ProgressPage() {
             <p style={{ fontSize: 14, color: "#64748b", marginBottom: 24 }}>
               {syncState === "error"
                 ? "Check your connection and retry. Local data shown if available."
-                : "Complete an exam in Examiner Mode to see your progress here."}
+                : attempts.length > 0
+                  ? `${attempts.length} exam record${attempts.length !== 1 ? "s" : ""} found but score data is missing — exams may not have been fully evaluated.`
+                  : "Complete an exam in Examiner Mode to see your progress here."}
             </p>
             {syncState === "error"
               ? <button style={btnBase} onClick={fetchAttempts}>Retry Sync</button>
