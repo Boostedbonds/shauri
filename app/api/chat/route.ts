@@ -24,6 +24,7 @@ type ExamSession = {
   status: "IDLE" | "READY" | "IN_EXAM" | "FAILED";
   subject_request?: string;
   subject?: string;
+  custom_instructions?: string; // NEW: stores free-form paper requirements
   question_paper?: string;
   answer_log: string[];
   started_at?: number;
@@ -53,6 +54,41 @@ function sanitiseClass(raw: string): string {
   const n = parseInt(raw);
   if (isNaN(n)) return String(syllabus.class);
   return String(Math.min(Math.max(n, MIN_CLASS), MAX_CLASS));
+}
+
+// ─────────────────────────────────────────────────────────────
+// DETECT CUSTOM PAPER INSTRUCTIONS
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Returns true if the message contains specific paper-format instructions
+ * beyond just naming a subject (e.g. MCQ count, chapters, marks per question).
+ */
+function hasCustomInstructions(text: string): boolean {
+  return /\b(mcq|multiple.?choice|chapter|chapters|marks?\s+each|carrying|only\s+\d|q\d|question\s+\d|\d+\s+question|\d+\s+mcq|short\s+answer|long\s+answer|fill\s+in|true.false|one.word|very\s+short|section\s+[a-z])\b/i.test(text);
+}
+
+/**
+ * Extract the core subject keyword from a custom instruction message.
+ * e.g. "Give me 20 MCQ of mathematics chapters 1-12" → "mathematics"
+ */
+function extractSubjectFromInstruction(text: string): string {
+  const subjectPatterns = [
+    /\b(science|physics|chemistry|biology)\b/i,
+    /\b(mathematics|maths?)\b/i,
+    /\b(history)\b/i,
+    /\b(geography|geo)\b/i,
+    /\b(civics?|political\s*science|democratic\s*politics)\b/i,
+    /\b(economics?|eco)\b/i,
+    /\b(sst|social\s*science)\b/i,
+    /\b(english)\b/i,
+    /\b(hindi)\b/i,
+  ];
+  for (const pat of subjectPatterns) {
+    const m = text.match(pat);
+    if (m) return m[1];
+  }
+  return text; // fallback: use full text
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -649,21 +685,18 @@ export async function POST(req: NextRequest) {
       const teacherConversationText = [...history, { role: "user", content: message }]
         .map((m) => m.content).join(" ");
 
-      // ── Detect subject for the correct system prompt variant ──
       const isHindiTeacher =
         /hindi/i.test(bodySubject) ||
         bodyLang === "hi-IN" ||
         /[\u0900-\u097F]{5,}/.test(teacherConversationText) ||
         /hindi|हिंदी/i.test(teacherConversationText);
 
-      // Detect maths from bodySubject OR any maths keyword in the conversation
       const isMathTeacher =
         !isHindiTeacher && (
           /math/i.test(bodySubject) ||
           /\b(mathematics|maths?|algebra|calculus|geometry|trigonometry|statistics|probability|polynomials?|coordinate geometry|quadrilateral|heron'?s? formula|surface area|volume|number system|linear equation|circles?|triangles?|constructions?|pythagoras|mensuration)\b/i.test(teacherConversationText)
         );
 
-      // Hindi takes priority; pass "mathematics" if maths detected; else undefined
       const subjectOverride = isHindiTeacher
         ? "hindi"
         : isMathTeacher
@@ -814,6 +847,7 @@ export async function POST(req: NextRequest) {
           session.status               = "READY";
           session.subject              = readySession.subject;
           session.subject_request      = readySession.subject_request;
+          session.custom_instructions  = readySession.custom_instructions;
           session.syllabus_from_upload = readySession.syllabus_from_upload;
           session.session_key          = readySession.session_key;
         } else if (confirmedSubject) {
@@ -838,6 +872,7 @@ export async function POST(req: NextRequest) {
             session.status               = "READY";
             session.subject              = directLookup.subject;
             session.subject_request      = directLookup.subject_request;
+            session.custom_instructions  = directLookup.custom_instructions;
             session.syllabus_from_upload = directLookup.syllabus_from_upload;
             session.session_key          = directLookup.session_key;
             console.log("[isStart+IDLE] direct key re-lookup found READY session:", directLookup.session_key);
@@ -1327,18 +1362,39 @@ Study Tip   : [one specific, actionable improvement]
           });
         }
 
-        const { subjectName } = getChaptersForSubject(message, cls);
+        // ── Detect if the message has custom paper instructions ──
+        const messageHasCustomInstructions = hasCustomInstructions(message);
+        const coreSubject = messageHasCustomInstructions
+          ? extractSubjectFromInstruction(message)
+          : message;
+
+        const { subjectName } = getChaptersForSubject(coreSubject, cls);
+
         const newSession: ExamSession = {
-          session_key:   key,
-          status:        "READY",
-          subject_request: message,
-          subject:       subjectName,
-          answer_log:    [],
-          student_name:  name,
-          student_class: cls,
-          student_board: board,
+          session_key:          key,
+          status:               "READY",
+          subject_request:      coreSubject,
+          subject:              subjectName,
+          // Store the full custom instructions so they're used at paper generation time
+          custom_instructions:  messageHasCustomInstructions ? message.trim() : undefined,
+          answer_log:           [],
+          student_name:         name,
+          student_class:        cls,
+          student_board:        board,
         };
         await saveSession(newSession);
+
+        if (messageHasCustomInstructions) {
+          return NextResponse.json({
+            reply:
+              `📚 Got it! I'll prepare a **custom paper** for:\n` +
+              `**${subjectName} — Class ${cls}**\n\n` +
+              `📝 **Your instructions:** ${message.trim()}\n\n` +
+              `The paper will be generated exactly as you described.\n\n` +
+              `Type **start** when you're ready to begin.\n` +
+              `⏱️ Timer starts the moment you type start.`,
+          });
+        }
 
         return NextResponse.json({
           reply:
@@ -1366,6 +1422,7 @@ Study Tip   : [one specific, actionable improvement]
           subject: session.subject,
           hasSyllabusUpload: !!session.syllabus_from_upload,
           syllabusLength: session.syllabus_from_upload?.length || 0,
+          hasCustomInstructions: !!session.custom_instructions,
         });
 
         if (session.syllabus_from_upload) {
@@ -1386,8 +1443,80 @@ Study Tip   : [one specific, actionable improvement]
         const isSST     = /sst|social|history|geography|civics|economics|politics|contemporary/i.test(subjectName);
         const isEnglish = /english/i.test(subjectName);
         const isHindi   = /hindi/i.test(subjectName);
-        const hasUploadedSyllabus = !!session.syllabus_from_upload;
+        const hasUploadedSyllabus   = !!session.syllabus_from_upload;
+        const customInstructions    = session.custom_instructions || "";
+        const hasCustomInstr        = !!customInstructions;
 
+        // ── If custom instructions were provided, use a free-form prompt ──
+        if (hasCustomInstr && !hasUploadedSyllabus) {
+          const customPaperPrompt = `
+You are an official CBSE question paper setter for Class ${cls}, ${board} board.
+Subject: ${subjectName}
+
+A student has requested a custom test with these exact specifications:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STUDENT'S REQUEST: ${customInstructions}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+AUTHORISED SYLLABUS (use only chapters/topics from this list):
+${chapterList}
+
+INSTRUCTIONS:
+1. Generate the paper EXACTLY as the student requested — honour their specified format, question types, chapter range, and marks per question.
+2. Include a proper paper header:
+   Subject       : ${subjectName}
+   Class         : ${cls}
+   Board         : ${board}
+   Time Allowed  : [derive from question count — approx 1.5 min per MCQ, 3 min per 2-mark Q, 5 min per 3-mark Q]
+   Maximum Marks : [sum of all question marks]
+3. Show the mark value in [brackets] next to every question.
+4. Output ONLY the question paper — no commentary, no preamble.
+          `.trim();
+
+          const paper = await callAI(customPaperPrompt, [
+            {
+              role: "user",
+              content: `Generate the custom paper as requested: "${customInstructions}"`,
+            },
+          ]);
+
+          const totalMarksOnPaper = parseTotalMarksFromPaper(paper);
+          const startTime         = Date.now();
+
+          const activeSession: ExamSession = {
+            session_key:          session.session_key || key,
+            status:               "IN_EXAM",
+            subject_request:      session.subject_request,
+            subject:              subjectName,
+            custom_instructions:  customInstructions,
+            question_paper:       paper,
+            answer_log:           [],
+            started_at:           startTime,
+            total_marks:          totalMarksOnPaper,
+            syllabus_from_upload: session.syllabus_from_upload,
+            student_name:         name,
+            student_class:        cls,
+            student_board:        board,
+          };
+
+          await saveSession(activeSession);
+
+          return NextResponse.json({
+            reply:
+              `⏱️ **Exam started! Timer is running.**\n\n` +
+              `📌 How to answer:\n` +
+              `• Answer questions in **any order** you prefer\n` +
+              `• Type answers directly in chat, OR\n` +
+              `• Upload **photos / PDFs** of your handwritten answers\n` +
+              `• You can send multiple messages — all will be collected\n` +
+              `• When fully done, type **submit** (or **done** / **finish**)\n\n` +
+              `Good luck${callName}! 💪 Give it your best.`,
+            paper,
+            startTime,
+          });
+        }
+
+        // ── Standard CBSE paper generation (unchanged) ──
         const englishSections = `
 SECTION A — READING [20 Marks]
 ━━━━━━━━━━━━━━━━━━
@@ -1634,6 +1763,7 @@ QUALITY RULES:
           status:               "IN_EXAM",
           subject_request:      session.subject_request,
           subject:              subjectName,
+          custom_instructions:  customInstructions || undefined,
           question_paper:       paper,
           answer_log:           [],
           started_at:           startTime,
