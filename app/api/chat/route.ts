@@ -570,7 +570,8 @@ async function handleSyllabusUpload(
   board: string,
   key: string,
   name: string,
-  currentStatus: "IDLE" | "READY"
+  currentStatus: "IDLE" | "READY",
+  customInstructions?: string          // ← NEW: format command sent alongside upload
 ): Promise<NextResponse> {
   if (!uploadedText || uploadedText.length <= 30) {
     return NextResponse.json({
@@ -586,6 +587,9 @@ async function handleSyllabusUpload(
   const { subjectName, chapterList, raw } =
     await parseSyllabusFromUpload(uploadedText, cls, board);
 
+  // Parse any format requirements from the accompanying message
+  const reqs = customInstructions ? parsePaperRequirements(customInstructions) : null;
+
   const updatedSession: ExamSession = {
     session_key:          key,
     status:               "READY",
@@ -593,27 +597,50 @@ async function handleSyllabusUpload(
     subject:              subjectName,
     answer_log:           [],
     syllabus_from_upload: chapterList,
+    // Save custom instructions if they contain real format requirements
+    custom_instructions:  (reqs?.isCustom && customInstructions) ? customInstructions : undefined,
     student_name:         name,
     student_class:        cls,
     student_board:        board,
   };
   await saveSession(updatedSession);
 
-  console.log("[SYLLABUS UPLOAD] Saved session:", key, "subject:", subjectName, "syllabusLength:", chapterList.length);
+  console.log("[SYLLABUS UPLOAD] Saved session:", key, "subject:", subjectName,
+    "syllabusLength:", chapterList.length,
+    "customInstructions:", updatedSession.custom_instructions || "none");
 
   const isOverride = currentStatus === "READY";
+
+  // Build a summary of detected format requirements to show the student
+  let formatConfirmation = "";
+  if (reqs?.isCustom) {
+    const parts: string[] = [];
+    if (reqs.totalMarks)              parts.push(`**${reqs.totalMarks} marks**`);
+    if (reqs.timeMinutes)             parts.push(`${formatTimeAllowed(reqs.timeMinutes)}`);
+    if (reqs.questionTypes.length)    parts.push(reqs.questionTypes.join(" + "));
+    if (reqs.questionCount)           parts.push(`${reqs.questionCount} questions`);
+    if (reqs.chapterFilter)           parts.push(reqs.chapterFilter);
+    if (parts.length > 0) {
+      formatConfirmation =
+        `\n✅ **Format detected:** ${parts.join(" · ")}\n` +
+        `The paper will be generated with these exact specifications.\n`;
+    }
+  }
+
   return NextResponse.json({
     reply:
       `📄 **Syllabus ${isOverride ? "updated" : "uploaded"} successfully!**\n\n` +
       `**Subject detected:** ${subjectName}\n\n` +
       `**Topics / Chapters found:**\n${raw}\n\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `The exam paper will be generated **strictly based on the above syllabus only**.\n\n` +
+      `The exam paper will be generated **strictly based on the above syllabus only**.\n` +
+      formatConfirmation + `\n` +
       `✅ If this looks correct, type **start** to begin your exam.\n` +
-      `💡 You can also specify the format, e.g.:\n` +
-      `   • "prepare 30 marks exam"\n` +
-      `   • "give 20 MCQ questions"\n` +
-      `   • "1 hour test with short answers"\n` +
+      (reqs?.isCustom ? `` :
+        `💡 You can also specify the format, e.g.:\n` +
+        `   • "prepare 30 marks exam"\n` +
+        `   • "give 20 MCQ questions"\n` +
+        `   • "1 hour test with short answers"\n`) +
       `✏️ If something is wrong, upload a clearer image or retype the subject name.`,
   });
 }
@@ -1428,7 +1455,7 @@ Study Tip   : [one specific, actionable improvement]
           (!uploadType && uploadedText.length > 30);
 
         if (isSyllabusUpload && uploadedText.length > 30) {
-          return handleSyllabusUpload(uploadedText, cls, board, key, name, "READY");
+          return handleSyllabusUpload(uploadedText, cls, board, key, name, "READY", message.trim() || undefined);
         }
 
         if (isSubmit(lower)) {
@@ -1472,7 +1499,7 @@ Study Tip   : [one specific, actionable improvement]
           (!uploadType && uploadedText.length > 30);
 
         if (isSyllabusUpload && uploadedText.length > 30) {
-          return handleSyllabusUpload(uploadedText, cls, board, key, name, "IDLE");
+          return handleSyllabusUpload(uploadedText, cls, board, key, name, "IDLE", message.trim() || undefined);
         }
 
         const isExamCommand = /^(submit|done|finish|finished|start|answers?)\s*$/i.test(message.trim());
@@ -1555,7 +1582,7 @@ Study Tip   : [one specific, actionable improvement]
       }
 
       if (session.status === "IDLE" && uploadedText.length > 30) {
-        return handleSyllabusUpload(uploadedText, cls, board, key, name, "IDLE");
+        return handleSyllabusUpload(uploadedText, cls, board, key, name, "IDLE", message.trim() || undefined);
       }
 
       if (isStart(lower) && session.status === "READY") {
