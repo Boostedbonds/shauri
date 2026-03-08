@@ -24,7 +24,7 @@ type ExamSession = {
   status: "IDLE" | "READY" | "IN_EXAM" | "FAILED";
   subject_request?: string;
   subject?: string;
-  custom_instructions?: string; // NEW: stores free-form paper requirements
+  custom_instructions?: string;
   question_paper?: string;
   answer_log: string[];
   started_at?: number;
@@ -57,20 +57,108 @@ function sanitiseClass(raw: string): string {
 }
 
 // ─────────────────────────────────────────────────────────────
-// DETECT CUSTOM PAPER INSTRUCTIONS
+// PARSE CUSTOM PAPER REQUIREMENTS FROM STUDENT COMMAND
 // ─────────────────────────────────────────────────────────────
+
+interface PaperRequirements {
+  totalMarks: number | null;         // e.g. 30
+  timeMinutes: number | null;        // e.g. 60
+  questionTypes: string[];           // e.g. ["mcq", "short answer"]
+  questionCount: number | null;      // e.g. 20
+  marksEach: number | null;          // e.g. 1
+  chapterFilter: string | null;      // e.g. "chapters 1-3"
+  isCustom: boolean;
+}
+
+/**
+ * Parse a student's free-form command into structured paper requirements.
+ * Examples:
+ *   "prepare 30 marks exam"          → totalMarks: 30
+ *   "give me 20 MCQ questions"       → questionCount: 20, questionTypes: ["mcq"]
+ *   "1 hour test"                    → timeMinutes: 60
+ *   "30 min practice"                → timeMinutes: 30
+ *   "10 questions of 2 marks each"   → questionCount: 10, marksEach: 2, totalMarks: 20
+ *   "chapters 1-3 only"              → chapterFilter: "chapters 1-3"
+ */
+function parsePaperRequirements(text: string): PaperRequirements {
+  const t = text.toLowerCase();
+
+  // Total marks
+  const marksMatch =
+    t.match(/(\d+)\s*(?:marks?|mark)\s*(?:exam|test|paper|quiz)?/) ||
+    t.match(/(?:exam|test|paper|quiz)\s*(?:of|for)?\s*(\d+)\s*marks?/);
+  const totalMarks = marksMatch ? parseInt(marksMatch[1]) : null;
+
+  // Time
+  let timeMinutes: number | null = null;
+  const hoursMatch   = t.match(/(\d+)\s*(?:hour|hr)s?\b/);
+  const minutesMatch = t.match(/(\d+)\s*(?:minute|min)s?\b/);
+  if (hoursMatch)   timeMinutes = parseInt(hoursMatch[1]) * 60;
+  if (minutesMatch) timeMinutes = (timeMinutes || 0) + parseInt(minutesMatch[1]);
+  if (timeMinutes === 0) timeMinutes = null;
+
+  // Question types
+  const questionTypes: string[] = [];
+  if (/\b(mcq|multiple.?choice)\b/.test(t))      questionTypes.push("MCQ");
+  if (/\bshort\s*answer\b/.test(t))               questionTypes.push("Short Answer");
+  if (/\blong\s*answer\b/.test(t))                questionTypes.push("Long Answer");
+  if (/\bfill\s*in\b/.test(t))                    questionTypes.push("Fill in the Blank");
+  if (/\btrue.false\b/.test(t))                   questionTypes.push("True/False");
+  if (/\bone.word\b/.test(t))                     questionTypes.push("One-Word");
+  if (/\bvery\s*short\b/.test(t))                 questionTypes.push("Very Short Answer");
+
+  // Question count
+  const countMatch =
+    t.match(/(\d+)\s*(?:mcq|questions?|q\.?s?|problems?|items?)/) ||
+    t.match(/(?:give|prepare|make|create)\s*(\d+)/);
+  const questionCount = countMatch ? parseInt(countMatch[1]) : null;
+
+  // Marks each
+  const marksEachMatch =
+    t.match(/(\d+)\s*marks?\s*each/) ||
+    t.match(/each\s*(?:carrying|of|worth)\s*(\d+)\s*marks?/);
+  const marksEach = marksEachMatch ? parseInt(marksEachMatch[1]) : null;
+
+  // Compute totalMarks from count × marksEach if not explicit
+  let computedTotal = totalMarks;
+  if (!computedTotal && questionCount && marksEach) {
+    computedTotal = questionCount * marksEach;
+  }
+
+  // Chapter filter
+  const chapterMatch =
+    t.match(/chapters?\s*([\d,\-\s]+(?:and\s*\d+)?)/) ||
+    t.match(/(?:from|only)\s*ch(?:apter)?s?\s*([\d,\-\s]+)/);
+  const chapterFilter = chapterMatch ? `chapters ${chapterMatch[1].trim()}` : null;
+
+  const isCustom =
+    computedTotal !== null ||
+    timeMinutes !== null ||
+    questionTypes.length > 0 ||
+    questionCount !== null ||
+    chapterFilter !== null;
+
+  return {
+    totalMarks:    computedTotal,
+    timeMinutes,
+    questionTypes,
+    questionCount,
+    marksEach,
+    chapterFilter,
+    isCustom,
+  };
+}
 
 /**
  * Returns true if the message contains specific paper-format instructions
- * beyond just naming a subject (e.g. MCQ count, chapters, marks per question).
+ * beyond just naming a subject.
  */
 function hasCustomInstructions(text: string): boolean {
-  return /\b(mcq|multiple.?choice|chapter|chapters|marks?\s+each|carrying|only\s+\d|q\d|question\s+\d|\d+\s+question|\d+\s+mcq|short\s+answer|long\s+answer|fill\s+in|true.false|one.word|very\s+short|section\s+[a-z])\b/i.test(text);
+  return /\b(mcq|multiple.?choice|chapter|chapters|marks?\s+each|carrying|only\s+\d|q\d|question\s+\d|\d+\s+question|\d+\s+mcq|short\s+answer|long\s+answer|fill\s+in|true.false|one.word|very\s+short|section\s+[a-z]|\d+\s*marks?|\d+\s*(?:hour|hr|minute|min))\b/i.test(text);
 }
 
 /**
  * Extract the core subject keyword from a custom instruction message.
- * e.g. "Give me 20 MCQ of mathematics chapters 1-12" → "mathematics"
  */
 function extractSubjectFromInstruction(text: string): string {
   const subjectPatterns = [
@@ -88,7 +176,23 @@ function extractSubjectFromInstruction(text: string): string {
     const m = text.match(pat);
     if (m) return m[1];
   }
-  return text; // fallback: use full text
+  return text;
+}
+
+/**
+ * Format minutes into a human-readable time string.
+ */
+function formatTimeAllowed(minutes: number): string {
+  if (minutes >= 60 && minutes % 60 === 0) {
+    const h = minutes / 60;
+    return `${h} Hour${h > 1 ? "s" : ""}`;
+  }
+  if (minutes >= 60) {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return `${h} Hour${h > 1 ? "s" : ""} ${m} Minutes`;
+  }
+  return `${minutes} Minutes`;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -506,6 +610,10 @@ async function handleSyllabusUpload(
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
       `The exam paper will be generated **strictly based on the above syllabus only**.\n\n` +
       `✅ If this looks correct, type **start** to begin your exam.\n` +
+      `💡 You can also specify the format, e.g.:\n` +
+      `   • "prepare 30 marks exam"\n` +
+      `   • "give 20 MCQ questions"\n` +
+      `   • "1 hour test with short answers"\n` +
       `✏️ If something is wrong, upload a clearer image or retype the subject name.`,
   });
 }
@@ -769,6 +877,10 @@ export async function POST(req: NextRequest) {
           reply:
             `📚 Welcome back${callName}! Your subject is set to **${session.subject}**.\n\n` +
             `Type **start** when you're ready to begin your exam. ⏱️ Timer starts immediately.\n\n` +
+            `💡 Want a custom format? Type something like:\n` +
+            `   • "prepare 30 marks exam"\n` +
+            `   • "give 20 MCQ questions"\n` +
+            `   • "1 hour test"\n\n` +
             `📎 Want to use a different syllabus? Upload a PDF or image now to override.`,
         });
       }
@@ -802,10 +914,14 @@ export async function POST(req: NextRequest) {
       if (isGreeting(lower) && session.status === "IDLE" && !uploadedText) {
         return NextResponse.json({
           reply:
-            `Hello ${greetName}! 📋 I'm your strict CBSE Examiner.\n\n` +
+            `Hello ${greetName}! 📋 I'm your CBSE Examiner.\n\n` +
             `Tell me the **subject** you want to be tested on:\n` +
             `Science | Mathematics | SST | History | Geography | Civics | Economics | English | Hindi\n\n` +
             `📎 **OR** upload your **syllabus as a PDF or image** and I'll generate a paper exactly based on it.\n\n` +
+            `💡 You can also specify the format:\n` +
+            `   • "prepare 30 marks exam for Hindi"\n` +
+            `   • "give 20 MCQ questions on Science"\n` +
+            `   • "1 hour Maths test"\n\n` +
             `⏱️ Your timer starts the moment you type **start**.`,
         });
       }
@@ -1324,10 +1440,28 @@ Study Tip   : [one specific, actionable improvement]
           });
         }
 
+        // ── Accept custom format commands while in READY state ──
+        const reqs = parsePaperRequirements(message);
+        if (reqs.isCustom) {
+          session.custom_instructions = message.trim();
+          await saveSession(session);
+          const totalDesc = reqs.totalMarks ? `**${reqs.totalMarks} marks**` : "custom marks";
+          const timeDesc  = reqs.timeMinutes ? `, ${formatTimeAllowed(reqs.timeMinutes)}` : "";
+          const typeDesc  = reqs.questionTypes.length > 0 ? `, ${reqs.questionTypes.join(" + ")} questions` : "";
+          return NextResponse.json({
+            reply:
+              `✅ Got it! Paper format updated:\n` +
+              `📝 ${totalDesc}${timeDesc}${typeDesc}\n\n` +
+              `Subject: **${session.subject}**\n\n` +
+              `Type **start** when ready. ⏱️ Timer starts immediately.`,
+          });
+        }
+
         return NextResponse.json({
           reply:
             `📚 Subject is set to **${session.subject}**.\n\n` +
-            `📎 Want to use your own syllabus instead? Upload a PDF or image now.\n\n` +
+            `📎 Want to use your own syllabus instead? Upload a PDF or image now.\n` +
+            `💡 Want a custom format? Try: "prepare 30 marks exam" or "give 20 MCQ questions"\n\n` +
             `Type **start** when ready to begin. ⏱️ Timer starts immediately.`,
         });
       }
@@ -1363,8 +1497,8 @@ Study Tip   : [one specific, actionable improvement]
         }
 
         // ── Detect if the message has custom paper instructions ──
-        const messageHasCustomInstructions = hasCustomInstructions(message);
-        const coreSubject = messageHasCustomInstructions
+        const messageReqs = parsePaperRequirements(message);
+        const coreSubject = messageReqs.isCustom
           ? extractSubjectFromInstruction(message)
           : message;
 
@@ -1375,8 +1509,7 @@ Study Tip   : [one specific, actionable improvement]
           status:               "READY",
           subject_request:      coreSubject,
           subject:              subjectName,
-          // Store the full custom instructions so they're used at paper generation time
-          custom_instructions:  messageHasCustomInstructions ? message.trim() : undefined,
+          custom_instructions:  messageReqs.isCustom ? message.trim() : undefined,
           answer_log:           [],
           student_name:         name,
           student_class:        cls,
@@ -1384,13 +1517,25 @@ Study Tip   : [one specific, actionable improvement]
         };
         await saveSession(newSession);
 
-        if (messageHasCustomInstructions) {
+        if (messageReqs.isCustom) {
+          const totalDesc = messageReqs.totalMarks ? `**${messageReqs.totalMarks} marks**` : "custom marks";
+          const timeDesc  = messageReqs.timeMinutes
+            ? ` · Time: **${formatTimeAllowed(messageReqs.timeMinutes)}**`
+            : "";
+          const typeDesc  = messageReqs.questionTypes.length > 0
+            ? ` · Type: **${messageReqs.questionTypes.join(" + ")}**`
+            : "";
+          const chapterDesc = messageReqs.chapterFilter
+            ? ` · Scope: **${messageReqs.chapterFilter}**`
+            : "";
+
           return NextResponse.json({
             reply:
               `📚 Got it! I'll prepare a **custom paper** for:\n` +
               `**${subjectName} — Class ${cls}**\n\n` +
-              `📝 **Your instructions:** ${message.trim()}\n\n` +
-              `The paper will be generated exactly as you described.\n\n` +
+              `📝 **Paper format:**\n` +
+              `   Marks: ${totalDesc}${timeDesc}${typeDesc}${chapterDesc}\n\n` +
+              `The paper will be generated **exactly** as you described — no extra sections added.\n\n` +
               `Type **start** when you're ready to begin.\n` +
               `⏱️ Timer starts the moment you type start.`,
           });
@@ -1403,6 +1548,7 @@ Study Tip   : [one specific, actionable improvement]
             `Paper will strictly follow the NCERT Class ${cls} syllabus chapters.\n\n` +
             `📎 **Tip:** Want a paper based on YOUR specific syllabus?\n` +
             `Upload your syllabus as a PDF or image now, before typing start.\n\n` +
+            `💡 Want a custom format? Type: "prepare 30 marks exam" or "give 20 MCQ questions"\n\n` +
             `Type **start** when you're ready to begin.\n` +
             `⏱️ Timer starts the moment you type start.`,
         });
@@ -1443,40 +1589,91 @@ Study Tip   : [one specific, actionable improvement]
         const isSST     = /sst|social|history|geography|civics|economics|politics|contemporary/i.test(subjectName);
         const isEnglish = /english/i.test(subjectName);
         const isHindi   = /hindi/i.test(subjectName);
-        const hasUploadedSyllabus   = !!session.syllabus_from_upload;
-        const customInstructions    = session.custom_instructions || "";
-        const hasCustomInstr        = !!customInstructions;
+        const hasUploadedSyllabus = !!session.syllabus_from_upload;
+        const customInstructions  = session.custom_instructions || "";
+        const hasCustomInstr      = !!customInstructions;
 
-        // ── If custom instructions were provided, use a free-form prompt ──
-        if (hasCustomInstr && !hasUploadedSyllabus) {
+        // ── Parse the custom requirements precisely ──────────────
+        const reqs = hasCustomInstr ? parsePaperRequirements(customInstructions) : {} as PaperRequirements;
+
+        // Determine final marks & time
+        const finalMarks    = reqs.totalMarks || 80;
+        const finalMinutes  = reqs.timeMinutes || 180;
+        const timeAllowed   = formatTimeAllowed(finalMinutes);
+        const isStandardPaper = !hasCustomInstr && !hasUploadedSyllabus;
+
+        // ── CUSTOM PAPER PROMPT (for any custom instructions OR uploaded syllabus + command) ──
+        if (hasCustomInstr || hasUploadedSyllabus) {
+
+          // Build question format spec from parsed requirements
+          let formatSpec = "";
+
+          if (reqs.questionTypes && reqs.questionTypes.length > 0) {
+            // Specific question types requested
+            const qTypes = reqs.questionTypes.join(", ");
+            if (reqs.questionCount && reqs.marksEach) {
+              formatSpec = `${reqs.questionCount} questions of type: ${qTypes}, each worth ${reqs.marksEach} mark(s). Total = ${finalMarks} marks.`;
+            } else if (reqs.questionCount) {
+              formatSpec = `${reqs.questionCount} questions of type: ${qTypes}. Distribute marks evenly to total exactly ${finalMarks} marks.`;
+            } else {
+              formatSpec = `Question type: ${qTypes}. Total marks: ${finalMarks}. Choose an appropriate number of questions.`;
+            }
+          } else if (reqs.questionCount && reqs.marksEach) {
+            formatSpec = `${reqs.questionCount} questions, ${reqs.marksEach} mark(s) each. Total = ${finalMarks} marks.`;
+          } else if (reqs.questionCount) {
+            formatSpec = `${reqs.questionCount} questions distributed to total exactly ${finalMarks} marks.`;
+          } else {
+            // No specific count — let AI decide distribution but enforce total marks
+            formatSpec = `Design an appropriate mix of question types that totals exactly ${finalMarks} marks.`;
+            if (isMath) {
+              formatSpec += ` Include a mix of MCQ, short answer, and problem-solving questions.`;
+            } else if (isEnglish || isHindi) {
+              formatSpec += ` Include a balanced mix of objective, short answer, and writing questions — but only from the topics listed in the syllabus above. Do NOT add unseen passages or writing tasks unless they appear in the syllabus.`;
+            }
+          }
+
+          // Chapter/topic filter
+          const chapterNote = reqs.chapterFilter
+            ? `\nCHAPTER RESTRICTION: Only use questions from ${reqs.chapterFilter}.`
+            : "";
+
           const customPaperPrompt = `
-You are an official CBSE question paper setter for Class ${cls}, ${board} board.
+You are an official ${board} question paper setter for Class ${cls}.
 Subject: ${subjectName}
 
-A student has requested a custom test with these exact specifications:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-STUDENT'S REQUEST: ${customInstructions}
+STUDENT'S REQUEST: ${customInstructions || "Generate based on uploaded syllabus"}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-AUTHORISED SYLLABUS (use only chapters/topics from this list):
+PAPER SPECIFICATIONS — FOLLOW EXACTLY:
+• Total Marks  : MUST be exactly ${finalMarks} marks — not 80, not anything else
+• Time Allowed : ${timeAllowed}
+• Format       : ${formatSpec}${chapterNote}
+
+AUTHORISED TOPICS — ALL QUESTIONS MUST COME FROM THIS LIST ONLY:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${chapterList}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-INSTRUCTIONS:
-1. Generate the paper EXACTLY as the student requested — honour their specified format, question types, chapter range, and marks per question.
-2. Include a proper paper header:
+STRICT RULES:
+1. The paper header MUST show:
    Subject       : ${subjectName}
    Class         : ${cls}
    Board         : ${board}
-   Time Allowed  : [derive from question count — approx 1.5 min per MCQ, 3 min per 2-mark Q, 5 min per 3-mark Q]
-   Maximum Marks : [sum of all question marks]
-3. Show the mark value in [brackets] next to every question.
-4. Output ONLY the question paper — no commentary, no preamble.
+   Time Allowed  : ${timeAllowed}
+   Maximum Marks : ${finalMarks}
+
+2. Every question MUST show its mark value in [brackets].
+3. Marks of ALL questions MUST add up to exactly ${finalMarks} — verify this before outputting.
+4. Do NOT add sections or question types not requested or not in the syllabus above.
+5. Do NOT default to the standard 80-mark CBSE pattern — follow only the specifications above.
+6. Output ONLY the question paper — no commentary, no preamble, no notes outside the paper.
           `.trim();
 
           const paper = await callAI(customPaperPrompt, [
             {
               role: "user",
-              content: `Generate the custom paper as requested: "${customInstructions}"`,
+              content: `Generate the paper: ${subjectName}, ${finalMarks} marks, ${timeAllowed}${reqs.chapterFilter ? `, ${reqs.chapterFilter}` : ""}.`,
             },
           ]);
 
@@ -1488,7 +1685,7 @@ INSTRUCTIONS:
             status:               "IN_EXAM",
             subject_request:      session.subject_request,
             subject:              subjectName,
-            custom_instructions:  customInstructions,
+            custom_instructions:  customInstructions || undefined,
             question_paper:       paper,
             answer_log:           [],
             started_at:           startTime,
@@ -1516,7 +1713,7 @@ INSTRUCTIONS:
           });
         }
 
-        // ── Standard CBSE paper generation (unchanged) ──
+        // ── Standard 80-mark CBSE paper generation ──────────────
         const englishSections = `
 SECTION A — READING [20 Marks]
 ━━━━━━━━━━━━━━━━━━
