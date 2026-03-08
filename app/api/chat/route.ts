@@ -1674,12 +1674,18 @@ Study Tip   : [one specific, actionable improvement]
           } else if (reqs.questionCount) {
             formatSpec = `${reqs.questionCount} questions distributed to total exactly ${finalMarks} marks.`;
           } else {
-            // No specific count — let AI decide distribution but enforce total marks
-            formatSpec = `Design an appropriate mix of question types that totals exactly ${finalMarks} marks.`;
-            if (isMath) {
-              formatSpec += ` Include a mix of MCQ, short answer, and problem-solving questions.`;
-            } else if (isEnglish || isHindi) {
-              formatSpec += ` Include a balanced mix of objective, short answer, and writing questions — but only from the topics listed in the syllabus above. Do NOT add unseen passages or writing tasks unless they appear in the syllabus.`;
+            // No specific count — build formatSpec from the actual uploaded topics
+            if (hasUploadedSyllabus) {
+              // For uploaded syllabus, derive question types from the topics themselves
+              // Never assume CBSE standard sections — use only what is explicitly listed
+              formatSpec = `Design a simple numbered question paper using ONLY the topics listed in the authorised syllabus above. `;
+              formatSpec += `Use a mix of: 1-mark objective questions (MCQ or fill-in-the-blank), 2-mark short-answer questions, and optionally 3-mark questions. `;
+              formatSpec += `Total must be exactly ${finalMarks} marks. Do NOT create CBSE-style sections (A/B/C/D). Just number the questions 1, 2, 3...`;
+            } else {
+              formatSpec = `Design an appropriate mix of question types that totals exactly ${finalMarks} marks.`;
+              if (isMath) {
+                formatSpec += ` Include a mix of MCQ, short answer, and problem-solving questions.`;
+              }
             }
           }
 
@@ -1688,8 +1694,39 @@ Study Tip   : [one specific, actionable improvement]
             ? `\nCHAPTER RESTRICTION: Only use questions from ${reqs.chapterFilter}.`
             : "";
 
+          // Build a hard exclusion list for this subject so the AI cannot default to standard CBSE sections
+          const syllabusTopicsFlat = chapterList.toLowerCase();
+          const exclusions: string[] = [];
+          if (isHindi) {
+            if (!syllabusTopicsFlat.includes("apathit") && !syllabusTopicsFlat.includes("unseen") && !syllabusTopicsFlat.includes("gadyansh") && !syllabusTopicsFlat.includes("apathit gadyansh")) {
+              exclusions.push("अपठित गद्यांश (Unseen Passage) — NOT in syllabus");
+            }
+            if (!syllabusTopicsFlat.includes("kavyansh") && !syllabusTopicsFlat.includes("poem") && !syllabusTopicsFlat.includes("kavita")) {
+              exclusions.push("अपठित काव्यांश (Unseen Poem) — NOT in syllabus");
+            }
+            if (!syllabusTopicsFlat.includes("patra") && !syllabusTopicsFlat.includes("letter") && !syllabusTopicsFlat.includes("lekhan")) {
+              exclusions.push("पत्र लेखन / Lekhan (Letter/Writing) — NOT in syllabus");
+            }
+            if (!syllabusTopicsFlat.includes("anuched") && !syllabusTopicsFlat.includes("paragraph")) {
+              exclusions.push("अनुच्छेद लेखन (Paragraph Writing) — NOT in syllabus");
+            }
+          }
+          if (isEnglish) {
+            if (!syllabusTopicsFlat.includes("unseen") && !syllabusTopicsFlat.includes("reading") && !syllabusTopicsFlat.includes("comprehension")) {
+              exclusions.push("Unseen Passage / Reading Comprehension — NOT in syllabus");
+            }
+            if (!syllabusTopicsFlat.includes("letter") && !syllabusTopicsFlat.includes("writing")) {
+              exclusions.push("Letter Writing / Writing Skills — NOT in syllabus");
+            }
+          }
+
+          const exclusionBlock = exclusions.length > 0
+            ? "\n!! ABSOLUTELY FORBIDDEN - DO NOT INCLUDE THESE EVEN PARTIALLY:\n" +
+              exclusions.map(e => "   X " + e).join("\n") + "\n"
+            : "";
+
           const customPaperPrompt = `
-You are an official ${board} question paper setter for Class ${cls}.
+You are a question paper setter for Class ${cls}, ${board}.
 Subject: ${subjectName}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1701,13 +1738,13 @@ PAPER SPECIFICATIONS — FOLLOW EXACTLY:
 • Time Allowed : ${timeAllowed}
 • Format       : ${formatSpec}${chapterNote}
 
-AUTHORISED TOPICS — ALL QUESTIONS MUST COME FROM THIS LIST ONLY:
+🚨 AUTHORISED TOPICS — EVERY SINGLE QUESTION MUST COME FROM THIS LIST AND NOWHERE ELSE:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${chapterList}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
+${exclusionBlock}
 STRICT RULES:
-1. The paper header MUST show:
+1. Paper header MUST show exactly:
    Subject       : ${subjectName}
    Class         : ${cls}
    Board         : ${board}
@@ -1715,10 +1752,11 @@ STRICT RULES:
    Maximum Marks : ${finalMarks}
 
 2. Every question MUST show its mark value in [brackets].
-3. Marks of ALL questions MUST add up to exactly ${finalMarks} — verify this before outputting.
-4. Do NOT add sections or question types not requested or not in the syllabus above.
-5. Do NOT default to the standard 80-mark CBSE pattern — follow only the specifications above.
-6. Output ONLY the question paper — no commentary, no preamble, no notes outside the paper.
+3. ALL question marks MUST add up to exactly ${finalMarks} — verify the sum before outputting.
+4. ONLY use topics from the authorised list above. If a topic is not listed, do NOT include it.
+5. Do NOT follow the standard CBSE section pattern (no Section A/B/C/D CBSE template).
+   Instead, create a simple numbered question paper based ONLY on the listed topics.
+6. Output ONLY the question paper — no commentary, no preamble, no notes after the last question.
           `.trim();
 
           const paper = await callAI(customPaperPrompt, [
