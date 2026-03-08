@@ -1589,13 +1589,33 @@ Study Tip   : [one specific, actionable improvement]
         let subjectName: string;
         let chapterList: string;
 
+        // ── Recover custom_instructions from chat history if DB did not persist it ──
+        // Supabase silently drops columns that don't exist in the table schema.
+        // As a robust fallback, scan recent user messages for any format command.
+        let recoveredInstructions = session.custom_instructions || "";
+        if (!recoveredInstructions) {
+          const recentUserMsgs = history
+            .filter((m) => m.role === "user")
+            .slice(-8)
+            .map((m) => m.content);
+          for (const msg of recentUserMsgs) {
+            const r = parsePaperRequirements(msg);
+            if (r.isCustom) {
+              recoveredInstructions = msg;
+              console.log("[START] Recovered custom_instructions from history:", msg);
+              break;
+            }
+          }
+        }
+
         console.log("[EXAM START DEBUG]", {
           sessionKey: session.session_key,
           status: session.status,
           subject: session.subject,
           hasSyllabusUpload: !!session.syllabus_from_upload,
           syllabusLength: session.syllabus_from_upload?.length || 0,
-          hasCustomInstructions: !!session.custom_instructions,
+          customInstructionsFromDB: session.custom_instructions || "none",
+          customInstructionsResolved: recoveredInstructions || "none",
         });
 
         if (session.syllabus_from_upload) {
@@ -1617,15 +1637,19 @@ Study Tip   : [one specific, actionable improvement]
         const isEnglish = /english/i.test(subjectName);
         const isHindi   = /hindi/i.test(subjectName);
         const hasUploadedSyllabus = !!session.syllabus_from_upload;
-        const customInstructions  = session.custom_instructions || "";
+        const customInstructions  = recoveredInstructions;
         const hasCustomInstr      = !!customInstructions;
 
         // ── Parse the custom requirements precisely ──────────────
         const reqs = hasCustomInstr ? parsePaperRequirements(customInstructions) : {} as PaperRequirements;
 
-        // Determine final marks & time
-        const finalMarks    = reqs.totalMarks || 80;
-        const finalMinutes  = reqs.timeMinutes || 180;
+        // Determine final marks & time.
+        // When a syllabus was uploaded with NO explicit marks/time, default to a
+        // compact practice paper (30 marks, 60 min) instead of the full 80-mark template.
+        const defaultMarks   = hasUploadedSyllabus ? 30 : 80;
+        const defaultMinutes = hasUploadedSyllabus ? 60 : 180;
+        const finalMarks    = reqs.totalMarks  || defaultMarks;
+        const finalMinutes  = reqs.timeMinutes || defaultMinutes;
         const timeAllowed   = formatTimeAllowed(finalMinutes);
         const isStandardPaper = !hasCustomInstr && !hasUploadedSyllabus;
 
