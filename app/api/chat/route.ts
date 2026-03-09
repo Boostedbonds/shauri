@@ -963,13 +963,43 @@ export async function POST(req: NextRequest) {
     if (mode === "teacher") {
       if (isGreeting(lower) && history.length === 0) {
         return NextResponse.json({
-          reply: `Hi ${greetName}! 👋 I'm Shauri, your ${board} teacher${cls ? ` for Class ${cls}` : ""}. What would you like to learn today?`,
+          reply: `Hey ${greetName}! 😊 I'm Shauri — think of me as your friendly ${board} teacher${cls ? ` for Class ${cls}` : ""}.\n\nI'm here to help you understand anything — concepts, doubts, revision, examples, you name it! What's on your mind today?`,
+        });
+      }
+
+      const teacherConversationText = [...history, { role: "user", content: message }]
+        .map((m) => m.content).join(" ");
+
+      // ── Count consecutive off-topic messages (from the END of history) ──
+      const OFF_TOPIC_PATTERNS =
+        /\b(how are you|how r u|what'?s up|whatsup|wazzup|sup\b|good morning|good night|good evening|i love you|tell me a joke|sing|dance|what'?s your name|who are you|are you alive|are you human|can we chat|can we talk|let'?s talk|wanna be friends|best friend|boyfriend|girlfriend|favourite (color|food|movie)|hobbies|fav\b|lol\b|haha|hehe|😂|🤣|💕|❤️|tell me something funny|roast me|dare|truth or dare)\b/i;
+
+      const lastUserMsgs = history.filter(m => m.role === "user").slice(-3);
+      const offTopicCount = lastUserMsgs.filter(m => OFF_TOPIC_PATTERNS.test(m.content)).length;
+      const currentIsOffTopic = OFF_TOPIC_PATTERNS.test(message);
+      const totalOffTopic = offTopicCount + (currentIsOffTopic ? 1 : 0);
+
+      // Strike 1: Be warm, friendly, and gently guide back
+      if (currentIsOffTopic && totalOffTopic === 1) {
+        const warmResponses: Record<string, string> = {
+          "how are you": `Doing great, thanks for asking, ${greetName}! 😄 Always energised when I get to help a student. Now — what subject are we tackling today?`,
+          "how r u": `All good here! 😊 Ready to help you ace your studies, ${greetName}. What topic shall we start with?`,
+          default: `Ha, I appreciate you chatting with me, ${greetName}! 😊 I'm best at helping you learn — ask me anything from your syllabus and I'll make it super easy to understand. What's your first question?`,
+        };
+        const key = Object.keys(warmResponses).find(k => message.toLowerCase().includes(k));
+        return NextResponse.json({ reply: warmResponses[key || "default"] });
+      }
+
+      // Strike 2+: Politely but firmly redirect
+      if (currentIsOffTopic && totalOffTopic >= 2) {
+        return NextResponse.json({
+          reply: `I totally get it — sometimes you just want to chat! 😄 But I'm most useful as your study buddy, ${greetName}. Let's make the most of our time together — pick a subject and throw your toughest question at me! 💪`,
         });
       }
 
       const contextPrimer: ChatMessage[] = name ? [
         { role: "user", content: `My name is ${name}${cls ? `, I'm in Class ${cls}` : ""}${board ? `, ${board} board` : ""}.` },
-        { role: "assistant", content: `Got it! I'll call you ${name}${cls ? ` (Class ${cls})` : ""}. How can I help you today?` },
+        { role: "assistant", content: `Hey ${name}! Great to have you here. What are we studying today?` },
       ] : [];
 
       const teacherConversation: ChatMessage[] = [
@@ -977,9 +1007,6 @@ export async function POST(req: NextRequest) {
         ...history.slice(-12),
         { role: "user", content: message },
       ];
-
-      const teacherConversationText = [...history, { role: "user", content: message }]
-        .map((m) => m.content).join(" ");
 
       const isHindiTeacher =
         /hindi/i.test(bodySubject) ||
@@ -1148,6 +1175,22 @@ export async function POST(req: NextRequest) {
           for (const anonKey of [`anon_${cls}`, `anon_x`]) {
             if (anonKey !== key) {
               const byKey = await getSession(anonKey);
+              if (byKey?.status === "READY") { readySession = byKey; break; }
+            }
+          }
+        }
+
+        // ── LAST RESORT: directly re-query the current key (DB might have READY) ──
+        if (!readySession) {
+          const directCheck = await getSession(key);
+          if (directCheck?.status === "READY") readySession = directCheck;
+        }
+
+        // ── Try name-only key variants (accounts without class set) ──
+        if (!readySession && name) {
+          for (const altKey of [`${name}_`, `${name.toLowerCase()}_`, `${name}_x`, `${name.toLowerCase()}_x`]) {
+            if (altKey !== key) {
+              const byKey = await getSession(altKey);
               if (byKey?.status === "READY") { readySession = byKey; break; }
             }
           }

@@ -1,232 +1,242 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 
 type Message = { role: "user" | "assistant"; content: string };
 type Lang = "auto" | "en-IN" | "hi-IN";
 type Gender = "female" | "male";
 
-// ── Waveform ────────────────────────────────────────────────
+// ── Waveform bars ────────────────────────────────────────────
 function Waveform({ active, color = "#38bdf8" }: { active: boolean; color?: string }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 3, height: 20 }}>
-      {Array.from({ length: 7 }).map((_, i) => (
-        <div key={i} style={{
-          width: 3, borderRadius: 99,
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 2, height: 16 }}>
+      {[0,1,2,3,4].map(i => (
+        <span key={i} style={{
+          display: "inline-block", width: 3, borderRadius: 99,
           background: active ? color : "#cbd5e1",
-          height: active ? undefined : 4,
-          animation: active ? `wave ${0.45 + (i % 4) * 0.1}s ease-in-out ${i * 0.05}s infinite alternate` : "none",
+          height: active ? undefined : 3,
+          animation: active
+            ? `oralWave ${0.38 + (i % 3) * 0.1}s ease-in-out ${i * 0.06}s infinite alternate`
+            : "none",
         }} />
       ))}
-      <style>{`@keyframes wave { from { height: 3px } to { height: 18px } }`}</style>
-    </div>
+    </span>
   );
 }
 
-// ── Detect if text contains significant Devanagari ──────────
-function isHindiText(text: string): boolean {
-  const devanagari = (text.match(/[\u0900-\u097F]/g) || []).length;
-  return devanagari > 10;
+function isHindiText(text: string) {
+  return (text.match(/[\u0900-\u097F]/g) || []).length > 8;
 }
 
-// ── TTS — browser-first, API as upgrade ────────────────────
-function useTTS(gender: Gender, lang: Lang) {
-  const audioRef    = useRef<HTMLAudioElement | null>(null);
-  const voicesReady = useRef(false);
+// Strip markdown/emoji for TTS
+function ttsClean(text: string) {
+  return text
+    .replace(/\*\*/g, "").replace(/\*/g, "").replace(/#{1,6}\s/g, "")
+    .replace(/[📋📝📎⏱✅⚠❌💪🎯📈📊🔤📚👋🎙📄⬇🗣️😊😄🤖]/g, "")
+    .replace(/━+|─+/g, " ").replace(/\s+/g, " ").trim();
+}
 
-  useEffect(() => {
-    function load() { window.speechSynthesis?.getVoices(); voicesReady.current = true; }
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    load();
-    window.speechSynthesis.addEventListener("voiceschanged", load);
-    return () => window.speechSynthesis.removeEventListener("voiceschanged", load);
+// ── Text with bold rendering ─────────────────────────────────
+function RichText({ text }: { text: string }) {
+  return (
+    <>
+      {text.split("\n").map((line, i, arr) => (
+        <span key={i}>
+          {line.split(/(\*\*[^*]+\*\*)/g).map((p, j) =>
+            p.startsWith("**") && p.endsWith("**")
+              ? <strong key={j}>{p.slice(2, -2)}</strong>
+              : p
+          )}
+          {i < arr.length - 1 && <br />}
+        </span>
+      ))}
+    </>
+  );
+}
+
+// ── Speech synthesis hook ─────────────────────────────────────
+function useSpeech(gender: Gender) {
+  const cancelRef = useRef(false);
+
+  const loadVoices = useCallback(() => {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.getVoices();
+    }
   }, []);
 
-  function stopAll() {
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+  useEffect(() => {
+    loadVoices();
+    window?.speechSynthesis?.addEventListener?.("voiceschanged", loadVoices);
+    return () => {
+      window?.speechSynthesis?.removeEventListener?.("voiceschanged", loadVoices);
+    };
+  }, [loadVoices]);
+
+  const stop = useCallback(() => {
+    cancelRef.current = true;
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-  }
+    setTimeout(() => { cancelRef.current = false; }, 100);
+  }, []);
 
-  function speakBrowser(text: string, effectiveLang: Lang, onStart: () => void, onEnd: () => void) {
-    if (!("speechSynthesis" in window)) { onEnd(); return; }
+  const speak = useCallback((
+    rawText: string,
+    onStart?: () => void,
+    onEnd?: () => void,
+    forceLang?: "en-IN" | "hi-IN"
+  ) => {
+    if (!("speechSynthesis" in window)) { onEnd?.(); return; }
     window.speechSynthesis.cancel();
+    cancelRef.current = false;
+
+    const text = ttsClean(rawText);
+    if (!text) { onEnd?.(); return; }
+
+    const lang = forceLang ?? (isHindiText(text) ? "hi-IN" : "en-IN");
     const u = new SpeechSynthesisUtterance(text);
-    // Use hi-IN if text is Hindi or lang is hi-IN
-    const resolvedLang = effectiveLang === "hi-IN" || isHindiText(text) ? "hi-IN" : "en-IN";
-    u.lang = resolvedLang;
-    u.rate = resolvedLang === "hi-IN" ? 0.85 : 0.92;
-    u.pitch = gender === "female" ? 1.15 : 0.82;
+    u.lang = lang;
+    u.rate = lang === "hi-IN" ? 0.82 : 0.9;
+    u.pitch = gender === "female" ? 1.1 : 0.85;
     u.volume = 1;
+
     const voices = window.speechSynthesis.getVoices();
-    let pick: SpeechSynthesisVoice | undefined;
-    if (resolvedLang === "hi-IN") {
-      // Prefer a native Hindi voice
-      pick =
-        voices.find(v => v.lang === "hi-IN") ||
-        voices.find(v => v.lang.startsWith("hi")) ||
-        voices.find(v => /lekha|heera|hindi/i.test(v.name));
+    if (lang === "hi-IN") {
+      u.voice = voices.find(v => v.lang === "hi-IN") || voices.find(v => v.lang.startsWith("hi")) || null;
     } else {
-      pick = voices.find(v =>
-        gender === "female"
-          ? /female|woman|zira|samantha|veena|lekha|google.*female|heera/i.test(v.name)
-          : /male|man|david|daniel|rishi|google.*male/i.test(v.name)
-      ) || voices.find(v => v.lang.startsWith("en"));
+      u.voice = gender === "female"
+        ? voices.find(v => /female|woman|zira|samantha|veena|lekha/i.test(v.name)) || voices.find(v => v.lang.startsWith("en")) || null
+        : voices.find(v => /male|man|david|daniel|rishi/i.test(v.name)) || voices.find(v => v.lang.startsWith("en")) || null;
     }
-    if (pick) u.voice = pick;
-    u.onstart = onStart;
-    u.onend = onEnd; u.onerror = onEnd;
-    onStart();
+
+    u.onstart = () => { if (!cancelRef.current) onStart?.(); };
+    u.onend   = () => { onEnd?.(); };
+    u.onerror = () => { onEnd?.(); };
     window.speechSynthesis.speak(u);
-  }
+  }, [gender]);
 
-  function speak(rawText: string, onStart: () => void, onEnd: () => void, overrideLang?: Lang) {
-    stopAll();
-    const text = rawText
-      .replace(/\*\*/g, "").replace(/\*/g, "").replace(/#{1,6}\s/g, "")
-      .replace(/━+|─+/g, " ").replace(/[📋📝📎⏱✅⚠❌💪🎯📈📊🔤📚👋🎙📄⬇🗣️]/g, "")
-      .replace(/\s+/g, " ").trim();
-    if (!text) { onEnd(); return; }
-    speakBrowser(text, overrideLang ?? lang, onStart, onEnd);
-  }
-
-  return { speak, stopAll, audioRef };
+  return { speak, stop };
 }
 
-// ── Markdown-lite ───────────────────────────────────────────
-function renderText(text: string): React.ReactNode {
-  return text.split("\n").map((line, i, arr) => {
-    const parts = line.split(/(\*\*[^*]+\*\*)/g).map((p, j) =>
-      p.startsWith("**") && p.endsWith("**") ? <strong key={j}>{p.slice(2, -2)}</strong> : p
-    );
-    return <span key={i}>{parts}{i < arr.length - 1 && <br />}</span>;
-  });
-}
-
-// ── Main page ───────────────────────────────────────────────
+// ── Main Page ─────────────────────────────────────────────────
 export default function OralPage() {
-  const GREETING_EN = "Hello! I'm Shauri, your learning partner.\n\nTell me what topic you'd like — explanation, dictation, spelling practice, or a spoken quiz. I understand English, Hindi, and Hinglish.";
-  const GREETING_HI = "नमस्ते! मैं शौरी हूँ — आपका हिंदी शिक्षक।\n\nबताइए आप क्या सीखना चाहते हैं:\n• कोई पाठ या कहानी (जैसे: दुःख का अधिकार)\n• कोई कविता या काव्यांश\n• व्याकरण (संधि, समास, अलंकार, मुहावरे)\n• CBSE प्रश्नोत्तरी\n\nहिंदी में बोलें या लिखें — मैं समझूँगा! 😊";
+  const GREETING = "Hey! 👋 I'm Shauri, your learning partner.\n\nTell me what you'd like to do:\n• Get a topic explained\n• Spelling or dictation practice\n• Spoken quiz\n\nSpeak or type — English, Hindi, or Hinglish! 😊";
+  const GREETING_HI = "नमस्ते! 👋 मैं शौरी हूँ — आपका पढ़ाई का साथी।\n\nबताइए आज क्या करना है:\n• पाठ समझाना है\n• शब्द-लेखन / श्रुतलेख\n• CBSE प्रश्नोत्तरी\n\nहिंदी या अंग्रेज़ी में बोलें या लिखें! 😊";
 
-  const [lang, setLang]             = useState<Lang>("auto");
-  const [gender, setGender]         = useState<Gender>("female");
-
-  const greeting = lang === "hi-IN" ? GREETING_HI : GREETING_EN;
-
-  const [messages, setMessages]     = useState<Message[]>([{ role: "assistant", content: greeting }]);
+  const [lang, setLang]     = useState<Lang>("auto");
+  const [gender, setGender] = useState<Gender>("female");
+  const [messages, setMessages]     = useState<Message[]>([]);
+  const [inputText, setInputText]   = useState("");
+  const [transcript, setTranscript] = useState("");
   const [listening, setListening]   = useState(false);
   const [speaking, setSpeaking]     = useState(false);
-  const [transcript, setTranscript] = useState("");
-  const transcriptRef = useRef("");
-  const [inputText, setInputText]   = useState("");
-  const [isLoading, setIsLoading]   = useState(false);
-  const sendingRef = useRef(false);
+  const [loading, setLoading]       = useState(false);
   const [studentName, setStudentName] = useState("");
 
-  const { speak, stopAll } = useTTS(gender, lang);
-  const recognitionRef  = useRef<any>(null);
-  const shauriEndRef    = useRef<HTMLDivElement>(null);
-  const studentEndRef   = useRef<HTMLDivElement>(null);
-  const spokenRef       = useRef(0);
-  const greetingSpoken  = useRef(false);
-  const prevLangRef     = useRef<Lang>("auto");
+  const { speak, stop } = useSpeech(gender);
 
-  const shauriMessages  = messages.filter(m => m.role === "assistant");
-  const studentMessages = messages.filter(m => m.role === "user");
+  // Refs
+  const transcriptRef  = useRef("");
+  const sendingRef     = useRef(false);
+  const recogRef       = useRef<any>(null);
+  const bottomRef      = useRef<HTMLDivElement>(null);
+  const initRef        = useRef(false);
+  // Track index of last spoken message to NEVER repeat
+  const lastSpokenIdx  = useRef(-1);
+  const prevLang       = useRef<Lang>("auto");
 
-  useEffect(() => { shauriEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [shauriMessages.length]);
-  useEffect(() => { studentEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [studentMessages.length]);
+  const isHindi = lang === "hi-IN";
+  const greet   = isHindi ? GREETING_HI : GREETING;
 
+  // ── Init on mount ──────────────────────────────────────────
   useEffect(() => {
+    if (initRef.current) return;
+    initRef.current = true;
     try {
       const s = JSON.parse(localStorage.getItem("shauri_student") || "null");
       if (s?.name) setStudentName(s.name);
     } catch {}
-  }, []);
-
-  // Speak greeting once on mount
-  useEffect(() => {
-    if (greetingSpoken.current) return;
-    greetingSpoken.current = true;
-    setTimeout(() => speak(greeting, () => setSpeaking(true), () => setSpeaking(false)), 600);
+    const init: Message = { role: "assistant", content: greet };
+    setMessages([init]);
+    lastSpokenIdx.current = 0; // mark greeting as "to be spoken" — index 0
+    // Speak after short delay so browser voice list loads
+    setTimeout(() => speak(greet, () => setSpeaking(true), () => setSpeaking(false)), 800);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // When user switches language → reset chat with new greeting
+  // ── Language switch → reset + re-greet ────────────────────
   useEffect(() => {
-    if (prevLangRef.current === lang) return;
-    prevLangRef.current = lang;
-    stopAll();
-    setSpeaking(false);
-    const newGreeting = lang === "hi-IN" ? GREETING_HI : GREETING_EN;
-    setMessages([{ role: "assistant", content: newGreeting }]);
-    spokenRef.current = 0;
-    setTimeout(() => speak(newGreeting, () => setSpeaking(true), () => setSpeaking(false)), 300);
+    if (prevLang.current === lang) return;
+    prevLang.current = lang;
+    stop(); setSpeaking(false);
+    const newGreet: Message = { role: "assistant", content: isHindi ? GREETING_HI : GREETING };
+    setMessages([newGreet]);
+    lastSpokenIdx.current = 0;
+    setTimeout(() => speak(newGreet.content, () => setSpeaking(true), () => setSpeaking(false)), 300);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang]);
 
-  // Auto-speak new AI messages — auto-detect Hindi in response
+  // ── Auto-speak NEW AI messages only ──────────────────────
+  // Rule: only speak if the message index is STRICTLY GREATER than lastSpokenIdx
   useEffect(() => {
-    const lastIdx = messages.length - 1;
-    const last = messages[lastIdx];
-    if (!last || last.role !== "assistant" || lastIdx <= spokenRef.current) return;
-    spokenRef.current = lastIdx;
-    // If response is Hindi text, force hi-IN TTS regardless of lang setting
-    const ttsLang: Lang = isHindiText(last.content) ? "hi-IN" : lang;
-    speak(last.content, () => setSpeaking(true), () => setSpeaking(false), ttsLang);
+    const idx = messages.length - 1;
+    const msg = messages[idx];
+    if (!msg || msg.role !== "assistant") return;
+    // idx 0 is the greeting — spoken in init or lang-switch above
+    // idx > lastSpokenIdx means it's new
+    if (idx <= lastSpokenIdx.current) return;
+    lastSpokenIdx.current = idx;
+    const fl: "en-IN" | "hi-IN" = isHindiText(msg.content) ? "hi-IN" : isHindi ? "hi-IN" : "en-IN";
+    speak(msg.content, () => setSpeaking(true), () => setSpeaking(false), fl);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages]);
 
-  // Speech recognition — rebuild on lang change
+  // ── Auto-scroll ────────────────────────────────────────────
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
+
+  // ── Speech recognition ─────────────────────────────────────
   useEffect(() => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) return;
     const r = new SR();
-    r.continuous = true; r.interimResults = true;
+    r.continuous = true;
+    r.interimResults = true;
     r.lang = lang === "auto" ? "en-IN" : lang;
     r.onresult = (e: any) => {
-      let finalText = "", interimText = "";
+      let fin = "", int = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const t = e.results[i][0].transcript;
-        if (e.results[i].isFinal) finalText += t; else interimText += t;
+        if (e.results[i].isFinal) fin += t; else int += t;
       }
-      if (finalText) {
-        const next = transcriptRef.current + finalText;
-        transcriptRef.current = next;
-        setTranscript(next);
-      } else if (interimText) {
-        setTranscript(transcriptRef.current + interimText);
-      }
+      if (fin) { transcriptRef.current += fin; setTranscript(transcriptRef.current); }
+      else if (int) setTranscript(transcriptRef.current + int);
     };
-    r.onend = () => setListening(false);
+    r.onend  = () => setListening(false);
     r.onerror = () => setListening(false);
-    recognitionRef.current = r;
-    return () => { try { r.stop(); } catch {} r.onresult = null; r.onend = null; };
+    recogRef.current = r;
+    return () => { try { r.stop(); } catch {} r.onresult = null; };
   }, [lang]);
 
-  useEffect(() => () => stopAll(), []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => stop(), []); // cleanup on unmount // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Mic toggle ─────────────────────────────────────────────
   function toggleMic() {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) { alert("Speech recognition not available. Use Chrome on Android."); return; }
+    if (!SR) { alert("Speech recognition requires Chrome browser."); return; }
     if (listening) {
-      recognitionRef.current?.stop();
+      recogRef.current?.stop();
       setListening(false);
       const t = transcriptRef.current.trim();
-      if (t && !isLoading) {
-        handleSend(t);
-        transcriptRef.current = "";
-        setTranscript("");
-      }
+      if (t) { sendMessage(t); transcriptRef.current = ""; setTranscript(""); }
     } else {
-      stopAll(); setSpeaking(false);
-      transcriptRef.current = "";
-      setTranscript("");
-      recognitionRef.current.lang = lang === "auto" ? "en-IN" : lang;
-      try { recognitionRef.current.start(); setListening(true); }
-      catch { /* already started */ }
+      stop(); setSpeaking(false);
+      transcriptRef.current = ""; setTranscript("");
+      recogRef.current.lang = lang === "auto" ? "en-IN" : lang;
+      try { recogRef.current.start(); setListening(true); } catch {}
     }
   }
 
-  async function handleSend(text: string) {
+  // ── Send message ────────────────────────────────────────────
+  async function sendMessage(text: string) {
     const trimmed = text.trim();
     if (!trimmed || sendingRef.current) return;
     sendingRef.current = true;
@@ -234,366 +244,281 @@ export default function OralPage() {
     const userMsg: Message = { role: "user", content: trimmed };
     const updated = [...messages, userMsg];
     setMessages(updated);
-    setInputText(""); setIsLoading(true);
+    setInputText(""); setLoading(true);
 
     let student: any = null;
     try { student = JSON.parse(localStorage.getItem("shauri_student") || "null"); } catch {}
-
-    const studentPayload = {
-      name:  student?.name  || "Student",
-      class: student?.class || "",
-      board: student?.board || "CBSE",
-    };
-
-    const history = updated.slice(1, -1).map(m => ({ role: m.role, content: m.content }));
-
-    // ── KEY FIX: pass lang + subject hint so backend enforces Hindi ──
-    // Determine subject hint:
-    //   1. If lang is explicitly hi-IN → subject = "hindi"
-    //   2. If any message in the conversation contains Devanagari → subject = "hindi"
-    //   3. If the student's message mentions "hindi" → subject = "hindi"
-    const conversationText = updated.map(m => m.content).join(" ");
-    const subjectHint =
-      lang === "hi-IN" ||
-      isHindiText(conversationText) ||
-      /hindi|हिंदी/i.test(trimmed)
-        ? "hindi"
-        : undefined;
+    const txt = updated.map(m => m.content).join(" ");
+    const subjectHint = isHindi || isHindiText(txt) || /hindi|हिंदी/i.test(trimmed) ? "hindi" : undefined;
 
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          mode:    "oral",
-          message: trimmed,
-          history,
-          student: studentPayload,
-          // ↓ NEW — tells the backend which language/subject mode to use
-          subject: subjectHint,
-          lang,
+          mode: "oral", message: trimmed,
+          history: updated.slice(1, -1).map(m => ({ role: m.role, content: m.content })),
+          student: { name: student?.name || "Student", class: student?.class || "", board: student?.board || "CBSE" },
+          subject: subjectHint, lang,
         }),
       });
       const data = await res.json();
-      const reply = typeof data?.reply === "string" ? data.reply : "Something went wrong.";
-      setMessages([...updated, { role: "assistant", content: reply }]);
+      setMessages([...updated, { role: "assistant", content: data?.reply || "Something went wrong." }]);
     } catch {
       setMessages([...updated, { role: "assistant", content: "⚠️ Network error. Please try again." }]);
-    } finally {
-      setIsLoading(false);
-      sendingRef.current = false;
-    }
+    } finally { setLoading(false); sendingRef.current = false; }
   }
 
-  function handleTextSend() {
-    if (sendingRef.current) return;
+  function handleSend() {
     const t = inputText.trim() || transcriptRef.current.trim();
-    if (t) {
-      handleSend(t);
-      setInputText("");
-      transcriptRef.current = "";
-      setTranscript("");
-    }
+    if (t) { sendMessage(t); setInputText(""); transcriptRef.current = ""; setTranscript(""); }
   }
 
-  const micBg = listening ? "#ef4444" : gender === "female" ? "#db2777" : "#2563eb";
+  // ── Replay last AI message ──────────────────────────────────
+  function replayLast() {
+    const last = [...messages].reverse().find(m => m.role === "assistant");
+    if (last) speak(last.content, () => setSpeaking(true), () => setSpeaking(false));
+  }
 
-  // Label for HI button — show active indicator when Hindi is active
-  const isHindiMode = lang === "hi-IN";
+  const accentColor = isHindi ? "#7c3aed" : "#0ea5e9";
+  const accentLight = isHindi ? "#f3e8ff" : "#e0f2fe";
 
   return (
-    <div style={{ height: "100vh", display: "flex", flexDirection: "column", background: "#f8fafc", overflow: "hidden" }}>
+    <div style={{
+      height: "100dvh", display: "flex", flexDirection: "column",
+      background: "#f8fafc", fontFamily: "'Segoe UI', system-ui, sans-serif",
+      overflow: "hidden",
+    }}>
       <style>{`
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        @keyframes oralWave { from{height:3px} to{height:15px} }
+        @keyframes fadeUp { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
         @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
-        @keyframes micPulse {
-          0%,100% { box-shadow: 0 0 0 0px rgba(239,68,68,0), 0 0 0 8px rgba(239,68,68,0.15); }
-          50%      { box-shadow: 0 0 0 8px rgba(239,68,68,0.2), 0 0 0 18px rgba(239,68,68,0.05); }
-        }
-        .oral-body { flex: 1; display: flex; overflow: hidden; }
-        .oral-shauri { width: 48%; border-right: 1.5px solid #e2e8f0; display: flex; flex-direction: column; overflow: hidden; background: #fff; }
-        .oral-student { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: ${isHindiMode ? "#fdf4ff" : "#f0f9ff"}; }
-        @media (max-width: 699px) {
-          .oral-shauri { width: 100%; border-right: none; border-bottom: 1.5px solid #e2e8f0; height: 45%; flex-shrink: 0; }
-          .oral-body { flex-direction: column; }
-          .oral-student { height: auto; flex: 1; }
-        }
+        @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0.4)} 60%{box-shadow:0 0 0 10px rgba(239,68,68,0)} }
+        .msg { animation: fadeUp 0.22s ease both; }
+        textarea { font-family: inherit; }
+        textarea:focus { outline: none; box-shadow: 0 0 0 2px ${accentColor}55; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
       `}</style>
 
-      {/* TOP BAR */}
+      {/* ── TOP BAR ── */}
       <div style={{
-        height: 52, display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 14px",
-        background: isHindiMode ? "#fdf4ff" : "#fff",
-        borderBottom: `1px solid ${isHindiMode ? "#e9d5ff" : "#e2e8f0"}`,
-        flexShrink: 0,
+        height: 54, display: "flex", alignItems: "center",
+        justifyContent: "space-between", padding: "0 12px",
+        background: `linear-gradient(90deg, ${accentColor}, ${isHindi ? "#a855f7" : "#38bdf8"})`,
+        boxShadow: "0 2px 10px rgba(0,0,0,0.15)", flexShrink: 0, zIndex: 10,
       }}>
+        {/* Back */}
         <button onClick={() => window.location.href = "/modes"} style={{
-          padding: "7px 12px", background: "#f1f5f9", color: "#374151",
-          borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13, cursor: "pointer", fontWeight: 600,
+          padding: "6px 12px", background: "rgba(255,255,255,0.2)",
+          color: "#fff", border: "1px solid rgba(255,255,255,0.3)",
+          borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer",
         }}>← Back</button>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+        {/* Title + status */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{
-            width: 7, height: 7, borderRadius: "50%",
-            background: speaking ? "#f97316" : listening ? "#22c55e" : "#cbd5e1",
-            boxShadow: speaking ? "0 0 7px #f97316" : listening ? "0 0 7px #22c55e" : "none",
+            width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
+            background: speaking ? "#fbbf24" : listening ? "#4ade80" : "rgba(255,255,255,0.35)",
+            boxShadow: speaking ? "0 0 6px #fbbf24" : listening ? "0 0 6px #4ade80" : "none",
             transition: "all 0.3s",
           }} />
-          <span style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>
-            {isHindiMode ? "🎙 हिंदी मोड" : "🎙 Oral Mode"}
+          <span style={{ color: "#fff", fontWeight: 700, fontSize: 14 }}>
+            🎙 {isHindi ? "हिंदी मोड" : "Oral Mode"}
           </span>
-          {isHindiMode && (
-            <span style={{
-              fontSize: 10, fontWeight: 700, background: "#a855f7", color: "#fff",
-              borderRadius: 5, padding: "2px 7px", letterSpacing: "0.05em",
-            }}>हिंदी</span>
-          )}
+          {speaking && <Waveform active color="#fbbf24" />}
         </div>
 
-        {/* Voice controls */}
+        {/* Controls */}
         <div style={{ display: "flex", gap: 5 }}>
-          <div style={{ display: "flex", background: "#f1f5f9", borderRadius: 7, padding: 2, border: "1px solid #e2e8f0" }}>
-            {(["female", "male"] as Gender[]).map(g => (
+          {/* Gender */}
+          <div style={{ display: "flex", background: "rgba(255,255,255,0.15)", borderRadius: 6, padding: 2 }}>
+            {(["female","male"] as Gender[]).map(g => (
               <button key={g} onClick={() => setGender(g)} style={{
-                padding: "4px 9px", borderRadius: 5, border: "none",
-                background: gender === g ? (g === "female" ? "#be185d" : "#1d4ed8") : "transparent",
-                color: gender === g ? "#fff" : "#64748b",
-                fontSize: 11, fontWeight: 700, cursor: "pointer",
-              }}>{g === "female" ? "♀ F" : "♂ M"}</button>
+                padding: "4px 8px", border: "none", borderRadius: 4, cursor: "pointer",
+                background: gender === g ? "rgba(255,255,255,0.9)" : "transparent",
+                color: gender === g ? "#0f172a" : "rgba(255,255,255,0.85)",
+                fontSize: 11, fontWeight: 700,
+              }}>{g === "female" ? "♀" : "♂"}</button>
             ))}
           </div>
-          <div style={{ display: "flex", background: "#f1f5f9", borderRadius: 7, padding: 2, border: "1px solid #e2e8f0" }}>
-            {(["auto", "en-IN", "hi-IN"] as Lang[]).map(l => (
+          {/* Language */}
+          <div style={{ display: "flex", background: "rgba(255,255,255,0.15)", borderRadius: 6, padding: 2 }}>
+            {(["auto","en-IN","hi-IN"] as Lang[]).map(l => (
               <button key={l} onClick={() => setLang(l)} style={{
-                padding: "4px 8px", borderRadius: 5, border: "none",
-                background: lang === l
-                  ? (l === "hi-IN" ? "#a855f7" : "#38bdf8")
-                  : "transparent",
-                color: lang === l ? "#fff" : "#64748b",
-                fontSize: 11, fontWeight: 700, cursor: "pointer",
-              }}>
-                {l === "auto" ? "AUTO" : l === "en-IN" ? "EN" : "हिंदी"}
-              </button>
+                padding: "4px 7px", border: "none", borderRadius: 4, cursor: "pointer",
+                background: lang === l ? "rgba(255,255,255,0.9)" : "transparent",
+                color: lang === l ? "#0f172a" : "rgba(255,255,255,0.85)",
+                fontSize: 10, fontWeight: 700,
+              }}>{l === "auto" ? "AUTO" : l === "en-IN" ? "EN" : "HI"}</button>
             ))}
           </div>
         </div>
       </div>
 
-      {/* SPLIT BODY */}
-      <div className="oral-body">
-
-        {/* LEFT — SHAURI's messages */}
-        <div className="oral-shauri">
-          <div style={{
-            padding: "10px 16px", borderBottom: "1px solid #e2e8f0",
-            background: "#f8fafc", flexShrink: 0,
-            display: "flex", alignItems: "center", gap: 8,
+      {/* ── MESSAGES ── */}
+      <div style={{
+        flex: 1, overflowY: "auto", padding: "14px 14px 0",
+        display: "flex", flexDirection: "column", gap: 10,
+      }}>
+        {messages.map((m, i) => (
+          <div key={i} className="msg" style={{
+            display: "flex",
+            justifyContent: m.role === "user" ? "flex-end" : "flex-start",
           }}>
-            <div style={{
-              width: 28, height: 28, borderRadius: "50%",
-              background: "linear-gradient(135deg, #38bdf8, #818cf8)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 14, flexShrink: 0,
-            }}>🤖</div>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#0f172a" }}>SHAURI</div>
-              {speaking && (
-                <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 2 }}>
-                  <Waveform active color="#f97316" />
-                  <span style={{ fontSize: 10, color: "#f97316", fontWeight: 600 }}>
-                    {isHindiMode ? "बोल रहा है…" : "speaking…"}
-                  </span>
-                </div>
-              )}
-            </div>
-            <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-              {speaking ? (
-                <button onClick={() => { stopAll(); setSpeaking(false); }} style={{
-                  padding: "3px 10px", background: "#fff7ed", color: "#f97316",
-                  border: "1px solid #fed7aa", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer",
-                }}>■ {isHindiMode ? "रोकें" : "Stop"}</button>
-              ) : (
-                shauriMessages.length > 0 && (
-                  <button onClick={() => {
-                    const last = shauriMessages[shauriMessages.length - 1];
-                    if (last) speak(last.content, () => setSpeaking(true), () => setSpeaking(false));
-                  }} style={{
-                    padding: "3px 10px", background: "#f8fafc", color: "#64748b",
-                    border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer",
-                  }}>▶ {isHindiMode ? "दोबारा सुनें" : "Replay"}</button>
-                )
-              )}
+            {m.role === "assistant" && (
+              <div style={{
+                width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
+                background: `linear-gradient(135deg, ${accentColor}, ${isHindi ? "#a855f7" : "#818cf8"})`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 16, marginRight: 8, alignSelf: "flex-end",
+                boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
+              }}>🤖</div>
+            )}
+            <div
+              onClick={() => m.role === "assistant" && speak(m.content, () => setSpeaking(true), () => setSpeaking(false))}
+              title={m.role === "assistant" ? "Tap to replay" : undefined}
+              style={{
+                maxWidth: "80%", padding: "11px 14px",
+                borderRadius: m.role === "user" ? "18px 18px 4px 18px" : "4px 18px 18px 18px",
+                background: m.role === "user" ? accentColor : "#fff",
+                color: m.role === "user" ? "#fff" : "#0f172a",
+                fontSize: 15,
+                lineHeight: isHindiText(m.content) ? 1.9 : 1.7,
+                fontFamily: isHindiText(m.content) ? "'Noto Sans Devanagari','Mangal',sans-serif" : "inherit",
+                border: m.role === "assistant" ? "1px solid #e2e8f0" : "none",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
+                wordBreak: "break-word",
+                cursor: m.role === "assistant" ? "pointer" : "default",
+              }}
+            >
+              <RichText text={m.content} />
             </div>
           </div>
+        ))}
 
-          {/* SHAURI messages */}
-          <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
-            {shauriMessages.map((m, i) => (
-              <div key={i}
-                onClick={() => speak(m.content, () => setSpeaking(true), () => setSpeaking(false))}
-                title="Click to replay"
-                style={{
-                  background: "#f1f5f9", borderRadius: "4px 16px 16px 16px",
-                  padding: "12px 14px", fontSize: 15, lineHeight: 1.75,
-                  color: "#0f172a", wordBreak: "break-word",
-                  cursor: "pointer", border: "1px solid #e2e8f0",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
-                  // Hindi text gets slightly larger line-height for Devanagari readability
-                  ...(isHindiText(m.content) ? { lineHeight: 2, fontSize: 16 } : {}),
-                }}
-              >
-                {renderText(m.content)}
-              </div>
-            ))}
-            {isLoading && (
-              <div style={{ display: "flex", gap: 5, padding: "4px 0" }}>
-                {[0,1,2].map(i => (
-                  <div key={i} style={{
-                    width: 8, height: 8, borderRadius: "50%", background: "#38bdf8",
-                    animation: `bounce 1s ${i * 0.15}s infinite ease-in-out`,
-                  }} />
-                ))}
-              </div>
-            )}
-            <div ref={shauriEndRef} />
-          </div>
-        </div>
-
-        {/* RIGHT — Student messages + mic + input */}
-        <div className="oral-student">
-          <div style={{
-            padding: "10px 16px",
-            borderBottom: `1px solid ${isHindiMode ? "#e9d5ff" : "#bae6fd"}`,
-            background: isHindiMode ? "#f3e8ff" : "#e0f2fe",
-            flexShrink: 0,
-            display: "flex", alignItems: "center", gap: 8,
-          }}>
-            <div style={{
-              width: 28, height: 28, borderRadius: "50%",
-              background: isHindiMode
-                ? "linear-gradient(135deg, #a855f7, #7c3aed)"
-                : "linear-gradient(135deg, #38bdf8, #0ea5e9)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 14, flexShrink: 0,
-            }}>👤</div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: isHindiMode ? "#581c87" : "#0c4a6e" }}>
-              {studentName || "YOU"}
-            </div>
-            {isHindiMode && (
-              <div style={{ fontSize: 11, color: "#7c3aed", marginLeft: 4 }}>
-                हिंदी में बोलें या लिखें 🎤
-              </div>
-            )}
-          </div>
-
-          {/* Student messages */}
-          <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
-            {studentMessages.length === 0 && (
-              <div style={{ color: "#94a3b8", fontSize: 13, fontStyle: "italic", textAlign: "center", paddingTop: 20 }}>
-                {isHindiMode ? "आपके संदेश यहाँ दिखेंगे…" : "Your messages appear here…"}
-              </div>
-            )}
-            {studentMessages.map((m, i) => (
+        {loading && (
+          <div style={{ display: "flex", gap: 5, paddingLeft: 46 }}>
+            {[0,1,2].map(i => (
               <div key={i} style={{
-                background: isHindiMode ? "#a855f7" : "#38bdf8",
-                borderRadius: "16px 4px 16px 16px",
-                padding: "11px 14px", fontSize: 15, lineHeight: 1.7,
-                color: "#fff", wordBreak: "break-word", alignSelf: "flex-end",
-                maxWidth: "90%",
-                ...(isHindiText(m.content) ? { lineHeight: 2, fontSize: 16 } : {}),
-              }}>
-                {renderText(m.content)}
-              </div>
+                width: 9, height: 9, borderRadius: "50%", background: accentColor,
+                animation: `bounce 0.9s ${i*0.15}s infinite ease-in-out`,
+              }} />
             ))}
-            <div ref={studentEndRef} />
           </div>
+        )}
+        <div ref={bottomRef} style={{ height: 8 }} />
+      </div>
 
-          {/* Live transcript */}
-          {(listening || transcript) && (
-            <div style={{
-              margin: "0 12px 8px",
-              background: listening ? "#f0fdf4" : "#fff",
-              border: `1.5px solid ${listening ? "#86efac" : "#e2e8f0"}`,
-              borderRadius: 10, padding: "8px 12px",
-              transition: "all 0.2s",
-            }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: listening ? "#22c55e" : "#94a3b8", marginBottom: 3, letterSpacing: "0.08em" }}>
-                {listening
-                  ? (isHindiMode ? "● सुन रहा है…" : "● LISTENING…")
-                  : (isHindiMode ? "लिखा हुआ" : "TRANSCRIPT")}
-              </div>
-              <div style={{ fontSize: 14, color: listening ? "#166534" : "#64748b", lineHeight: 1.6 }}>
-                {transcript || <span style={{ fontStyle: "italic" }}>{isHindiMode ? "बोलिए…" : "Speak now…"}</span>}
-              </div>
-            </div>
-          )}
-
-          {/* Mic + text input bar */}
-          <div style={{
-            padding: "10px 12px",
-            borderTop: `1px solid ${isHindiMode ? "#e9d5ff" : "#bae6fd"}`,
-            background: "#fff", flexShrink: 0,
-            display: "flex", alignItems: "flex-end", gap: 10,
-          }}>
-            <button onClick={toggleMic} style={{
-              width: 52, height: 52, borderRadius: "50%", border: "none",
-              background: listening ? "#ef4444" : isHindiMode ? "#a855f7" : micBg,
-              color: "#fff", fontSize: 22,
-              cursor: "pointer", flexShrink: 0,
-              boxShadow: listening
-                ? "0 0 0 4px rgba(239,68,68,0.25)"
-                : `0 4px 12px ${isHindiMode ? "#a855f750" : micBg + "50"}`,
-              animation: listening ? "micPulse 1.5s infinite" : "none",
-              transition: "background 0.2s, box-shadow 0.2s",
-            }} title={listening ? "Stop & send" : isHindiMode ? "बोलने के लिए दबाएं" : "Tap to speak"}>
-              {listening ? "■" : "🎤"}
-            </button>
-
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
-              {listening && (
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <Waveform active color="#22c55e" />
-                  <span style={{ fontSize: 12, color: "#22c55e", fontWeight: 600 }}>
-                    {isHindiMode ? "■ दबाएं और भेजें" : "Tap ■ to stop & send"}
-                  </span>
-                </div>
-              )}
-              <div style={{ display: "flex", gap: 7 }}>
-                <textarea
-                  value={inputText}
-                  onChange={e => setInputText(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleTextSend(); } }}
-                  placeholder={isHindiMode ? "यहाँ लिखें… (Enter भेजें)" : "Or type here… (Enter to send)"}
-                  rows={2}
-                  disabled={isLoading}
-                  style={{
-                    flex: 1, resize: "none",
-                    border: `1.5px solid ${isHindiMode ? "#d8b4fe" : "#e2e8f0"}`,
-                    borderRadius: 10, padding: "8px 12px", fontSize: 15,
-                    outline: "none", background: isLoading ? "#f1f5f9" : "#fff",
-                    color: "#0f172a", lineHeight: 1.6,
-                    fontFamily: isHindiMode ? "'Noto Sans Devanagari', 'Mangal', sans-serif" : "inherit",
-                  }}
-                />
-                <button
-                  onClick={handleTextSend}
-                  disabled={isLoading || (!inputText.trim() && !transcript.trim())}
-                  style={{
-                    padding: "8px 18px", alignSelf: "stretch",
-                    background: (isLoading || (!inputText.trim() && !transcript.trim()))
-                      ? "#e2e8f0"
-                      : (isHindiMode ? "#a855f7" : "#38bdf8"),
-                    color: (isLoading || (!inputText.trim() && !transcript.trim())) ? "#94a3b8" : "#fff",
-                    border: "none", borderRadius: 10,
-                    fontSize: 14, fontWeight: 700, cursor: "pointer",
-                    transition: "background 0.15s",
-                  }}
-                >{isLoading ? "…" : (isHindiMode ? "भेजें" : "Send")}</button>
-              </div>
-            </div>
+      {/* ── LIVE TRANSCRIPT (shown only when mic is active) ── */}
+      {(listening || (transcript && !loading)) && (
+        <div style={{
+          margin: "8px 14px 0",
+          background: listening ? "#f0fdf4" : "#f8fafc",
+          border: `1.5px solid ${listening ? "#86efac" : "#e2e8f0"}`,
+          borderRadius: 12, padding: "8px 12px",
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", marginBottom: 3,
+            color: listening ? "#22c55e" : "#94a3b8" }}>
+            {listening ? (isHindi ? "● सुन रहा है…" : "● LISTENING…") : (isHindi ? "सुना हुआ" : "TRANSCRIPT")}
+          </div>
+          <div style={{ fontSize: 14, color: listening ? "#166534" : "#64748b", lineHeight: 1.6 }}>
+            {transcript || <em style={{ color: "#94a3b8" }}>{isHindi ? "बोलिए…" : "Speak now…"}</em>}
           </div>
         </div>
+      )}
+
+      {/* ── SPEAKING BANNER ── */}
+      {speaking && (
+        <div style={{
+          margin: "8px 14px 0", padding: "8px 14px",
+          background: "#0f172a", borderRadius: 12,
+          display: "flex", alignItems: "center", gap: 10,
+        }}>
+          <Waveform active color="#fbbf24" />
+          <span style={{ color: "#fbbf24", fontSize: 12, fontWeight: 700 }}>
+            {isHindi ? "बोल रहा है…" : "Speaking…"}
+          </span>
+          <button onClick={() => { stop(); setSpeaking(false); }} style={{
+            marginLeft: "auto", padding: "3px 10px",
+            background: "rgba(255,255,255,0.15)", color: "#fff",
+            border: "none", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer",
+          }}>■ Stop</button>
+        </div>
+      )}
+
+      {/* ── INPUT BAR ── */}
+      <div style={{
+        padding: "10px 14px",
+        paddingBottom: "calc(10px + env(safe-area-inset-bottom))",
+        background: "#fff", borderTop: "1px solid #e2e8f0",
+        flexShrink: 0,
+        display: "flex", alignItems: "flex-end", gap: 10,
+      }}>
+        {/* Mic button */}
+        <button
+          onClick={toggleMic}
+          style={{
+            width: 52, height: 52, borderRadius: "50%", border: "none",
+            background: listening ? "#ef4444" : accentColor,
+            color: "#fff", fontSize: 22, cursor: "pointer", flexShrink: 0,
+            boxShadow: listening ? "none" : `0 4px 14px ${accentColor}60`,
+            animation: listening ? "pulse 1.4s infinite" : "none",
+            transition: "background 0.2s",
+          }}
+          title={listening ? "Stop & send" : isHindi ? "बोलने के लिए दबाएं" : "Tap to speak"}
+        >
+          {listening ? "■" : "🎤"}
+        </button>
+
+        {/* Text input + send */}
+        <div style={{ flex: 1, position: "relative" }}>
+          <textarea
+            value={inputText}
+            onChange={e => setInputText(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+            }}
+            placeholder={isHindi ? "🎤 बोलें  या  ✏️ यहाँ लिखें…" : "🎤 Speak  or  ✏️ Type here…"}
+            rows={1}
+            disabled={loading}
+            style={{
+              width: "100%", resize: "none",
+              border: `2px solid ${accentColor}55`,
+              borderRadius: 14, padding: "13px 52px 13px 16px",
+              fontSize: 15, lineHeight: 1.5,
+              background: loading ? "#f8fafc" : "#fff", color: "#0f172a",
+              fontFamily: isHindi ? "'Noto Sans Devanagari','Mangal',sans-serif" : "inherit",
+              minHeight: 50, maxHeight: 110, overflowY: "auto",
+            }}
+          />
+          {/* Send button inside textarea */}
+          <button
+            onClick={handleSend}
+            disabled={loading || (!inputText.trim() && !transcript.trim())}
+            style={{
+              position: "absolute", right: 6, bottom: 6,
+              width: 38, height: 38, borderRadius: 10, border: "none",
+              background: (loading || (!inputText.trim() && !transcript.trim())) ? "#e2e8f0" : accentColor,
+              color: (loading || (!inputText.trim() && !transcript.trim())) ? "#94a3b8" : "#fff",
+              fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+              transition: "background 0.15s",
+            }}
+          >{loading ? "…" : "↑"}</button>
+        </div>
+
+        {/* Replay button */}
+        <button
+          onClick={replayLast}
+          disabled={speaking || messages.filter(m=>m.role==="assistant").length === 0}
+          title="Replay last response"
+          style={{
+            width: 44, height: 44, borderRadius: "50%", border: `2px solid ${accentColor}40`,
+            background: "#fff", color: accentColor, fontSize: 17, cursor: "pointer", flexShrink: 0,
+            opacity: speaking ? 0.4 : 1, transition: "opacity 0.2s",
+          }}
+        >▶</button>
       </div>
     </div>
   );
