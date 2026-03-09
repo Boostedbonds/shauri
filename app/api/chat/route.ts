@@ -67,6 +67,7 @@ interface PaperRequirements {
   questionCount: number | null;      // e.g. 20
   marksEach: number | null;          // e.g. 1
   chapterFilter: string | null;      // e.g. "chapters 1-3"
+  topicKeyword: string | null;       // e.g. "Gravitation", "Polynomials"
   isCustom: boolean;
 }
 
@@ -125,11 +126,21 @@ function parsePaperRequirements(text: string): PaperRequirements {
     computedTotal = questionCount * marksEach;
   }
 
-  // Chapter filter
+  // Chapter / topic filter — catches:
+  //   "chapters 3 and 4", "chapter 5", "on ch 2", "from unit 3", "topics 1-3"
   const chapterMatch =
-    t.match(/chapters?\s*([\d,\-\s]+(?:and\s*\d+)?)/) ||
-    t.match(/(?:from|only)\s*ch(?:apter)?s?\s*([\d,\-\s]+)/);
+    t.match(/chapters?\s*([\d,\-–\s]+(?:and\s*\d+)?)/) ||
+    t.match(/(?:from|only|on)\s*ch(?:apter)?s?\s*([\d,\-–\s]+(?:and\s*\d+)?)/) ||
+    t.match(/(?:unit|topic)s?\s*([\d,\-–\s]+(?:and\s*\d+)?)/);
   const chapterFilter = chapterMatch ? `chapters ${chapterMatch[1].trim()}` : null;
+
+  // Also detect topic/subject keyword restrictions like "on Gravitation", "on Polynomials"
+  const topicKeywordMatch = !chapterFilter
+    ? text.match(/(?:on|about|for|covering|from)\s+([A-Z][a-zA-Z\s]{3,30})(?:\s|$)/)
+    : null;
+  const topicKeyword = topicKeywordMatch
+    ? topicKeywordMatch[1].trim()
+    : null;
 
   const isCustom =
     computedTotal !== null ||
@@ -145,6 +156,7 @@ function parsePaperRequirements(text: string): PaperRequirements {
     questionCount,
     marksEach,
     chapterFilter,
+    topicKeyword,
     isCustom,
   };
 }
@@ -1739,9 +1751,12 @@ Study Tip   : [one specific, actionable improvement]
             ? `\nCHAPTER RESTRICTION: Only use questions from ${reqs.chapterFilter}.`
             : "";
 
-          // ── STEP 1: Extract clean topic list from uploaded syllabus ────────
-          // Strip the warning headers added by parseSyllabusFromUpload so only
-          // actual topic names reach the AI.
+          // ── STEP 1: Build the authorised topic list ──────────────────────
+          // Three sources, in priority order:
+          //   a) Uploaded syllabus (strip warning headers)
+          //   b) Chapter filter from custom instruction (e.g. "chapters 3 and 4")
+          //   c) Full NCERT chapter list for the subject (fallback)
+
           const cleanTopicList = chapterList
             .replace(/.*UPLOADED SYLLABUS.*\n/g, "")
             .replace(/.*ABSOLUTE RULE.*\n/g, "")
@@ -1750,11 +1765,71 @@ Study Tip   : [one specific, actionable improvement]
             .replace(/.*Do NOT "fill gaps".*\n/g, "")
             .trim();
 
-          // Parse individual topic names (numbered lines like "1. शब्द और पद")
-          const topicLines = cleanTopicList
+          // All chapter lines from the NCERT/uploaded list
+          const allTopicLines = cleanTopicList
             .split("\n")
             .map(l => l.replace(/^\d+\.\s*/, "").trim())
-            .filter(l => l.length > 2 && !/^(SUBJECT|CHAPTERS|TOPICS)/i.test(l));
+            .filter(l => l.length > 2 && !/^(SUBJECT|CHAPTERS|TOPICS|Board|Class)/i.test(l));
+
+          // If the student asked for specific chapters (e.g. "chapters 1-3", "chapter 5"),
+          // filter the NCERT list to only those chapters. This is the critical fix for
+          // "prepare 30 marks exam on Chapter 3 Science" — without this the AI cycles
+          // through all NCERT chapters instead of staying on the requested ones.
+          let topicLines = allTopicLines;
+          if (!hasUploadedSyllabus && reqs.chapterFilter) {
+            // Parse chapter numbers from the filter string
+            const chapterNums: number[] = [];
+            const rangeMatch = reqs.chapterFilter.match(/(\d+)\s*[-–to]+\s*(\d+)/i);
+            if (rangeMatch) {
+              const from = parseInt(rangeMatch[1]);
+              const to   = parseInt(rangeMatch[2]);
+              for (let n = from; n <= to; n++) chapterNums.push(n);
+            }
+            const singleMatches = reqs.chapterFilter.matchAll(/(\b|ch\.?\s*)(\d+)/gi);
+            for (const m of singleMatches) chapterNums.push(parseInt(m[2]));
+
+            if (chapterNums.length > 0) {
+              // Filter: keep only topics whose position in the list matches a requested chapter number
+              const filtered = chapterNums
+                .filter(n => n > 0 && n <= allTopicLines.length)
+                .map(n => allTopicLines[n - 1])
+                .filter(Boolean);
+              if (filtered.length > 0) {
+                topicLines = filtered;
+                console.log("[CHAPTER FILTER] Narrowed to:", topicLines);
+              }
+            }
+
+            // If chapter numbers didn't resolve, try keyword matching
+            if (topicLines === allTopicLines && reqs.chapterFilter) {
+              const filterLower = reqs.chapterFilter.toLowerCase();
+              const keywordFiltered = allTopicLines.filter(t =>
+                t.toLowerCase().split(/\s+/).some(word =>
+                  word.length > 3 && filterLower.includes(word)
+                )
+              );
+              if (keywordFiltered.length > 0) {
+                topicLines = keywordFiltered;
+                console.log("[KEYWORD FILTER] Narrowed to:", topicLines);
+              }
+            }
+          }
+
+          // Also filter by topic keyword (e.g. "on Gravitation", "on Polynomials")
+          if (topicLines === allTopicLines && reqs.topicKeyword) {
+            const kw = reqs.topicKeyword.toLowerCase();
+            const kwFiltered = allTopicLines.filter(t =>
+              t.toLowerCase().includes(kw) ||
+              kw.includes(t.toLowerCase().split(" ")[0])
+            );
+            if (kwFiltered.length > 0) {
+              topicLines = kwFiltered;
+              console.log("[KEYWORD TOPIC FILTER] Narrowed to:", topicLines);
+            }
+          }
+
+          // Safety: if filtering left us with nothing, fall back to full list
+          if (topicLines.length === 0) topicLines = allTopicLines;
 
           // ── STEP 2: Pre-build a question plan in code ─────────────────────
           // Distribute marks across topics. This means the AI gets a rigid
@@ -1812,11 +1887,14 @@ STRICT RULES:
 Write EXACTLY ONE question on the topic: "${slot.topic}"
 Question type: ${qTypeSuggestion}
 Marks: ${slot.marks}
+${reqs.chapterFilter ? `This question is from: ${reqs.chapterFilter}.` : ""}
 
 STRICT RULES:
-- Test ONLY "${slot.topic}".
-- Do NOT add passages, images, or unrelated topics.
-- Output ONLY the question text. No numbering, no marks label.`;
+- Test ONLY "${slot.topic}" from ${subjectName} Class ${cls}.
+- Do NOT add unseen passages, images, or topics outside "${slot.topic}".
+- Do NOT follow the standard 80-mark CBSE section pattern.
+- Do NOT add any NCERT chapter or concept not directly related to "${slot.topic}".
+- Output ONLY the question text. No numbering, no marks label, no explanation.`;
 
             const qText = await callAI(singleQPrompt, [
               { role: "user", content: `Write one ${slot.marks}-mark question on "${slot.topic}".` }
@@ -2302,4 +2380,4 @@ LINE FORMAT (output all 4, in this exact order):
       { status: 500 }
     );
   }
-}		
+}
