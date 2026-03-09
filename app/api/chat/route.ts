@@ -1734,48 +1734,69 @@ Study Tip   : [one specific, actionable improvement]
             marksAssigned += m;
           }
 
-          // ── STEP 3: Build the prompt from the plan ────────────────────────
-          // Each line tells the AI exactly: question number, topic, marks.
-          // The AI's ONLY job is to write a question for that exact topic.
-          const planLines = questionPlan
-            .map(q => `Q${q.qNum}. [${q.marks} mark${q.marks > 1 ? "s" : ""}] Topic: "${q.topic}"`)
-            .join("\n");
+          // ── STEP 3: Generate each question individually ───────────────────
+          // Call AI once per question with a locked single-topic prompt.
+          // This is the only reliable way to prevent topic bleed — the AI
+          // cannot invent extra questions or add prose/passage sections
+          // because each call produces exactly ONE question for ONE topic.
 
-          const subjectTypeNote = isHindi
-            ? `SUBJECT TYPE: Hindi Grammar (व्याकरण). Every question must be a grammar exercise for its topic — definitions, fill-in-blanks, identify errors, give examples, sandhi-viched, upsarg-pratyay etc. NEVER ask about stories, prose chapters, poems, or authors.`
+          // Question types appropriate for grammar/concept topics
+          // (never passage-based, never requires an image)
+          const safeQTypes = isHindi
+            ? ["परिभाषा लिखिए", "उदाहरण सहित अंतर स्पष्ट कीजिए", "रिक्त स्थान भरिए", "सही विकल्प चुनिए", "शुद्ध कीजिए", "पहचान कीजिए", "वाक्य में प्रयोग कीजिए"]
             : isEnglish
-            ? `SUBJECT TYPE: English Grammar/Writing. Every question must be a grammar or writing exercise for its topic. NEVER add unseen passages or literature questions.`
-            : `SUBJECT TYPE: ${subjectName}. Write questions strictly on each listed topic.`;
+            ? ["Define with example", "Fill in the blanks", "Identify and correct", "Choose the correct option", "Rewrite as directed", "Give two examples of"]
+            : ["Define", "Give examples", "Fill in the blanks", "Identify", "Explain with example"];
 
-          const customPaperPrompt = `
-You are filling in a pre-planned question paper. Your ONLY job is to write the question text for each numbered slot below. Do NOT add, remove, or change any question slot.
+          const questionTexts: string[] = [];
+          for (const slot of questionPlan) {
+            const qTypeSuggestion = safeQTypes[slot.qNum % safeQTypes.length];
+            const singleQPrompt = isHindi
+              ? `You are a Hindi grammar question writer for Class ${cls} CBSE.
+Write EXACTLY ONE question on the grammar topic: "${slot.topic}"
+The question should be of type: ${qTypeSuggestion} (or similar grammar exercise).
+Marks: ${slot.marks}
 
-${subjectTypeNote}
+STRICT RULES:
+- The question must test ONLY "${slot.topic}" — a grammar concept.
+- Do NOT mention any story, book chapter, poem, author, or prose passage.
+- Do NOT ask for चित्र-वर्णन, गद्यांश, अपठित, पत्र-लेखन, or निबंध.
+- Do NOT include a reading passage — pure grammar exercise only.
+- Output ONLY the question text (in Hindi). No numbering, no marks label, no explanation.`
+              : `You are a ${subjectName} question writer for Class ${cls} CBSE.
+Write EXACTLY ONE question on the topic: "${slot.topic}"
+Question type: ${qTypeSuggestion}
+Marks: ${slot.marks}
 
-PAPER HEADER (output this exactly):
-Subject       : ${subjectName}
+STRICT RULES:
+- Test ONLY "${slot.topic}".
+- Do NOT add passages, images, or unrelated topics.
+- Output ONLY the question text. No numbering, no marks label.`;
+
+            const qText = await callAI(singleQPrompt, [
+              { role: "user", content: `Write one ${slot.marks}-mark question on "${slot.topic}".` }
+            ]);
+            // Strip any numbering the AI might have added
+            const cleanQ = qText.trim().replace(/^(Q\.?\d+\.?\s*|\d+\.\s*)/i, "").trim();
+            questionTexts.push(cleanQ);
+          }
+
+          // ── STEP 4: Assemble the final paper in code ──────────────────────
+          const paperHeader = `Subject       : ${subjectName}
 Class         : ${cls}
 Board         : ${board}
 Time Allowed  : ${timeAllowed}
-Maximum Marks : ${finalMarks}
+Maximum Marks : ${finalMarks}`;
 
-QUESTION PLAN — write one question per slot, exactly as numbered:
-${planLines}
+          const generalInstructions = `General Instructions:
+1. All questions are compulsory.
+2. Marks are indicated against each question.`;
 
-RULES:
-- Each question must test ONLY the topic stated for that slot.
-- Show marks as [X marks] at the end of each question.
-- Do NOT add any extra questions, sections, passages, or instructions.
-- Output the paper header first, then questions 1, 2, 3... in order.
-- Total marks = ${finalMarks}. Do not change any mark values.
-          `.trim();
+          const questionBody = questionPlan
+            .map((slot, i) => `${slot.qNum}. ${questionTexts[i] || "(Question unavailable)"} [${slot.marks} marks]`)
+            .join("\n\n");
 
-          const paper = await callAI(customPaperPrompt, [
-            {
-              role: "user",
-              content: `Write the question text for each slot. Subject: ${subjectName}, ${finalMarks} marks total.`,
-            },
-          ]);
+          const paper = `${paperHeader}\n\n${generalInstructions}\n\n${questionBody}`;
 
           const totalMarksOnPaper = parseTotalMarksFromPaper(paper);
           const startTime         = Date.now();
