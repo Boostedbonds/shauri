@@ -479,6 +479,17 @@ function formatDuration(ms: number): string {
 }
 
 function parseScore(text: string): { obtained: number; total: number } {
+  // First try JSON eval format
+  try {
+    const jsonMatch = text.match(/\{[\s\S]*"totalObtained"[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (parsed.totalObtained !== undefined && parsed.totalMarks !== undefined) {
+        return { obtained: Number(parsed.totalObtained), total: Number(parsed.totalMarks) };
+      }
+    }
+  } catch {}
+  // Fallback: regex on plain text
   const match =
     text.match(/total\s*marks\s*obtained\s*[:\|]\s*(\d+)\s*\/\s*(\d+)/i) ||
     text.match(/total[:\s]+(\d+)\s*\/\s*(\d+)/i) ||
@@ -489,6 +500,144 @@ function parseScore(text: string): { obtained: number; total: number } {
   }
   console.warn("[parseScore] Could not extract score from evaluation text.");
   return { obtained: 0, total: 0 };
+}
+
+// ─────────────────────────────────────────────────────────────
+// BUILD RICH HTML EVALUATION REPORT (matches docx colour scheme)
+// ─────────────────────────────────────────────────────────────
+function buildEvalHtml(evalJson: Record<string, unknown>, fallbackText: string): string {
+  try {
+    const {
+      studentName, cls, subject, board, timeTaken, overtime,
+      totalObtained, totalMarks, percentage, grade, gradeLabel,
+      sections, strengths, weaknesses, studyTip,
+    } = evalJson as {
+      studentName: string; cls: string; subject: string; board: string;
+      timeTaken: string; overtime: boolean;
+      totalObtained: number; totalMarks: number; percentage: number;
+      grade: string; gradeLabel: string;
+      sections: Array<{
+        name: string; obtained: number; maxMarks: number;
+        questions: Array<{ qNum: string; topic: string; obtained: number; maxMarks: number; status: string; feedback: string; correctAnswer?: string }>;
+      }>;
+      strengths: string; weaknesses: string; studyTip: string;
+    };
+
+    const gradeColor = percentage >= 91 ? "#1a7a4a" : percentage >= 71 ? "#1F4E79" : percentage >= 51 ? "#7d5a00" : percentage >= 33 ? "#a84300" : "#c0392b";
+    const gradeBg    = percentage >= 91 ? "#e8f5e9" : percentage >= 71 ? "#EBF3FB" : percentage >= 51 ? "#fff9c4" : percentage >= 33 ? "#fdebd7" : "#fdecea";
+
+    const sectionHtml = (sections || []).map(sec => {
+      const secPct = sec.maxMarks > 0 ? Math.round((sec.obtained / sec.maxMarks) * 100) : 0;
+      const secColor = sec.obtained === sec.maxMarks ? "#27AE60" : sec.obtained >= sec.maxMarks * 0.6 ? "#E67E22" : "#E74C3C";
+      const qRows = (sec.questions || []).map(q => {
+        const statusIcon = q.status === "correct" ? "✓" : q.status === "partial" ? "~" : q.status === "unattempted" ? "—" : "✗";
+        const rowBg = q.status === "correct" ? "#f0fff0" : q.status === "partial" ? "#fffde7" : q.status === "unattempted" ? "#f5f5f5" : "#fff0f0";
+        const statusColor = q.status === "correct" ? "#27AE60" : q.status === "partial" ? "#E67E22" : q.status === "unattempted" ? "#888" : "#E74C3C";
+        const wrongNote = (q.correctAnswer && q.status !== "correct")
+          ? `<div style="font-size:12px;color:#1A5276;margin-top:4px;"><b>✎ Correct:</b> ${q.correctAnswer}</div>` : "";
+        const feedbackNote = q.feedback
+          ? `<div style="font-size:12px;color:#5D4037;margin-top:2px;">${q.feedback}</div>` : "";
+        return `
+          <tr style="background:${rowBg};">
+            <td style="padding:7px 10px;font-weight:600;color:#333;border:1px solid #ddd;white-space:nowrap;">${q.qNum}</td>
+            <td style="padding:7px 10px;color:#333;border:1px solid #ddd;">${q.topic || "—"}${feedbackNote}${wrongNote}</td>
+            <td style="padding:7px 10px;text-align:center;font-weight:700;color:${statusColor};border:1px solid #ddd;white-space:nowrap;">${statusIcon} ${q.obtained}/${q.maxMarks}</td>
+          </tr>`;
+      }).join("");
+
+      return `
+        <div style="margin-bottom:24px;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.10);">
+          <div style="background:#2C3E50;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;">
+            <span style="color:#fff;font-weight:700;font-size:15px;">${sec.name}</span>
+            <span style="background:${secColor};color:#fff;padding:3px 12px;border-radius:20px;font-weight:700;font-size:14px;">${sec.obtained} / ${sec.maxMarks} &nbsp;(${secPct}%)</span>
+          </div>
+          <table style="width:100%;border-collapse:collapse;background:#fff;">
+            <thead>
+              <tr style="background:#D6E4F7;">
+                <th style="padding:7px 10px;text-align:left;border:1px solid #ddd;font-size:13px;color:#1F4E79;">Q#</th>
+                <th style="padding:7px 10px;text-align:left;border:1px solid #ddd;font-size:13px;color:#1F4E79;">Topic / Feedback</th>
+                <th style="padding:7px 10px;text-align:center;border:1px solid #ddd;font-size:13px;color:#1F4E79;">Score</th>
+              </tr>
+            </thead>
+            <tbody>${qRows}</tbody>
+          </table>
+        </div>`;
+    }).join("");
+
+    const summaryRows = (sections || []).map(sec => {
+      const bg = sec.obtained === sec.maxMarks ? "#E8F5E9" : sec.obtained >= sec.maxMarks * 0.6 ? "#FFF9C4" : "#FDECEA";
+      return `<tr style="background:${bg};">
+        <td style="padding:8px 12px;border:1px solid #ddd;">${sec.name}</td>
+        <td style="padding:8px 12px;text-align:center;font-weight:700;border:1px solid #ddd;">${sec.obtained} / ${sec.maxMarks}</td>
+        <td style="padding:8px 12px;text-align:center;border:1px solid #ddd;">${sec.maxMarks > 0 ? Math.round(sec.obtained/sec.maxMarks*100) : 0}%</td>
+      </tr>`;
+    }).join("");
+
+    return `
+<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:860px;margin:0 auto;">
+
+  <!-- Header -->
+  <div style="background:#1F4E79;padding:20px 24px;border-radius:10px 10px 0 0;">
+    <div style="color:#fff;font-size:22px;font-weight:700;">📋 CBSE Evaluation Report</div>
+    <div style="color:#BDD7EE;font-size:14px;margin-top:4px;">${subject} &nbsp;|&nbsp; Class ${cls} &nbsp;|&nbsp; ${board}</div>
+  </div>
+
+  <!-- Info bar -->
+  <div style="background:#EBF3FB;padding:12px 24px;display:flex;flex-wrap:wrap;gap:20px;border:1px solid #c8ddf0;border-top:none;">
+    <span style="font-size:13px;color:#333;"><b>Student:</b> ${studentName || "—"}</span>
+    <span style="font-size:13px;color:#333;"><b>Time Taken:</b> ${timeTaken}${overtime ? " ⚠️ Over limit" : ""}</span>
+    <span style="font-size:13px;color:#333;"><b>Max Marks:</b> ${totalMarks}</span>
+  </div>
+
+  <!-- Score banner -->
+  <div style="background:${gradeBg};border:2px solid ${gradeColor};border-radius:0 0 10px 10px;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:24px;">
+    <div>
+      <div style="font-size:36px;font-weight:800;color:${gradeColor};">${totalObtained} <span style="font-size:20px;color:#555;">/ ${totalMarks}</span></div>
+      <div style="font-size:15px;color:#555;margin-top:2px;">Marks Obtained &nbsp;•&nbsp; ${percentage}%</div>
+    </div>
+    <div style="text-align:center;">
+      <div style="font-size:48px;font-weight:800;color:${gradeColor};">${grade}</div>
+      <div style="font-size:14px;color:#555;">${gradeLabel}</div>
+    </div>
+  </div>
+
+  <!-- Section breakdown heading -->
+  <div style="font-size:17px;font-weight:700;color:#1F4E79;border-bottom:3px solid #1F4E79;padding-bottom:6px;margin-bottom:16px;">📊 Section-wise Breakdown</div>
+  ${sectionHtml}
+
+  <!-- Summary table -->
+  <div style="font-size:17px;font-weight:700;color:#1F4E79;border-bottom:3px solid #1F4E79;padding-bottom:6px;margin-bottom:16px;margin-top:8px;">📈 Summary</div>
+  <table style="width:100%;border-collapse:collapse;margin-bottom:24px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.08);border-radius:6px;overflow:hidden;">
+    <thead>
+      <tr style="background:#1F4E79;">
+        <th style="padding:9px 12px;text-align:left;color:#fff;border:1px solid #ddd;">Section</th>
+        <th style="padding:9px 12px;text-align:center;color:#fff;border:1px solid #ddd;">Marks</th>
+        <th style="padding:9px 12px;text-align:center;color:#fff;border:1px solid #ddd;">%</th>
+      </tr>
+    </thead>
+    <tbody>${summaryRows}
+      <tr style="background:#D6E4F7;font-weight:700;">
+        <td style="padding:9px 12px;border:1px solid #ddd;">TOTAL</td>
+        <td style="padding:9px 12px;text-align:center;border:1px solid #ddd;">${totalObtained} / ${totalMarks}</td>
+        <td style="padding:9px 12px;text-align:center;border:1px solid #ddd;">${percentage}%</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Examiner Remarks -->
+  <div style="font-size:17px;font-weight:700;color:#1F4E79;border-bottom:3px solid #1F4E79;padding-bottom:6px;margin-bottom:16px;">💬 Examiner's Remarks</div>
+  <div style="background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.08);padding:16px 20px;margin-bottom:8px;">
+    <div style="margin-bottom:10px;"><span style="color:#27AE60;font-weight:700;">✦ Strengths:</span> <span style="color:#333;">${strengths || "—"}</span></div>
+    <div style="margin-bottom:10px;"><span style="color:#E74C3C;font-weight:700;">✦ Weaknesses:</span> <span style="color:#333;">${weaknesses || "—"}</span></div>
+    <div><span style="color:#1F4E79;font-weight:700;">✦ Study Tip:</span> <span style="color:#333;">${studyTip || "—"}</span></div>
+  </div>
+
+  <div style="text-align:center;padding:16px 0;color:#1F4E79;font-weight:700;font-size:15px;">✦ End of Evaluation Report ✦</div>
+</div>`;
+  } catch (e) {
+    // If JSON parse / build fails, return a simple HTML-wrapped plain text
+    return `<pre style="font-family:monospace;white-space:pre-wrap;">${fallbackText}</pre>`;
+  }
 }
 
 function parseTotalMarksFromPaper(paper: string): number {
@@ -1214,157 +1363,67 @@ SECTION C — Long Answer [5 marks each]: Introduction(1) + Content(2) + Example
 SECTION D — Long Answer [5 marks each]: Same as Section C.
 SECTION E — Case Study [4 marks each]: Sub(i) 1m + Sub(ii) 1m + Sub(iii) 2m.`;
 
+        // ── Build JSON-structured evaluation prompt ──────────────────
         const evaluationPrompt = `
-You are an official CBSE Board Examiner evaluating a Class ${cls} student named ${name || "the student"}.
-Subject: ${session.subject || "General"}
-Board: ${board}
-Maximum Marks: ${totalMarks}
+You are an official CBSE Board Examiner for Class ${cls}.
+Subject: ${session.subject || "General"} | Board: ${board} | Maximum Marks: ${totalMarks}
 Time Taken: ${timeTaken}${overtime ? " ⚠️ SUBMITTED AFTER 3-HOUR LIMIT" : ""}
 
-IMPORTANT: Match the student's answers to questions by question number OR topic/context.
-Evaluate EVERY question on the paper — give 0 for unattempted questions, do not skip them.
-Student may have answered out of order — cross-reference carefully before marking.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SUBJECT-SPECIFIC CBSE MARKING RULES:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MARKING RULES:
 ${subjectMarkingRules}
 
-UNIVERSAL RULES (apply to all subjects):
+UNIVERSAL RULES:
 • No negative marking — minimum per question is always 0
-• No sympathy marks for vague, wrong, or off-topic answers
-• Image/PDF answers → evaluate content only, ignore handwriting quality
-• Consistent marking — same quality of answer must always get the same marks
-• NCERT-accurate facts required for full marks; correct concept in own words = full marks
-${overtime ? "• ⚠️ Student submitted after the 3-hour limit. Note this in Examiner Remarks." : ""}
+• Match answers to questions by number OR topic — student may have answered out of order
+• Evaluate EVERY question — unattempted = 0, do NOT skip
+• Image/PDF answers → evaluate content only, ignore handwriting
+• NCERT-accurate facts = full marks; correct concept in own words = full marks
+${overtime ? "• Student submitted after the 3-hour limit — note in remarks." : ""}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-EVALUATION REPORT — OUTPUT THIS FORMAT EXACTLY:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OUTPUT FORMAT — respond ONLY with a single valid JSON object, no markdown, no explanation:
+{
+  "studentName": "${name || "Student"}",
+  "cls": "${cls}",
+  "subject": "${session.subject || "General"}",
+  "board": "${board}",
+  "timeTaken": "${timeTaken}",
+  "overtime": ${overtime},
+  "totalMarks": ${totalMarks},
+  "totalObtained": <number>,
+  "percentage": <number 0-100>,
+  "grade": "<A1|A2|B1|B2|C1|C2|D|E>",
+  "gradeLabel": "<Outstanding|Excellent|Very Good|Good|Average|Satisfactory|Pass|Needs Improvement>",
+  "sections": [
+    {
+      "name": "<Section name e.g. Section A — Reading>",
+      "maxMarks": <number>,
+      "obtained": <number>,
+      "questions": [
+        {
+          "qNum": "<e.g. Q1 or Q1(a)>",
+          "topic": "<brief topic or question type>",
+          "maxMarks": <number>,
+          "obtained": <number>,
+          "status": "<correct|partial|wrong|unattempted>",
+          "feedback": "<one sentence — what was right/wrong or what was missing; empty string if fully correct>",
+          "correctAnswer": "<correct answer if status is wrong or partial; empty string if correct>"
+        }
+      ]
+    }
+  ],
+  "strengths": "<specific sections/topics where student did well>",
+  "weaknesses": "<specific sections/topics to improve>",
+  "studyTip": "<one concrete, actionable improvement suggestion>"
+}
 
-📋 OFFICIAL CBSE EVALUATION REPORT
-Student : ${name || "—"}
-Class   : ${cls}
-Subject : ${session.subject}
-Board   : ${board}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-${evalIsEnglish || evalIsHindi ? `SECTION A — READING [__ / 20]
-Q[N] | [x]/[max] | ✅/⚠️/❌/— | [brief feedback if wrong or partial]
-Section A Total: [X] / 20
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION B — WRITING [__ / 20]
-Q[N] — [type] | Format [x]/1 | Content [x]/2 | Expression [x]/2 | Total [x]/5
-Feedback: [what format elements were missing, what content was strong/weak]
-Section B Total: [X] / 20
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION C — GRAMMAR [__ / 20]
-Q[N] | [x]/[max] | ✅/❌ | [correct answer if wrong]
-Section C Total: [X] / 20
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION D — LITERATURE [__ / 20]
-Q[N] — [text/topic] | [x]/[max] | ✅/⚠️/❌/—
-Feedback: [specific — what was correct, what was missing]
-Section D Total: [X] / 20` : evalIsMath ? `SECTION A — MCQ & Assertion-Reason [__ / 20]
-Q[N] | [x]/1 | ✅/❌/— | [correct answer if wrong]
-Section A Total: [X] / 20
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION B — Very Short Answer [__ / 10]
-Q[N] — [topic] | [x]/2 | Step marks: [detail]
-Section B Total: [X] / 10
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION C — Short Answer [__ / 18]
-Q[N] — [topic] | [x]/3 | Step marks: setup[x]/1 working[x]/1 answer[x]/1
-Section C Total: [X] / 18
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION D — Long Answer [__ / 20]
-Q[N] — [topic] | [x]/5 | [step-by-step mark breakdown]
-Section D Total: [X] / 20
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION E — Case Study [__ / 12]
-Q[N] (i)[x]/1 (ii)[x]/1 (iii)[x]/2 | Total [x]/4
-Section E Total: [X] / 12` : `SECTION A — Objective [__ / 20]
-Q[N] | [x]/1 | ✅/❌/— | [correct answer if wrong]
-Section A Total: [X] / 20
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION B — Short Answer [__ / 10]
-Q[N] — [topic] | [x]/2 | [brief feedback]
-Section B Total: [X] / 10
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION C — Short Answer [__ / 18]
-Q[N] — [topic] | [x]/3 | ✅/⚠️/❌/—
-Feedback: [specific — what was right, what was missing]
-Section C Total: [X] / 18
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION D — Long Answer [__ / 20]
-Q[N] — [topic] | [x]/5
-  Content/Points : [x]/3
-  Diagram/Example: [x]/1
-  Conclusion     : [x]/1
-Feedback: [what was strong, what was missing]
-Section D Total: [X] / 20
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION E — Case Study [__ / 12]
-Q[N] (i)[x]/1 (ii)[x]/1 (iii)[x]/2 | Total [x]/4
-Feedback: [accuracy of scientific/factual reasoning]
-Section E Total: [X] / 12`}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 FINAL RESULT:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${evalIsEnglish || evalIsHindi ? `Section A (Reading)   : [X] / 20
-Section B (Writing)   : [X] / 20
-Section C (Grammar)   : [X] / 20
-Section D (Literature): [X] / 20` : evalIsMath ? `Section A (MCQ/AR)    : [X] / 20
-Section B (VSA 2m)    : [X] / 10
-Section C (SA 3m)     : [X] / 18
-Section D (LA 5m)     : [X] / 20
-Section E (Case Study): [X] / 12` : `Section A (Objective) : [X] / 20
-Section B (VSA 2m)    : [X] / 10
-Section C (SA 3m)     : [X] / 18
-Section D (LA 5m)     : [X] / 20
-Section E (Case Study): [X] / 12`}
-─────────────────────────────────────────
-Total Marks Obtained  : [X] / ${totalMarks}
-Percentage            : [X.X]%
-Time Taken            : ${timeTaken}${overtime ? " ⚠️ Over time limit" : ""}
-─────────────────────────────────────────
-CBSE Grade:
-91–100% → A1  Outstanding
-81–90%  → A2  Excellent
-71–80%  → B1  Very Good
-61–70%  → B2  Good
-51–60%  → C1  Average
-41–50%  → C2  Satisfactory
-33–40%  → D   Pass
-Below 33% → E  Needs Improvement
-
-Your Grade: [grade + label]
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💬 EXAMINER'S REMARKS:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Strengths   : [specific sections/chapters where ${name || "the student"} performed well]
-Weaknesses  : [specific sections/chapters to work on]
-Study Tip   : [one specific, actionable improvement]
+Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very Good | 61-70% = B2 Good | 51-60% = C1 Average | 41-50% = C2 Satisfactory | 33-40% = D Pass | <33% = E Needs Improvement
         `.trim();
 
         await saveSession({ ...session, status: "FAILED" });
 
-        let evaluation: string;
+        let evalRaw: string;
         try {
-          evaluation = await callAIForEvaluation(evaluationPrompt, [
+          evalRaw = await callAIForEvaluation(evaluationPrompt, [
             {
               role: "user",
               content:
@@ -1384,8 +1443,33 @@ Study Tip   : [one specific, actionable improvement]
           });
         }
 
-        const { obtained, total } = parseScore(evaluation);
-        const percentage = total > 0 ? Math.round((obtained / total) * 100) : 0;
+        // Parse JSON from AI response
+        let evalJson: Record<string, unknown> = {};
+        let evaluationHtml = "";
+        try {
+          const jsonMatch = evalRaw.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            evalJson = JSON.parse(jsonMatch[0]);
+          }
+          evaluationHtml = buildEvalHtml(evalJson, evalRaw);
+        } catch (parseErr) {
+          console.warn("[evaluation] JSON parse failed, using plain text fallback", parseErr);
+          evaluationHtml = `<pre style="font-family:monospace;white-space:pre-wrap;padding:16px;">${evalRaw}</pre>`;
+        }
+
+        const { obtained, total } = parseScore(evalRaw);
+        const obtained2  = (evalJson.totalObtained as number) || obtained;
+        const total2     = (evalJson.totalMarks    as number) || (total > 0 ? total : totalMarks);
+        const percentage = total2 > 0 ? Math.round((obtained2 / total2) * 100) : 0;
+
+        // Plain-text summary for reply field (shown in chat before HTML card)
+        const gradeLabel = (evalJson.gradeLabel as string) || "";
+        const grade      = (evalJson.grade      as string) || "";
+        const plainSummary =
+          `✅ **Evaluation complete${callName}!**\n\n` +
+          `📊 **${obtained2} / ${total2}** &nbsp;(${percentage}%) &nbsp;— Grade **${grade}** ${gradeLabel}\n\n` +
+          `⏱️ Time taken: ${timeTaken}${overtime ? " ⚠️ Over limit" : ""}\n\n` +
+          `_Detailed report below_ 👇`;
 
         try {
           await supabase.from("exam_attempts").insert({
@@ -1393,11 +1477,11 @@ Study Tip   : [one specific, actionable improvement]
             class:           cls,
             subject:         session.subject || "General",
             percentage,
-            marks_obtained:  obtained,
-            total_marks:     total > 0 ? total : totalMarks,
+            marks_obtained:  obtained2,
+            total_marks:     total2,
             time_taken:      timeTaken,
             overtime,
-            evaluation_text: evaluation,
+            evaluation_text: evalRaw,
             created_at:      new Date().toISOString(),
           });
         } catch (dbErr) {
@@ -1407,11 +1491,12 @@ Study Tip   : [one specific, actionable improvement]
         await deleteSession(session.session_key || key);
 
         return NextResponse.json({
-          reply:          evaluation,
-          examEnded:      true,
-          subject:        session.subject,
-          marksObtained:  obtained,
-          totalMarks:     total > 0 ? total : totalMarks,
+          reply:           plainSummary,
+          evaluationHtml,
+          examEnded:       true,
+          subject:         session.subject,
+          marksObtained:   obtained2,
+          totalMarks:      total2,
           percentage,
           timeTaken,
           overtime,
@@ -1831,6 +1916,19 @@ Study Tip   : [one specific, actionable improvement]
           // Safety: if filtering left us with nothing, fall back to full list
           if (topicLines.length === 0) topicLines = allTopicLines;
 
+          // ── RANDOMISE topic order so every reattempt gets fresh questions ──
+          // Fisher-Yates shuffle seeded by current timestamp
+          const shuffled = [...topicLines];
+          for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+          }
+          topicLines = shuffled;
+
+          // Unique attempt seed injected into each question prompt so the AI
+          // cannot fall back to a cached / remembered response
+          const attemptSeed = `[Attempt-${Date.now()}-${Math.random().toString(36).slice(2,7)}]`;
+
           // ── STEP 2: Pre-build a question plan in code ─────────────────────
           // Distribute marks across topics. This means the AI gets a rigid
           // per-question brief — it can ONLY write the question text for that
@@ -1869,28 +1967,32 @@ Study Tip   : [one specific, actionable improvement]
             : ["Define", "Give examples", "Fill in the blanks", "Identify", "Explain with example"];
 
           const questionTexts: string[] = [];
+          // Rotate question-type list starting from a random offset for variety
+          const qTypeOffset = Math.floor(Math.random() * safeQTypes.length);
           for (const slot of questionPlan) {
-            const qTypeSuggestion = safeQTypes[slot.qNum % safeQTypes.length];
+            const qTypeSuggestion = safeQTypes[(slot.qNum + qTypeOffset) % safeQTypes.length];
             const singleQPrompt = isHindi
-              ? `You are a Hindi grammar question writer for Class ${cls} CBSE.
-Write EXACTLY ONE question on the grammar topic: "${slot.topic}"
+              ? `You are a Hindi grammar question writer for Class ${cls} CBSE. ${attemptSeed}
+Write EXACTLY ONE FRESH question on the grammar topic: "${slot.topic}"
 The question should be of type: ${qTypeSuggestion} (or similar grammar exercise).
 Marks: ${slot.marks}
 
 STRICT RULES:
 - The question must test ONLY "${slot.topic}" — a grammar concept.
+- Do NOT repeat questions you have generated before — always create a NEW question.
 - Do NOT mention any story, book chapter, poem, author, or prose passage.
 - Do NOT ask for चित्र-वर्णन, गद्यांश, अपठित, पत्र-लेखन, or निबंध.
 - Do NOT include a reading passage — pure grammar exercise only.
 - Output ONLY the question text (in Hindi). No numbering, no marks label, no explanation.`
-              : `You are a ${subjectName} question writer for Class ${cls} CBSE.
-Write EXACTLY ONE question on the topic: "${slot.topic}"
+              : `You are a ${subjectName} question writer for Class ${cls} CBSE. ${attemptSeed}
+Write EXACTLY ONE FRESH question on the topic: "${slot.topic}"
 Question type: ${qTypeSuggestion}
 Marks: ${slot.marks}
 ${reqs.chapterFilter ? `This question is from: ${reqs.chapterFilter}.` : ""}
 
 STRICT RULES:
 - Test ONLY "${slot.topic}" from ${subjectName} Class ${cls}.
+- IMPORTANT: Generate a NEW, UNIQUE question — do NOT repeat or reuse previously asked questions.
 - Do NOT add unseen passages, images, or topics outside "${slot.topic}".
 - Do NOT follow the standard 80-mark CBSE section pattern.
 - Do NOT add any NCERT chapter or concept not directly related to "${slot.topic}".
@@ -2147,9 +2249,11 @@ Do NOT include any chapter, unit, or concept absent from the uploaded list.
 Do NOT use NCERT or CBSE default chapter lists — the uploaded list replaces them entirely.
         `.trim() : "";
 
+        const standardPaperSeed = `[Paper-${Date.now()}-${Math.random().toString(36).slice(2,8)}]`;
         const paperPrompt = `
-You are an official CBSE Board question paper setter for Class ${cls}.
+You are an official CBSE Board question paper setter for Class ${cls}. ${standardPaperSeed}
 Subject: ${subjectName} | Board: ${board} | Maximum Marks: 80 | Time: 3 Hours
+IMPORTANT: Generate a COMPLETELY FRESH paper — every question must be unique and different from any previously generated paper. Do NOT reuse question stems, values, or examples.
 Follow the EXACT official CBSE 2024-25 paper pattern for ${subjectName} as specified below.
 Output the complete question paper ONLY — no commentary, no preamble, no notes outside the paper.
 
