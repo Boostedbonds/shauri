@@ -1694,69 +1694,65 @@ Study Tip   : [one specific, actionable improvement]
             ? `\nCHAPTER RESTRICTION: Only use questions from ${reqs.chapterFilter}.`
             : "";
 
-          // Build a hard exclusion list for this subject so the AI cannot default to standard CBSE sections
-          const syllabusTopicsFlat = chapterList.toLowerCase();
-          const exclusions: string[] = [];
-          if (isHindi) {
-            if (!syllabusTopicsFlat.includes("apathit") && !syllabusTopicsFlat.includes("unseen") && !syllabusTopicsFlat.includes("gadyansh") && !syllabusTopicsFlat.includes("apathit gadyansh")) {
-              exclusions.push("अपठित गद्यांश (Unseen Passage) — NOT in syllabus");
-            }
-            if (!syllabusTopicsFlat.includes("kavyansh") && !syllabusTopicsFlat.includes("poem") && !syllabusTopicsFlat.includes("kavita")) {
-              exclusions.push("अपठित काव्यांश (Unseen Poem) — NOT in syllabus");
-            }
-            if (!syllabusTopicsFlat.includes("patra") && !syllabusTopicsFlat.includes("letter") && !syllabusTopicsFlat.includes("lekhan")) {
-              exclusions.push("पत्र लेखन / Lekhan (Letter/Writing) — NOT in syllabus");
-            }
-            if (!syllabusTopicsFlat.includes("anuched") && !syllabusTopicsFlat.includes("paragraph")) {
-              exclusions.push("अनुच्छेद लेखन (Paragraph Writing) — NOT in syllabus");
-            }
-          }
-          if (isEnglish) {
-            if (!syllabusTopicsFlat.includes("unseen") && !syllabusTopicsFlat.includes("reading") && !syllabusTopicsFlat.includes("comprehension")) {
-              exclusions.push("Unseen Passage / Reading Comprehension — NOT in syllabus");
-            }
-            if (!syllabusTopicsFlat.includes("letter") && !syllabusTopicsFlat.includes("writing")) {
-              exclusions.push("Letter Writing / Writing Skills — NOT in syllabus");
-            }
-          }
-
-          const exclusionBlock = exclusions.length > 0
-            ? "\n!! ABSOLUTELY FORBIDDEN - DO NOT INCLUDE THESE EVEN PARTIALLY:\n" +
-              exclusions.map(e => "   X " + e).join("\n") + "\n"
-            : "";
+          // Extract just the topic names from the uploaded syllabus for the prompt
+          // Strip the boundary-warning header added by parseSyllabusFromUpload
+          const cleanTopicList = chapterList
+            .replace(/.*UPLOADED SYLLABUS.*\n/g, "")
+            .replace(/.*ABSOLUTE RULE.*\n/g, "")
+            .replace(/.*A topic NOT listed.*\n/g, "")
+            .replace(/.*Do NOT use standard.*\n/g, "")
+            .replace(/.*Do NOT "fill gaps".*\n/g, "")
+            .trim();
 
           const customPaperPrompt = `
 You are a question paper setter for Class ${cls}, ${board}.
 Subject: ${subjectName}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STUDENT'S REQUEST: ${customInstructions || "Generate based on uploaded syllabus"}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 PAPER SPECIFICATIONS — FOLLOW EXACTLY:
 • Total Marks  : MUST be exactly ${finalMarks} marks — not 80, not anything else
 • Time Allowed : ${timeAllowed}
 • Format       : ${formatSpec}${chapterNote}
 
-🚨 AUTHORISED TOPICS — EVERY SINGLE QUESTION MUST COME FROM THIS LIST AND NOWHERE ELSE:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${chapterList}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${exclusionBlock}
-STRICT RULES:
-1. Paper header MUST show exactly:
-   Subject       : ${subjectName}
-   Class         : ${cls}
-   Board         : ${board}
-   Time Allowed  : ${timeAllowed}
-   Maximum Marks : ${finalMarks}
+===========================================================
+THE ONLY TOPICS ALLOWED IN THIS PAPER:
+===========================================================
+${cleanTopicList}
+===========================================================
 
-2. Every question MUST show its mark value in [brackets].
-3. ALL question marks MUST add up to exactly ${finalMarks} — verify the sum before outputting.
-4. ONLY use topics from the authorised list above. If a topic is not listed, do NOT include it.
-5. Do NOT follow the standard CBSE section pattern (no Section A/B/C/D CBSE template).
-   Instead, create a simple numbered question paper based ONLY on the listed topics.
-6. Output ONLY the question paper — no commentary, no preamble, no notes after the last question.
+CRITICAL RULES — READ EVERY RULE BEFORE WRITING A SINGLE QUESTION:
+
+RULE 1 — TOPIC LOCK:
+Every question must test ONLY the topics listed above.
+If a topic is not in the list above, you CANNOT ask about it — not even one sub-question.
+Do NOT bring in any NCERT prose chapters, poems, stories, or passages that are not listed.
+Do NOT bring in any writing tasks (letter, paragraph, notice, essay) that are not listed.
+Do NOT bring in any unseen/reading comprehension passages that are not listed.
+${isHindi ? `For Hindi specifically: the listed topics are GRAMMAR topics (व्याकरण).
+Ask ONLY grammar-based questions on those exact grammar concepts.
+Do NOT ask about any story (कहानी), prose chapter (गद्य पाठ), poem (कविता), or author.
+Every question must be a grammar exercise: definitions, examples, fill-in-blanks, identify/correct, etc.` : ""}
+${isEnglish ? `For English specifically: ask ONLY about the grammar/writing topics listed.
+Do NOT add unseen passages, story comprehension, or literature questions not in the list.` : ""}
+
+RULE 2 — NO CBSE TEMPLATE:
+Do NOT create Section A / B / C / D.
+Just number questions: 1, 2, 3, 4...
+
+RULE 3 — MARKS SUM:
+All question marks must add up to exactly ${finalMarks}.
+Show each question's marks in [brackets].
+
+RULE 4 — HEADER:
+Subject       : ${subjectName}
+Class         : ${cls}
+Board         : ${board}
+Time Allowed  : ${timeAllowed}
+Maximum Marks : ${finalMarks}
+
+RULE 5 — OUTPUT:
+Output ONLY the question paper. No explanations, no notes, no commentary.
           `.trim();
 
           const paper = await callAI(customPaperPrompt, [
