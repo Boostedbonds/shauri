@@ -1694,8 +1694,9 @@ Study Tip   : [one specific, actionable improvement]
             ? `\nCHAPTER RESTRICTION: Only use questions from ${reqs.chapterFilter}.`
             : "";
 
-          // Extract just the topic names from the uploaded syllabus for the prompt
-          // Strip the boundary-warning header added by parseSyllabusFromUpload
+          // ── STEP 1: Extract clean topic list from uploaded syllabus ────────
+          // Strip the warning headers added by parseSyllabusFromUpload so only
+          // actual topic names reach the AI.
           const cleanTopicList = chapterList
             .replace(/.*UPLOADED SYLLABUS.*\n/g, "")
             .replace(/.*ABSOLUTE RULE.*\n/g, "")
@@ -1704,61 +1705,75 @@ Study Tip   : [one specific, actionable improvement]
             .replace(/.*Do NOT "fill gaps".*\n/g, "")
             .trim();
 
+          // Parse individual topic names (numbered lines like "1. शब्द और पद")
+          const topicLines = cleanTopicList
+            .split("\n")
+            .map(l => l.replace(/^\d+\.\s*/, "").trim())
+            .filter(l => l.length > 2 && !/^(SUBJECT|CHAPTERS|TOPICS)/i.test(l));
+
+          // ── STEP 2: Pre-build a question plan in code ─────────────────────
+          // Distribute marks across topics. This means the AI gets a rigid
+          // per-question brief — it can ONLY write the question text for that
+          // exact topic. It cannot add new topics or sections.
+          const marksPerQ = reqs.marksEach || (reqs.questionCount
+            ? Math.round(finalMarks / reqs.questionCount)
+            : finalMarks <= 20 ? 2 : finalMarks <= 40 ? 2 : 3);
+
+          const targetQCount = reqs.questionCount ||
+            Math.min(Math.ceil(finalMarks / marksPerQ), topicLines.length * 2 || 15);
+
+          // Spread topics evenly across questions; cycle if more questions than topics
+          const questionPlan: Array<{ qNum: number; topic: string; marks: number }> = [];
+          let marksAssigned = 0;
+          for (let i = 0; i < targetQCount; i++) {
+            const topic = topicLines[i % topicLines.length] || topicLines[0] || subjectName;
+            const isLast = i === targetQCount - 1;
+            const m = isLast ? finalMarks - marksAssigned : marksPerQ;
+            if (m <= 0) break;
+            questionPlan.push({ qNum: i + 1, topic, marks: m });
+            marksAssigned += m;
+          }
+
+          // ── STEP 3: Build the prompt from the plan ────────────────────────
+          // Each line tells the AI exactly: question number, topic, marks.
+          // The AI's ONLY job is to write a question for that exact topic.
+          const planLines = questionPlan
+            .map(q => `Q${q.qNum}. [${q.marks} mark${q.marks > 1 ? "s" : ""}] Topic: "${q.topic}"`)
+            .join("\n");
+
+          const subjectTypeNote = isHindi
+            ? `SUBJECT TYPE: Hindi Grammar (व्याकरण). Every question must be a grammar exercise for its topic — definitions, fill-in-blanks, identify errors, give examples, sandhi-viched, upsarg-pratyay etc. NEVER ask about stories, prose chapters, poems, or authors.`
+            : isEnglish
+            ? `SUBJECT TYPE: English Grammar/Writing. Every question must be a grammar or writing exercise for its topic. NEVER add unseen passages or literature questions.`
+            : `SUBJECT TYPE: ${subjectName}. Write questions strictly on each listed topic.`;
+
           const customPaperPrompt = `
-You are a question paper setter for Class ${cls}, ${board}.
-Subject: ${subjectName}
+You are filling in a pre-planned question paper. Your ONLY job is to write the question text for each numbered slot below. Do NOT add, remove, or change any question slot.
 
-STUDENT'S REQUEST: ${customInstructions || "Generate based on uploaded syllabus"}
+${subjectTypeNote}
 
-PAPER SPECIFICATIONS — FOLLOW EXACTLY:
-• Total Marks  : MUST be exactly ${finalMarks} marks — not 80, not anything else
-• Time Allowed : ${timeAllowed}
-• Format       : ${formatSpec}${chapterNote}
-
-===========================================================
-THE ONLY TOPICS ALLOWED IN THIS PAPER:
-===========================================================
-${cleanTopicList}
-===========================================================
-
-CRITICAL RULES — READ EVERY RULE BEFORE WRITING A SINGLE QUESTION:
-
-RULE 1 — TOPIC LOCK:
-Every question must test ONLY the topics listed above.
-If a topic is not in the list above, you CANNOT ask about it — not even one sub-question.
-Do NOT bring in any NCERT prose chapters, poems, stories, or passages that are not listed.
-Do NOT bring in any writing tasks (letter, paragraph, notice, essay) that are not listed.
-Do NOT bring in any unseen/reading comprehension passages that are not listed.
-${isHindi ? `For Hindi specifically: the listed topics are GRAMMAR topics (व्याकरण).
-Ask ONLY grammar-based questions on those exact grammar concepts.
-Do NOT ask about any story (कहानी), prose chapter (गद्य पाठ), poem (कविता), or author.
-Every question must be a grammar exercise: definitions, examples, fill-in-blanks, identify/correct, etc.` : ""}
-${isEnglish ? `For English specifically: ask ONLY about the grammar/writing topics listed.
-Do NOT add unseen passages, story comprehension, or literature questions not in the list.` : ""}
-
-RULE 2 — NO CBSE TEMPLATE:
-Do NOT create Section A / B / C / D.
-Just number questions: 1, 2, 3, 4...
-
-RULE 3 — MARKS SUM:
-All question marks must add up to exactly ${finalMarks}.
-Show each question's marks in [brackets].
-
-RULE 4 — HEADER:
+PAPER HEADER (output this exactly):
 Subject       : ${subjectName}
 Class         : ${cls}
 Board         : ${board}
 Time Allowed  : ${timeAllowed}
 Maximum Marks : ${finalMarks}
 
-RULE 5 — OUTPUT:
-Output ONLY the question paper. No explanations, no notes, no commentary.
+QUESTION PLAN — write one question per slot, exactly as numbered:
+${planLines}
+
+RULES:
+- Each question must test ONLY the topic stated for that slot.
+- Show marks as [X marks] at the end of each question.
+- Do NOT add any extra questions, sections, passages, or instructions.
+- Output the paper header first, then questions 1, 2, 3... in order.
+- Total marks = ${finalMarks}. Do not change any mark values.
           `.trim();
 
           const paper = await callAI(customPaperPrompt, [
             {
               role: "user",
-              content: `Generate the paper: ${subjectName}, ${finalMarks} marks, ${timeAllowed}${reqs.chapterFilter ? `, ${reqs.chapterFilter}` : ""}.`,
+              content: `Write the question text for each slot. Subject: ${subjectName}, ${finalMarks} marks total.`,
             },
           ]);
 
