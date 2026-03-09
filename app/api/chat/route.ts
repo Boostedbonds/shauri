@@ -864,7 +864,15 @@ export async function POST(req: NextRequest) {
       if (session.status === "IDLE") {
         let recovered: ExamSession | null = null;
 
+        // Prioritise finding an IN_EXAM session first — this is the most
+        // critical case: student is mid-exam but session loaded as IDLE
         if (name) {
+          recovered = await getSessionByStudent(name, cls, "IN_EXAM");
+        }
+        if (!recovered && name) {
+          recovered = await getSessionByStudent(name, cls, "READY");
+        }
+        if (!recovered && name) {
           recovered = await getSessionByStudent(name, cls);
         }
 
@@ -1494,6 +1502,43 @@ Study Tip   : [one specific, actionable improvement]
       }
 
       if (session.status === "IDLE" && !isGreeting(lower)) {
+        // ── SAFETY: If the message looks like a student answering exam questions,
+        // do one final aggressive session recovery before treating it as a subject name.
+        // This catches DB key mismatches where the student is IN_EXAM but we loaded IDLE.
+        const looksLikeAnswer =
+          message.trim().length > 40 ||                          // long message
+          /^\d+[.)]/m.test(message.trim()) ||                   // starts with "1." or "1)"
+          /[।\.]{2,}/.test(message) ||                         // Hindi sentence endings
+          /\b(answer|ans|q\d|question|ques)\b/i.test(message); // answer keywords
+
+        if (looksLikeAnswer) {
+          // Try harder to find an active session
+          let activeSession: ExamSession | null = null;
+          if (name) activeSession = await getSessionByStudent(name, cls, "IN_EXAM");
+          if (!activeSession && name) activeSession = await getSessionByStudent(name, cls);
+          if (activeSession && activeSession.status === "IN_EXAM") {
+            session = activeSession;
+            console.log("[IDLE-GUARD] Recovered IN_EXAM session for answer:", activeSession.session_key);
+            // Fall through to the IN_EXAM handler below by re-checking status
+            // We need to process this as an answer — record and return
+            if (message.trim()) {
+              const answerParts: string[] = [message.trim()];
+              if (uploadedText) answerParts.push(`[UPLOADED ANSWER]\n${uploadedText}`);
+              activeSession.answer_log.push(answerParts.join("\n\n"));
+              await saveSession(activeSession);
+              const elapsed = activeSession.started_at
+                ? formatDuration(Date.now() - activeSession.started_at)
+                : "—";
+              return NextResponse.json({
+                reply:
+                  `✅ **Answer recorded** (Entry ${activeSession.answer_log.length})\n` +
+                  `⏱️ Time elapsed: **${elapsed}**\n\n` +
+                  `Continue answering, or type **submit** when done.`,
+              });
+            }
+          }
+        }
+
         const isSyllabusUpload =
           uploadType === "syllabus" ||
           (!uploadType && uploadedText.length > 30);
@@ -2257,4 +2302,4 @@ LINE FORMAT (output all 4, in this exact order):
       { status: 500 }
     );
   }
-}
+}		
