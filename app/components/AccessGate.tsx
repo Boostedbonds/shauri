@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { grantAccess } from "../lib/session";
 
 // ── Types ─────────────────────────────────────────────────────
@@ -353,6 +353,89 @@ const styles = `
     text-align: center;
   }
 
+  /* ── Returning user card ── */
+  .ag-returning {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .ag-profile-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px;
+    background: #f8fafc;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 14px;
+    margin-bottom: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .ag-profile-card:hover {
+    border-color: #2563eb;
+    background: #eff6ff;
+    box-shadow: 0 2px 12px rgba(37,99,235,0.1);
+  }
+  .ag-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #2563eb, #0d9488);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 800;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .ag-profile-info { flex: 1; min-width: 0; }
+  .ag-profile-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 2px;
+  }
+  .ag-profile-class {
+    font-size: 12px;
+    color: #64748b;
+  }
+  .ag-profile-arrow {
+    font-size: 18px;
+    color: #2563eb;
+  }
+  .ag-or-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .ag-or-line {
+    flex: 1;
+    height: 1px;
+    background: #e2e8f0;
+  }
+  .ag-or-text {
+    font-size: 11px;
+    color: #94a3b8;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+  .ag-diff-btn {
+    font-size: 12px;
+    color: #64748b;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-decoration: underline;
+    padding: 0;
+    font-family: inherit;
+    margin-bottom: 16px;
+  }
+  .ag-diff-btn:hover { color: #2563eb; }
+
   /* ── Mobile: stack vertically ── */
   @media (max-width: 600px) {
     .ag-window {
@@ -371,6 +454,10 @@ const styles = `
 
 // ── Component ─────────────────────────────────────────────────
 export default function AccessGate({ onSuccess }: { onSuccess: () => void }) {
+  // Returning user
+  const [savedStudent, setSavedStudent] = useState<{name: string; class: string} | null>(null);
+  const [showForm, setShowForm]         = useState(false);
+
   // Student state
   const [name, setName]         = useState("");
   const [cls, setCls]           = useState("");
@@ -382,12 +469,24 @@ export default function AccessGate({ onSuccess }: { onSuccess: () => void }) {
   const [notified, setNotified] = useState(false);
   const [notifying, setNotifying] = useState(false);
 
+  // Check localStorage on mount for returning user
+  useEffect(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem("shauri_student") || "null");
+      if (s?.name && s?.class) setSavedStudent(s);
+    } catch {}
+  }, []);
+
+  function continueAsSaved() {
+    grantAccess();
+    onSuccess();
+  }
+
   function submitStudent() {
     if (!name.trim()) { setError("Please enter your name."); return; }
     if (!cls)         { setError("Please select your class."); return; }
     if (code !== "0330") { setError("Invalid access code."); return; }
 
-    // Save student context — same shape as before
     if (typeof window !== "undefined") {
       localStorage.setItem("shauri_student", JSON.stringify({
         name: name.trim(),
@@ -431,56 +530,100 @@ export default function AccessGate({ onSuccess }: { onSuccess: () => void }) {
               👤 Student Login
             </div>
 
-            <h2 className="ag-title ag-title-student">
-              Begin your<br />learning journey
-            </h2>
-            <p className="ag-sub ag-sub-student">
-              Practice exams, oral sessions, AI teacher — all in one place.
-            </p>
+            {/* ── Returning user: show profile card ── */}
+            {savedStudent && !showForm ? (
+              <div className="ag-returning">
+                <h2 className="ag-title ag-title-student" style={{marginBottom: 6}}>
+                  Welcome back!
+                </h2>
+                <p className="ag-sub ag-sub-student" style={{marginBottom: 20}}>
+                  Continue where you left off.
+                </p>
 
-            <div className="ag-field">
-              <label className="ag-label ag-label-student">Your Name</label>
-              <input
-                className="ag-input ag-input-student"
-                placeholder="e.g. Arjun Sharma"
-                value={name}
-                onChange={e => { setName(e.target.value); setError(""); }}
-                onKeyDown={e => e.key === "Enter" && submitStudent()}
-              />
-            </div>
+                {/* Profile card — tap to continue */}
+                <div className="ag-profile-card" onClick={continueAsSaved}>
+                  <div className="ag-avatar">
+                    {savedStudent.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="ag-profile-info">
+                    <div className="ag-profile-name">{savedStudent.name}</div>
+                    <div className="ag-profile-class">Class {savedStudent.class} · CBSE</div>
+                  </div>
+                  <span className="ag-profile-arrow">→</span>
+                </div>
 
-            <div className="ag-field ag-row">
-              <div>
-                <label className="ag-label ag-label-student">Class</label>
-                <select
-                  className="ag-select ag-select-student ag-input"
-                  value={cls}
-                  onChange={e => { setCls(e.target.value); setError(""); }}
-                >
-                  <option value="">Select</option>
-                  {[6,7,8,9,10,11,12].map(c => (
-                    <option key={c} value={String(c)}>Class {c}</option>
-                  ))}
-                </select>
+                {/* Or sign in as someone else */}
+                <div className="ag-or-divider">
+                  <div className="ag-or-line" />
+                  <span className="ag-or-text">or</span>
+                  <div className="ag-or-line" />
+                </div>
+                <button className="ag-diff-btn" onClick={() => setShowForm(true)}>
+                  Sign in as a different student
+                </button>
               </div>
-              <div>
-                <label className="ag-label ag-label-student">Access Code</label>
-                <input
-                  className="ag-input ag-input-student"
-                  placeholder="••••"
-                  type="password"
-                  value={code}
-                  onChange={e => { setCode(e.target.value); setError(""); }}
-                  onKeyDown={e => e.key === "Enter" && submitStudent()}
-                />
-              </div>
-            </div>
+            ) : (
+              <>
+                <h2 className="ag-title ag-title-student">
+                  {showForm ? "Different student?" : "Begin your"}<br />
+                  {showForm ? "Enter your details" : "learning journey"}
+                </h2>
+                <p className="ag-sub ag-sub-student">
+                  Practice exams, oral sessions, AI teacher — all in one place.
+                </p>
 
-            {error && <div className="ag-error">⚠ {error}</div>}
+                <div className="ag-field">
+                  <label className="ag-label ag-label-student">Your Name</label>
+                  <input
+                    className="ag-input ag-input-student"
+                    placeholder="e.g. Arjun Sharma"
+                    value={name}
+                    onChange={e => { setName(e.target.value); setError(""); }}
+                    onKeyDown={e => e.key === "Enter" && submitStudent()}
+                  />
+                </div>
 
-            <button className="ag-btn ag-btn-student" onClick={submitStudent}>
-              Enter Shauri →
-            </button>
+                <div className="ag-field ag-row">
+                  <div>
+                    <label className="ag-label ag-label-student">Class</label>
+                    <select
+                      className="ag-select ag-select-student ag-input"
+                      value={cls}
+                      onChange={e => { setCls(e.target.value); setError(""); }}
+                    >
+                      <option value="">Select</option>
+                      {[6,7,8,9,10,11,12].map(c => (
+                        <option key={c} value={String(c)}>Class {c}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="ag-label ag-label-student">Access Code</label>
+                    <input
+                      className="ag-input ag-input-student"
+                      placeholder="••••"
+                      type="password"
+                      value={code}
+                      onChange={e => { setCode(e.target.value); setError(""); }}
+                      onKeyDown={e => e.key === "Enter" && submitStudent()}
+                    />
+                  </div>
+                </div>
+
+                {error && <div className="ag-error">⚠ {error}</div>}
+
+                <button className="ag-btn ag-btn-student" onClick={submitStudent}>
+                  Enter Shauri →
+                </button>
+
+                {showForm && (
+                  <button className="ag-diff-btn" style={{marginTop: 10, textAlign: "center"}}
+                    onClick={() => { setShowForm(false); setError(""); }}>
+                    ← Back
+                  </button>
+                )}
+              </>
+            )}
 
             <p style={{ fontSize: 11, color: "#cbd5e1", textAlign: "center", marginTop: 14 }}>
               Access code from your school or teacher
