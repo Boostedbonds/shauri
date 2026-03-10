@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Orbitron } from "next/font/google";
+import AccessGate from "./components/AccessGate";
 
 const orbitron = Orbitron({
   subsets: ["latin"],
@@ -15,12 +16,7 @@ export default function HomePage() {
   const [entered, setEntered]       = useState(false);
   const [warp, setWarp]             = useState(false);
   const [showBtn, setShowBtn]       = useState(false);
-  const [name, setName]             = useState("");
-  const [studentClass, setStudentClass] = useState("");
   const board = "CBSE";
-  const [code, setCode]             = useState("");
-  const [error, setError]           = useState("");
-  const [focusedField, setFocusedField] = useState<string | null>(null);
 
   // ── Measure viewport (SSR-safe) ─────────────────────────────
   const [vw, setVw] = useState(0);
@@ -71,28 +67,7 @@ export default function HomePage() {
     setTimeout(() => setEntered(true), 900);
   }
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    if (!name.trim())  return setError("Please enter student name");
-    if (!studentClass) return setError("Please select class");
-    if (code !== ACCESS_CODE) return setError("Invalid access code");
-    const ctx = { name: name.trim(), class: studentClass.replace("Class ", ""), board };
-    localStorage.setItem("shauri_student", JSON.stringify(ctx));
-    document.cookie = `shauri_name=${encodeURIComponent(ctx.name)}; path=/`;
-    document.cookie = `shauri_class=${encodeURIComponent(ctx.class)}; path=/`;
-    window.location.href = "/modes";
-  }
 
-  const getInputStyle = (field: string): React.CSSProperties => ({
-    ...inputBase,
-    border: focusedField === field ? "1.5px solid #d4af37" : "1px solid #d4af37",
-    boxShadow: focusedField === field
-      ? "0 0 0 3px rgba(212,175,55,0.25), 0 0 12px rgba(212,175,55,0.15)"
-      : "none",
-    background: focusedField === field ? "#fffef8" : "#f8fafc",
-    transition: "border 0.18s, box-shadow 0.18s, background 0.18s",
-  });
 
   return (
     <div className={orbitron.className} style={{ minHeight: "100dvh" }}>
@@ -363,164 +338,13 @@ export default function HomePage() {
         )}
       </AnimatePresence>
 
-      {/* ══════════════════════════════════════════════
-          ACCESS SCREEN (after "Begin the Ascent")
-         ══════════════════════════════════════════════ */}
+      {/* ACCESS SCREEN — two-sided AccessGate */}
       {entered && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5 }}
-          style={{
-            minHeight: "100dvh",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            flexDirection: "column",
-            background: "linear-gradient(160deg, #ede0c0 0%, #d9c48a 55%, #c9ae70 100%)",
-            padding: "24px 20px",
-          }}
-        >
-          {/* Logo */}
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15, duration: 0.5 }}
-            style={{ textAlign: "center", marginBottom: 32 }}
-          >
-            <h1 style={{
-              fontSize: "clamp(28px, 10vw, 52px)",
-              letterSpacing: "0.38em",
-              fontWeight: 700, color: "#0f172a",
-              margin: 0,
-              textShadow: "0 2px 4px rgba(0,0,0,0.12)",
-            }}>
-              SHAURI
-            </h1>
-            <p style={{
-              marginTop: 10, opacity: 0.6,
-              fontSize: "clamp(10px, 2.8vw, 13px)",
-              letterSpacing: "0.04em",
-              fontFamily: "inherit",
-            }}>
-              CBSE-Aligned. Adaptive. Built for your growth.
-            </p>
-          </motion.div>
-
-          {/* Form */}
-          <motion.form
-            onSubmit={handleSubmit}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.25, duration: 0.5 }}
-            style={{ display: "grid", gap: 14, width: "100%", maxWidth: 300 }}
-          >
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onFocus={() => setFocusedField("name")}
-              onBlur={() => setFocusedField(null)}
-              placeholder="Student Name"
-              style={getInputStyle("name")}
-            />
-
-            <select
-              value={studentClass}
-              onChange={(e) => setStudentClass(e.target.value)}
-              onFocus={() => setFocusedField("class")}
-              onBlur={() => setFocusedField(null)}
-              className="shauri-select"
-              style={{
-                ...getInputStyle("class"),
-                color: studentClass ? "#0f172a" : "#94a3b8",
-                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23b8a060' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
-                backgroundRepeat: "no-repeat",
-                backgroundPosition: "right 14px center",
-                paddingRight: 36,
-              }}
-            >
-              <option value="" disabled style={{ color: "#94a3b8" }}>Select Class</option>
-              {[6, 7, 8, 9, 10, 11, 12].map((c) => (
-                <option key={c} value={`Class ${c}`}>Class {c}</option>
-              ))}
-            </select>
-
-            {/* Masked access code */}
-            <input
-              type="text"
-              inputMode="numeric"
-              autoComplete="off"
-              value={"★".repeat(code.length)}
-              onFocus={() => setFocusedField("code")}
-              onBlur={() => setFocusedField(null)}
-              onChange={(e) => {
-                if (e.target.value.length < code.length) {
-                  setCode((prev) => prev.slice(0, -1));
-                } else {
-                  setCode((prev) => prev + e.target.value.replace(/★/g, ""));
-                }
-              }}
-              placeholder="Access Code"
-              style={{
-                ...getInputStyle("code"),
-                letterSpacing: code.length > 0 ? "0.45em" : "0.02em",
-                fontSize: code.length > 0 ? 18 : 14,
-              }}
-            />
-
-            {error && (
-              <p style={{
-                color: "#dc2626", fontSize: 12, margin: 0,
-                textAlign: "center", letterSpacing: "0.04em", fontFamily: "inherit",
-              }}>{error}</p>
-            )}
-
-            <motion.button
-              type="submit"
-              whileHover={{ scale: 1.02, boxShadow: "0 0 0 3px rgba(212,175,55,0.3), 0 0 16px rgba(212,175,55,0.2)" }}
-              whileTap={{ scale: 0.97 }}
-              style={{
-                padding: "13px", borderRadius: 999,
-                border: "1px solid #d4af37",
-                background: "transparent", cursor: "pointer",
-                color: "#0f172a", width: "100%",
-                fontFamily: "inherit", letterSpacing: "0.2em",
-                fontSize: 13, fontWeight: 700, marginTop: 4,
-              }}
-            >
-              STEP IN
-            </motion.button>
-          </motion.form>
-
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5 }}
-            style={{
-              marginTop: 36, opacity: 0.45, fontSize: 12,
-              textAlign: "center", letterSpacing: "0.04em",
-              fontFamily: "inherit", maxWidth: 280,
-            }}
-          >
-            Discipline today builds the confidence of tomorrow.
-          </motion.p>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
+          <AccessGate onSuccess={() => { window.location.href = "/modes"; }} />
         </motion.div>
       )}
     </div>
   );
-}
 
-// ── Shared base styles ───────────────────────────────────────
-const inputBase: React.CSSProperties = {
-  padding: "12px 14px",
-  borderRadius: 12,
-  border: "1px solid #d4af37",
-  width: "100%",
-  background: "#f8fafc",
-  fontSize: 14,
-  color: "#0f172a",
-  outline: "none",
-  fontFamily: "inherit",
-  boxSizing: "border-box",
-  letterSpacing: "0.02em",
-};
+}

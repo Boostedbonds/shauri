@@ -1,0 +1,177 @@
+"use client";
+
+/**
+ * MathRenderer — drop-in component that renders LaTeX math in any text.
+ *
+ * Usage:
+ *   import MathRenderer from "@/components/MathRenderer";
+ *   <MathRenderer text="The quadratic formula is $$x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}$$" />
+ *
+ * Requires KaTeX in your project:
+ *   npm install katex
+ *   npm install --save-dev @types/katex
+ *
+ * Add to app/layout.tsx or globals.css:
+ *   import 'katex/dist/katex.min.css';
+ */
+
+import { useEffect, useRef } from "react";
+
+interface Props {
+  text: string;
+  style?: React.CSSProperties;
+  className?: string;
+}
+
+// Render LaTeX blocks inside a string using KaTeX.
+// Supports:
+//   $$...$$ → display math (block, centred)
+//   $...$   → inline math
+//   \[...\] → display math (alternate syntax)
+//   \(...\) → inline math (alternate syntax)
+function renderMath(raw: string): string {
+  try {
+    // Dynamic import to avoid SSR issues
+    const katex = (window as any).__katex__;
+    if (!katex) return escapeHtml(raw); // fallback if KaTeX not loaded
+
+    // Display math first ($$...$$)
+    let result = raw.replace(/\$\$([\s\S]+?)\$\$/g, (_, math) => {
+      try {
+        return `<span class="math-display">${katex.renderToString(math.trim(), { displayMode: true, throwOnError: false })}</span>`;
+      } catch { return `<code class="math-error">$$${math}$$</code>`; }
+    });
+
+    // Inline math ($...$) — careful not to match $$ again
+    result = result.replace(/\$([^$\n]+?)\$/g, (_, math) => {
+      try {
+        return katex.renderToString(math.trim(), { displayMode: false, throwOnError: false });
+      } catch { return `<code class="math-error">$${math}$</code>`; }
+    });
+
+    // \[...\] display
+    result = result.replace(/\\\[([\s\S]+?)\\\]/g, (_, math) => {
+      try {
+        return `<span class="math-display">${katex.renderToString(math.trim(), { displayMode: true, throwOnError: false })}</span>`;
+      } catch { return `<code class="math-error">\\[${math}\\]</code>`; }
+    });
+
+    // \(...\) inline
+    result = result.replace(/\\\(([\s\S]+?)\\\)/g, (_, math) => {
+      try {
+        return katex.renderToString(math.trim(), { displayMode: false, throwOnError: false });
+      } catch { return `<code class="math-error">\\(${math}\\)</code>`; }
+    });
+
+    return result;
+  } catch {
+    return escapeHtml(raw);
+  }
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+export default function MathRenderer({ text, style, className }: Props) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Load KaTeX dynamically if not already loaded
+    if (typeof window === "undefined") return;
+
+    if (!(window as any).__katex__) {
+      // Try to load from npm bundle (works if katex is installed)
+      import("katex").then(katex => {
+        (window as any).__katex__ = katex.default || katex;
+        if (ref.current) {
+          ref.current.innerHTML = renderMath(text);
+        }
+      }).catch(() => {
+        // KaTeX not installed — render plain text with basic formatting
+        if (ref.current) {
+          ref.current.innerHTML = formatPlainMath(text);
+        }
+      });
+    } else {
+      if (ref.current) {
+        ref.current.innerHTML = renderMath(text);
+      }
+    }
+  }, [text]);
+
+  return (
+    <>
+      <style>{`
+        .math-display {
+          display: block;
+          text-align: center;
+          margin: 8px 0;
+          overflow-x: auto;
+        }
+        .math-error {
+          background: #fef2f2;
+          color: #dc2626;
+          padding: 1px 4px;
+          border-radius: 4px;
+          font-size: 12px;
+        }
+        .katex { font-size: 1.05em; }
+        .katex-display { margin: 0.5em 0; }
+
+        /* Fallback plain math styles */
+        .math-plain-sup { vertical-align: super; font-size: 0.75em; }
+        .math-plain-frac { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; margin: 0 2px; }
+        .math-plain-frac-top { border-bottom: 1px solid currentColor; padding: 0 2px; font-size: 0.85em; }
+        .math-plain-frac-bot { padding: 0 2px; font-size: 0.85em; }
+      `}</style>
+      <div ref={ref} style={style} className={className}>
+        {/* Render plain text initially — replaced by KaTeX on mount */}
+        {text}
+      </div>
+    </>
+  );
+}
+
+/**
+ * formatPlainMath — fallback when KaTeX is not installed.
+ * Converts common notation to readable HTML without proper typesetting.
+ * x^2 → x², \sqrt{x} → √x, \frac{a}{b} → a/b
+ */
+function formatPlainMath(text: string): string {
+  return text
+    // Strip $$ and $ delimiters
+    .replace(/\$\$([\s\S]+?)\$\$/g, '<span style="display:block;text-align:center;margin:6px 0;font-family:serif">$1</span>')
+    .replace(/\$([\s\S]+?)\$/g, '<span style="font-family:serif">$1</span>')
+    // Superscripts: x^2, x^{12}
+    .replace(/\^{(\d+)}/g, '<sup>$1</sup>')
+    .replace(/\^(\d)/g, '<sup>$1</sup>')
+    // Subscripts: x_{n}
+    .replace(/_{(\w+)}/g, '<sub>$1</sub>')
+    // \sqrt{x}
+    .replace(/\\sqrt{([^}]+)}/g, '√($1)')
+    .replace(/\\sqrt\s+(\w)/g, '√$1')
+    // \frac{a}{b}
+    .replace(/\\frac{([^}]+)}{([^}]+)}/g, '($1)/($2)')
+    // Greek letters
+    .replace(/\\alpha/g, 'α').replace(/\\beta/g, 'β').replace(/\\gamma/g, 'γ')
+    .replace(/\\theta/g, 'θ').replace(/\\pi/g, 'π').replace(/\\sigma/g, 'σ')
+    .replace(/\\Delta/g, 'Δ').replace(/\\Sigma/g, 'Σ').replace(/\\infty/g, '∞')
+    // Operators
+    .replace(/\\times/g, '×').replace(/\\div/g, '÷').replace(/\\pm/g, '±')
+    .replace(/\\leq/g, '≤').replace(/\\geq/g, '≥').replace(/\\neq/g, '≠')
+    // Clean remaining backslash commands
+    .replace(/\\[a-zA-Z]+/g, '')
+    .replace(/[{}]/g, '');
+}
+
+/**
+ * useMathText — hook version for cases where you need the rendered HTML string.
+ * Returns rendered HTML or original text while KaTeX loads.
+ */
+export function useMathText(text: string): string {
+  if (typeof window === "undefined") return text;
+  const katex = (window as any).__katex__;
+  if (!katex) return text;
+  return renderMath(text);
+}

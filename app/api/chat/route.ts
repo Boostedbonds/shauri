@@ -1421,6 +1421,7 @@ SECTION E — Case Study [4 marks each]: Sub(i) 1m + Sub(ii) 1m + Sub(iii) 2m.`;
         const evaluationPrompt = `
 You are an official CBSE Board Examiner for Class ${cls}.
 Subject: ${session.subject || "General"} | Board: ${board} | Maximum Marks: ${totalMarks}
+${evalIsMath ? "MATH FORMATTING: Use LaTeX notation for all equations. Wrap inline math in $...$ and display math in $$...$$. Example: $x^2 + 3x = 0$, $$\\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$$" : ""}
 Time Taken: ${timeTaken}${overtime ? " ⚠️ SUBMITTED AFTER 3-HOUR LIMIT" : ""}
 
 MARKING RULES:
@@ -2127,6 +2128,8 @@ Maximum Marks : ${finalMarks}`;
 
         // ── Standard 80-mark CBSE paper generation ──────────────
         const englishSections = `
+⚠️ CBSE 2026 FORMAT: 50% competency-based. Reading comprehension MCQs and inferential questions count as competency. Writing tasks must include real-life formats (notices, emails, articles).
+
 SECTION A — READING [20 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q1  Unseen Passage — Factual / Discursive [10 marks]
@@ -2207,27 +2210,36 @@ SECTION D — Long Answer [4 × 5 = 20 Marks]
 ━━━━━━━━━━━━━━━━━━
 Q32–Q35  [5 marks each]
 
-SECTION E — Case-Based / Source-Based [3 × 4 = 12 Marks]
+SECTION E — Case-Based / Competency [3 × 4 = 12 Marks]
 ━━━━━━━━━━━━━━━━━━
-Q36  Case Study 1 [4 marks]
-Q37  Case Study 2 [4 marks]
-Q38  Case Study 3 [4 marks]
+⚠️ CBSE 2026: These MUST be real-life application problems, not textbook exercises.
+Q36  Case Study 1 — real-life maths scenario [4 marks: (i)1m + (ii)1m + (iii)2m]
+Q37  Case Study 2 — data interpretation / graph reading [4 marks]
+Q38  Case Study 3 — everyday application of maths [4 marks]
+
+NOTE: TOTAL competency-based marks across all sections must be ≥ 40 out of 80 (50%).
         `.trim();
 
         const scienceSections = `
+⚠️ CBSE 2026 FORMAT: 50% of marks must be competency-based (application, analysis, case-based).
+Competency questions test real-life understanding — NOT direct recall. Always include case studies.
+
 SECTION A — Objective [20 × 1 = 20 Marks]
 ━━━━━━━━━━━━━━━━━━
-Q1–Q16   MCQs [1 mark each]
+Q1–Q10   MCQs — Mix of recall (5) + application/competency MCQs (5) [1 mark each]
+Q11–Q16  Competency-based MCQs — real-life scenarios [1 mark each]
 Q17–Q18  Assertion-Reason [1 mark each]
 Q19–Q20  Fill in the Blanks / One-Word Answer [1 mark each]
 
 SECTION B — Very Short Answer [5 × 2 = 10 Marks]
 ━━━━━━━━━━━━━━━━━━
-Q21–Q25  [2 marks each]
+Q21–Q22  Recall-based [2 marks each]
+Q23–Q25  Application-based — "Why does...", "What would happen if..." [2 marks each]
 
 SECTION C — Short Answer [6 × 3 = 18 Marks]
 ━━━━━━━━━━━━━━━━━━
-Q26–Q31  [3 marks each]
+Q26–Q28  Concept explanation [3 marks each]
+Q29–Q31  Competency-based — experiments, diagrams, real-life connections [3 marks each]
 
 SECTION D — Long Answer [4 × 5 = 20 Marks]
 ━━━━━━━━━━━━━━━━━━

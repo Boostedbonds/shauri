@@ -1,491 +1,449 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import ChatInput from "../components/ChatInput";
 
-type Message = { role: "user" | "assistant"; content: string };
+import { useEffect, useState, useMemo } from "react";
 
-function renderText(text: string): React.ReactNode {
-  return text.split("\n").map((line, i, arr) => {
-    const parts = line.split(/(\*\*[^*]+\*\*)/g).map((p, j) =>
-      p.startsWith("**") && p.endsWith("**") ? <strong key={j}>{p.slice(2, -2)}</strong> : p
-    );
-    return <span key={i}>{parts}{i < arr.length - 1 && <br />}</span>;
+// ── Types ─────────────────────────────────────────────────────
+type StudentRow = {
+  student_name: string;
+  class: string;
+  subject: string;
+  percentage: number | null;
+  marks_obtained: number | null;
+  total_marks: number | null;
+  time_taken: string | null;
+  created_at: string;
+  evaluation_text: string | null;
+  chapters: string[] | null;
+};
+
+type StudentSummary = {
+  name: string;
+  cls: string;
+  sessions: StudentRow[];
+  lastActive: string;
+  subjects: Record<string, number[]>;
+  avgScore: number | null;
+  totalTime: number;
+  strongest: string | null;
+  weakest: string | null;
+  trend: "up" | "down" | "flat" | "new";
+};
+
+// ── Helpers ───────────────────────────────────────────────────
+const GRADES = [
+  { min: 90, label: "A1", color: "#059669" },
+  { min: 75, label: "A2", color: "#0d9488" },
+  { min: 60, label: "B1", color: "#2563eb" },
+  { min: 45, label: "B2", color: "#7c3aed" },
+  { min: 33, label: "C",  color: "#d97706" },
+  { min: 0,  label: "F",  color: "#dc2626" },
+];
+function getGrade(s: number) { return GRADES.find(g => s >= g.min) || GRADES[GRADES.length-1]; }
+
+function parseTime(raw: string | null): number {
+  if (!raw) return 0;
+  let s = 0;
+  const h = raw.match(/(\d+)\s*h/i); const m = raw.match(/(\d+)\s*m/i); const sec = raw.match(/(\d+)\s*s/i);
+  if (h) s += parseInt(h[1]) * 3600; if (m) s += parseInt(m[1]) * 60; if (sec) s += parseInt(sec[1]);
+  return s;
+}
+
+function fmtTime(secs: number): string {
+  if (secs < 60) return `${secs}s`;
+  if (secs < 3600) return `${Math.floor(secs/60)}m`;
+  return `${Math.floor(secs/3600)}h ${Math.floor((secs%3600)/60)}m`;
+}
+
+function fmtDate(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const diff = Math.floor((now.getTime() - d.getTime()) / 60000);
+  if (diff < 60) return `${diff}m ago`;
+  if (diff < 1440) return `${Math.floor(diff/60)}h ago`;
+  if (diff < 2880) return "Yesterday";
+  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+}
+
+function buildSummary(name: string, cls: string, rows: StudentRow[]): StudentSummary {
+  const subjects: Record<string, number[]> = {};
+  let totalTime = 0;
+  rows.forEach(r => {
+    totalTime += parseTime(r.time_taken);
+    if (r.subject && r.percentage != null) {
+      subjects[r.subject] = subjects[r.subject] || [];
+      subjects[r.subject].push(r.percentage);
+    }
   });
-}
 
-function Bubble({ m }: { m: Message }) {
-  const isUser = m.role === "user";
-  return (
-    <div style={{ display: "flex", justifyContent: isUser ? "flex-end" : "flex-start", marginBottom: 14 }}>
-      <div style={{
-        maxWidth: "80%", padding: "12px 16px",
-        borderRadius: isUser ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-        background: isUser ? "#38bdf8" : "#fff",
-        color: isUser ? "#fff" : "#0f172a",
-        fontSize: 15, lineHeight: 1.75, wordBreak: "break-word",
-        border: isUser ? "none" : "1px solid #e2e8f0",
-        boxShadow: isUser ? "none" : "0 1px 4px rgba(0,0,0,0.08)",
-      }}>
-        {renderText(m.content)}
-      </div>
-    </div>
-  );
-}
+  const subjectAvgs = Object.entries(subjects).map(([s, scores]) => ({
+    subject: s, avg: scores.reduce((a,b) => a+b, 0) / scores.length
+  }));
 
-// ─── Math symbol button ───────────────────────────────────────
-function MathSymBtn({ sym, onClick }: { sym: { display: string; insert: string }; onClick: () => void }) {
-  const [hover, setHover] = useState(false);
-  const [flash, setFlash] = useState(false);
-
-  function handle() {
-    onClick();
-    setFlash(true);
-    setTimeout(() => setFlash(false), 400);
-  }
-
-  return (
-    <button
-      onClick={handle}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      title={`Copy: ${sym.insert}`}
-      style={{
-        minWidth: 38, height: 36, padding: "2px 5px",
-        background: flash ? "#dcfce7" : hover ? "#eff6ff" : "#f8fafc",
-        border: `1.5px solid ${flash ? "#86efac" : hover ? "#93c5fd" : "#e2e8f0"}`,
-        borderRadius: 7, fontSize: 15, cursor: "pointer",
-        fontFamily: "math, 'Times New Roman', serif",
-        color: "#0f172a", transition: "all 0.1s",
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}
-    >{sym.display}</button>
-  );
-}
-
-// ─── Dictionary + Math Panel ──────────────────────────────────
-function DictionaryPanel({ subject }: { subject?: string }) {
-  const isMathSubject = !!(subject && /math/i.test(subject));
-
-  const [query, setQuery]   = useState("");
-  const [result, setResult] = useState<string | null>(null);
-  const [loading, setLoad]  = useState(false);
-  const [mode, setMode]     = useState<"dictionary" | "thesaurus" | "math">(
-    isMathSubject ? "math" : "dictionary"
-  );
-  const [history, setHist]  = useState<{ word: string; result: string; mode: string }[]>([]);
-  const [mathHistory, setMathHist] = useState<{ display: string; insert: string }[]>([]);
-  const [mathSearch, setMathSearch] = useState("");
-  const [activeCategory, setActiveCategory] = useState(0);
-
-  // Auto-switch to math tab when subject changes to maths
-  useEffect(() => {
-    if (isMathSubject) setMode("math");
-  }, [isMathSubject]);
-
-  async function lookup() {
-    const word = query.trim();
-    if (!word) return;
-    setLoad(true); setResult(null);
-    const prompt = mode === "dictionary"
-      ? `Define "${word}": part of speech, meaning, one example sentence. Max 60 words, plain text.`
-      : `Synonyms/antonyms for "${word}". Format: SYNONYMS: w1, w2, w3 | ANTONYMS: w1, w2. Max 50 words.`;
-    try {
-      const res  = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "teacher", message: prompt, history: [], student: { name: "lookup", class: "tool" } }),
-      });
-      const data = await res.json();
-      const text = data?.reply || "No result.";
-      setResult(text);
-      setHist(prev => [{ word, result: text, mode }, ...prev.slice(0, 9)]);
-    } catch { setResult("⚠️ Could not fetch."); }
-    setLoad(false);
-  }
-
-  // ── Math categories ───────────────────────────────────────
-  const MATH_CATS = [
-    { label: "Basic", icon: "±", symbols: [
-      { display: "±", insert: "±" }, { display: "×", insert: "×" }, { display: "÷", insert: "÷" },
-      { display: "≠", insert: "≠" }, { display: "≤", insert: "≤" }, { display: "≥", insert: "≥" },
-      { display: "≈", insert: "≈" }, { display: "∞", insert: "∞" }, { display: "√", insert: "√(" },
-      { display: "∛", insert: "∛(" }, { display: "x²", insert: "²" }, { display: "x³", insert: "³" },
-      { display: "xⁿ", insert: "^" }, { display: "|x|", insert: "|  |" }, { display: "%", insert: "%" },
-      { display: "½", insert: "½" }, { display: "¼", insert: "¼" }, { display: "¾", insert: "¾" },
-    ]},
-    { label: "Greek", icon: "α", symbols: [
-      { display: "α", insert: "α" }, { display: "β", insert: "β" }, { display: "γ", insert: "γ" },
-      { display: "Γ", insert: "Γ" }, { display: "δ", insert: "δ" }, { display: "Δ", insert: "Δ" },
-      { display: "ε", insert: "ε" }, { display: "ζ", insert: "ζ" }, { display: "η", insert: "η" },
-      { display: "θ", insert: "θ" }, { display: "Θ", insert: "Θ" }, { display: "λ", insert: "λ" },
-      { display: "Λ", insert: "Λ" }, { display: "μ", insert: "μ" }, { display: "π", insert: "π" },
-      { display: "Π", insert: "Π" }, { display: "ρ", insert: "ρ" }, { display: "σ", insert: "σ" },
-      { display: "Σ", insert: "Σ" }, { display: "τ", insert: "τ" }, { display: "φ", insert: "φ" },
-      { display: "Φ", insert: "Φ" }, { display: "χ", insert: "χ" }, { display: "ψ", insert: "ψ" },
-      { display: "Ψ", insert: "Ψ" }, { display: "ω", insert: "ω" }, { display: "Ω", insert: "Ω" },
-    ]},
-    { label: "Calc", icon: "∫", symbols: [
-      { display: "∫", insert: "∫" }, { display: "∬", insert: "∬" }, { display: "∮", insert: "∮" },
-      { display: "∂", insert: "∂" }, { display: "d/dx", insert: "d/dx(" }, { display: "dy/dx", insert: "dy/dx" },
-      { display: "lim", insert: "lim(x→" }, { display: "→", insert: "→" },
-      { display: "∑", insert: "∑" }, { display: "∏", insert: "∏" }, { display: "∇", insert: "∇" },
-    ]},
-    { label: "Trig", icon: "sin", symbols: [
-      { display: "sin", insert: "sin(" }, { display: "cos", insert: "cos(" }, { display: "tan", insert: "tan(" },
-      { display: "sin⁻¹", insert: "sin⁻¹(" }, { display: "cos⁻¹", insert: "cos⁻¹(" }, { display: "tan⁻¹", insert: "tan⁻¹(" },
-      { display: "sec", insert: "sec(" }, { display: "cosec", insert: "cosec(" }, { display: "cot", insert: "cot(" },
-      { display: "°", insert: "°" }, { display: "rad", insert: " rad" },
-    ]},
-    { label: "Sets", icon: "∈", symbols: [
-      { display: "∈", insert: "∈" }, { display: "∉", insert: "∉" }, { display: "⊂", insert: "⊂" },
-      { display: "⊃", insert: "⊃" }, { display: "∪", insert: "∪" }, { display: "∩", insert: "∩" },
-      { display: "∅", insert: "∅" }, { display: "ℝ", insert: "ℝ" }, { display: "ℤ", insert: "ℤ" },
-      { display: "ℕ", insert: "ℕ" }, { display: "ℚ", insert: "ℚ" }, { display: "ℂ", insert: "ℂ" },
-      { display: "∀", insert: "∀" }, { display: "∃", insert: "∃" },
-      { display: "⟹", insert: "⟹" }, { display: "⟺", insert: "⟺" },
-    ]},
-    { label: "Sub/Sup", icon: "xₙ", symbols: [
-      { display: "²", insert: "²" }, { display: "³", insert: "³" }, { display: "ⁿ", insert: "ⁿ" },
-      { display: "⁻¹", insert: "⁻¹" }, { display: "₀", insert: "₀" }, { display: "₁", insert: "₁" },
-      { display: "₂", insert: "₂" }, { display: "₃", insert: "₃" }, { display: "ₙ", insert: "ₙ" },
-      { display: "ᵢ", insert: "ᵢ" }, { display: "×10^", insert: "×10^" },
-    ]},
-    { label: "Logic", icon: "∧", symbols: [
-      { display: "∧", insert: "∧" }, { display: "∨", insert: "∨" }, { display: "¬", insert: "¬" },
-      { display: "⊕", insert: "⊕" }, { display: "∴", insert: "∴" }, { display: "∵", insert: "∵" },
-      { display: "≡", insert: "≡" }, { display: "⊢", insert: "⊢" },
-    ]},
-  ];
-
-  const allSyms = MATH_CATS.flatMap(c => c.symbols);
-  const filteredSyms = mathSearch.trim()
-    ? allSyms.filter(s =>
-        s.display.toLowerCase().includes(mathSearch.toLowerCase()) ||
-        s.insert.toLowerCase().includes(mathSearch.toLowerCase())
-      )
+  const avgScore = subjectAvgs.length
+    ? Math.round(subjectAvgs.reduce((a,b) => a + b.avg, 0) / subjectAvgs.length)
     : null;
-  const currentSyms = filteredSyms
-    ? filteredSyms
-    : activeCategory === -1
-      ? mathHistory
-      : MATH_CATS[activeCategory]?.symbols || [];
 
-  function insertSymbol(sym: { display: string; insert: string }) {
-    navigator.clipboard?.writeText(sym.insert).catch(() => {});
-    setMathHist(prev => [sym, ...prev.filter(s => s.insert !== sym.insert)].slice(0, 12));
+  const sorted = subjectAvgs.sort((a,b) => b.avg - a.avg);
+  const strongest = sorted[0]?.subject || null;
+  const weakest   = sorted[sorted.length-1]?.subject || null;
+
+  // Trend: compare last 2 sessions with scores
+  const scoredRows = rows.filter(r => r.percentage != null).sort((a,b) =>
+    new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+  let trend: StudentSummary["trend"] = "new";
+  if (scoredRows.length >= 2) {
+    const last = scoredRows[scoredRows.length-1].percentage!;
+    const prev = scoredRows[scoredRows.length-2].percentage!;
+    trend = last > prev ? "up" : last < prev ? "down" : "flat";
+  } else if (scoredRows.length === 1) {
+    trend = "new";
   }
 
-  return (
-    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: "#fafbff" }}>
+  const lastActive = rows.reduce((latest, r) =>
+    new Date(r.created_at) > new Date(latest) ? r.created_at : latest,
+    rows[0].created_at
+  );
 
-      {/* ── Header: 3 tabs ── */}
-      <div style={{ padding: "10px 10px 0", borderBottom: "1px solid #e2e8f0", background: "#fff", flexShrink: 0 }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: "#64748b", marginBottom: 7, letterSpacing: "0.08em" }}>
-          📖 REFERENCE
+  return { name, cls, sessions: rows, lastActive, subjects, avgScore, totalTime, strongest, weakest, trend };
+}
+
+// ── Student Detail Modal ───────────────────────────────────────
+function StudentModal({ student, onClose }: { student: StudentSummary; onClose: () => void }) {
+  const subjectEntries = Object.entries(student.subjects);
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 1000,
+      display: "flex", alignItems: "flex-end", justifyContent: "center",
+    }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{
+        background: "#fff", borderRadius: "20px 20px 0 0",
+        width: "100%", maxWidth: 680, maxHeight: "88vh", overflow: "auto",
+        padding: "28px 24px 40px", boxShadow: "0 -8px 40px rgba(0,0,0,0.18)",
+      }}>
+        <div style={{ width: 40, height: 4, background: "#e2e8f0", borderRadius: 2, margin: "0 auto 20px" }} />
+
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24 }}>
+          <div style={{
+            width: 52, height: 52, borderRadius: "50%",
+            background: "linear-gradient(135deg, #2563eb, #0d9488)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 22, fontWeight: 800, color: "#fff", flexShrink: 0,
+          }}>{student.name.charAt(0).toUpperCase()}</div>
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#0f172a" }}>{student.name}</div>
+            <div style={{ fontSize: 13, color: "#64748b" }}>Class {student.cls} · CBSE · {student.sessions.length} sessions</div>
+          </div>
+          <button onClick={onClose} style={{ marginLeft: "auto", background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#94a3b8" }}>✕</button>
         </div>
-        <div style={{ display: "flex", gap: 3, background: "#f1f5f9", borderRadius: 8, padding: 3, marginBottom: 8 }}>
-          {(["dictionary", "thesaurus", "math"] as const).map(m => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              style={{
-                flex: 1, padding: "5px 2px", position: "relative",
-                background: mode === m ? (m === "math" ? "#0f172a" : "#2563eb") : "transparent",
-                color: mode === m ? "#fff" : "#64748b",
-                border: "none", borderRadius: 5,
-                fontSize: m === "math" ? 10 : 11,
-                fontWeight: 700, cursor: "pointer",
-                transition: "all 0.15s",
-              }}
-            >
-              {m === "dictionary" ? "Dict" : m === "thesaurus" ? "Thesaurus" : "Math ∑"}
-              {/* Blue dot badge when subject is maths and this is the math tab but not active */}
-              {m === "math" && isMathSubject && mode !== "math" && (
-                <span style={{
-                  position: "absolute", top: 3, right: 4,
-                  width: 5, height: 5, borderRadius: "50%",
-                  background: "#38bdf8", display: "block",
-                }} />
+
+        {/* Stats row */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 24 }}>
+          {[
+            { label: "Avg Score", value: student.avgScore != null ? `${student.avgScore}%` : "—", color: student.avgScore != null ? getGrade(student.avgScore).color : "#94a3b8" },
+            { label: "Time Spent", value: fmtTime(student.totalTime), color: "#2563eb" },
+            { label: "Sessions", value: String(student.sessions.length), color: "#7c3aed" },
+          ].map(s => (
+            <div key={s.label} style={{ background: "#f8fafc", borderRadius: 12, padding: "14px 16px", textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>{s.label}</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Subject breakdown */}
+        {subjectEntries.length > 0 && (
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>Subject Breakdown</div>
+            {subjectEntries.map(([subject, scores]) => {
+              const avg = Math.round(scores.reduce((a,b) => a+b,0) / scores.length);
+              const grade = getGrade(avg);
+              return (
+                <div key={subject} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#334155", width: 120, flexShrink: 0 }}>{subject}</div>
+                  <div style={{ flex: 1, height: 8, background: "#f1f5f9", borderRadius: 999, overflow: "hidden" }}>
+                    <div style={{ width: `${avg}%`, height: "100%", background: grade.color, borderRadius: 999, transition: "width 0.6s ease" }} />
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: grade.color, width: 40, textAlign: "right" }}>{avg}%</div>
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", background: grade.color + "20", color: grade.color, borderRadius: 6 }}>{grade.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Session history */}
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>Session History</div>
+          {[...student.sessions].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+            .slice(0, 10).map((s, i) => (
+            <div key={i} style={{
+              display: "flex", alignItems: "center", gap: 12, padding: "10px 14px",
+              background: i % 2 === 0 ? "#f8fafc" : "#fff",
+              borderRadius: 10, marginBottom: 4,
+            }}>
+              <span style={{ fontSize: 12, color: "#64748b", width: 80, flexShrink: 0 }}>{fmtDate(s.created_at)}</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "#334155", flex: 1 }}>{s.subject || "—"}</span>
+              {s.percentage != null && (
+                <span style={{ fontSize: 13, fontWeight: 700, color: getGrade(s.percentage).color }}>{s.percentage}%</span>
               )}
-            </button>
+              {s.time_taken && <span style={{ fontSize: 11, color: "#94a3b8" }}>{s.time_taken}</span>}
+            </div>
           ))}
         </div>
       </div>
-
-      {/* ── MATH TAB ── */}
-      {mode === "math" && (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-
-          {/* Search */}
-          <div style={{ padding: "8px 10px 4px", flexShrink: 0 }}>
-            <input
-              value={mathSearch}
-              onChange={e => setMathSearch(e.target.value)}
-              placeholder="Search… theta, integral, pi"
-              style={{
-                width: "100%", padding: "6px 9px", border: "1px solid #e2e8f0",
-                borderRadius: 7, fontSize: 11, outline: "none", background: "#f8fafc",
-              }}
-            />
-          </div>
-
-          {/* Category sub-tabs */}
-          <div style={{ display: "flex", overflowX: "auto", gap: 3, padding: "0 10px 6px", flexShrink: 0 }}>
-            {mathHistory.length > 0 && (
-              <button
-                onClick={() => { setActiveCategory(-1); setMathSearch(""); }}
-                style={{
-                  padding: "3px 8px", border: "none", borderRadius: 5, fontSize: 10,
-                  fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
-                  background: activeCategory === -1 && !mathSearch ? "#0f172a" : "#f1f5f9",
-                  color: activeCategory === -1 && !mathSearch ? "#fff" : "#475569",
-                }}
-              >⏱ Recent</button>
-            )}
-            {MATH_CATS.map((c, i) => (
-              <button
-                key={i}
-                onClick={() => { setActiveCategory(i); setMathSearch(""); }}
-                style={{
-                  padding: "3px 8px", border: "none", borderRadius: 5, fontSize: 10,
-                  fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
-                  background: activeCategory === i && !mathSearch ? "#0f172a" : "#f1f5f9",
-                  color: activeCategory === i && !mathSearch ? "#fff" : "#475569",
-                }}
-              >{c.icon} {c.label}</button>
-            ))}
-          </div>
-
-          {/* Symbol grid */}
-          <div style={{
-            flex: 1, overflowY: "auto", padding: "4px 10px 8px",
-            display: "flex", flexWrap: "wrap", gap: 5, alignContent: "flex-start",
-          }}>
-            {currentSyms.length === 0 && (
-              <div style={{ color: "#94a3b8", fontSize: 11, padding: "8px 0" }}>No symbols found.</div>
-            )}
-            {currentSyms.map((s, i) => (
-              <MathSymBtn key={i} sym={s} onClick={() => insertSymbol(s)} />
-            ))}
-          </div>
-
-          {/* Footer hint */}
-          <div style={{
-            padding: "5px 10px 7px", fontSize: 9, color: "#94a3b8",
-            borderTop: "1px solid #f1f5f9", background: "#fafbff",
-            flexShrink: 0, lineHeight: 1.6, textAlign: "center",
-          }}>
-            Click symbol → copied ✓ → paste in chat with <strong>Ctrl+V</strong>
-          </div>
-        </div>
-      )}
-
-      {/* ── DICT / THESAURUS TAB ── */}
-      {mode !== "math" && (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <div style={{ padding: "10px 10px 8px", flexShrink: 0 }}>
-            <div style={{ display: "flex", gap: 6 }}>
-              <input
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && lookup()}
-                placeholder="Search word…"
-                style={{
-                  flex: 1, padding: "8px 10px", border: "1px solid #e2e8f0",
-                  borderRadius: 8, fontSize: 13, outline: "none", background: "#f8fafc", minWidth: 0,
-                }}
-              />
-              <button
-                onClick={lookup}
-                disabled={loading}
-                style={{
-                  padding: "8px 12px", background: loading ? "#94a3b8" : "#2563eb",
-                  color: "#fff", border: "none", borderRadius: 8, fontSize: 13,
-                  fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", flexShrink: 0,
-                }}
-              >{loading ? "…" : "Go"}</button>
-            </div>
-          </div>
-
-          <div style={{ flex: 1, overflowY: "auto", padding: "0 10px 10px" }}>
-            {loading && <div style={{ color: "#64748b", fontSize: 13 }}>Looking up <em>{query}</em>…</div>}
-            {result && !loading && (
-              <div style={{
-                background: "#fff", border: "1px solid #e2e8f0",
-                borderRadius: 10, padding: "10px 12px", marginBottom: 12,
-              }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#2563eb", marginBottom: 6 }}>{query}</div>
-                <div style={{ fontSize: 13, color: "#334155", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{result}</div>
-              </div>
-            )}
-            {!result && !loading && history.length === 0 && (
-              <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>
-                Look up any word for definitions & synonyms.
-              </div>
-            )}
-            {!loading && history.map((h, i) => (
-              <button
-                key={i}
-                onClick={() => { setQuery(h.word); setResult(h.result); setMode(h.mode as any); }}
-                style={{
-                  display: "block", width: "100%", textAlign: "left",
-                  padding: "7px 10px", marginBottom: 4, background: "#fff",
-                  border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 12,
-                  color: "#475569", cursor: "pointer",
-                }}
-              >
-                <strong>{h.word}</strong>
-                <span style={{ opacity: 0.45, marginLeft: 6, fontSize: 10 }}>{h.mode}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-// ─── Main Teacher Page ─────────────────────────────────────────
+// ── Main Page ─────────────────────────────────────────────────
 export default function TeacherPage() {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [isLoading, setLoading] = useState(false);
-  const [studentName, setName]  = useState("");
-  const [studentData, setData]  = useState<any>(null);
-  const [currentSubject, setCurrentSubject] = useState("");
+  const [rows, setRows]           = useState<StudentRow[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState("");
+  const [search, setSearch]       = useState("");
+  const [filterCls, setFilterCls] = useState("");
+  const [sortBy, setSortBy]       = useState<"name"|"score"|"time"|"sessions"|"lastActive">("lastActive");
+  const [selected, setSelected]   = useState<StudentSummary | null>(null);
+  const [lastSynced, setLastSynced] = useState<Date | null>(null);
 
-  const sendingRef = useRef(false);
-  const bottomRef  = useRef<HTMLDivElement>(null);
-  const msgsRef    = useRef<Message[]>([]);
-
-  useEffect(() => { msgsRef.current = messages; }, [messages]);
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
-
-  useEffect(() => {
-    let student: any = null;
-    try { student = JSON.parse(localStorage.getItem("shauri_student") || "null"); } catch {}
-    const name  = student?.name  || "";
-    const board = student?.board || "CBSE";
-    const cls   = student?.class ? ` Class ${student.class}` : "";
-    setName(name);
-    setData(student);
-    const greeting = name
-      ? `Hi ${name}! 👋 I'm Shauri, your ${board}${cls} teacher.\n\nWhat would you like to learn today?`
-      : `Hi! 👋 I'm Shauri, your ${board} teacher.\n\nWhat would you like to learn today?`;
-    setMessages([{ role: "assistant", content: greeting }]);
-  }, []);
-
-  // Detect subject from assistant replies so DictionaryPanel can auto-switch
-  useEffect(() => {
-    const last = messages[messages.length - 1];
-    if (!last || last.role !== "assistant") return;
-    const mathMatch = last.content.match(/\b(mathematics|maths?)\b/i);
-    if (mathMatch) setCurrentSubject("mathematics");
-  }, [messages]);
-
-  async function callAPI(text: string, uploadedText?: string, uploadType?: "syllabus" | "answer") {
-    if (sendingRef.current) return;
-    sendingRef.current = true;
+  async function fetchData() {
     setLoading(true);
-
-    let student = studentData;
-    if (!student) {
-      try { student = JSON.parse(localStorage.getItem("shauri_student") || "null"); } catch {}
-    }
-
-    const history = msgsRef.current.slice(1).map(m => ({ role: m.role, content: m.content }));
-
+    setError("");
     try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mode: "teacher",
-          message: text,
-          uploadedText: uploadedText || "",
-          uploadType: uploadType || null,
-          history,
-          student: {
-            name:  student?.name  || "",
-            class: student?.class || "",
-            board: student?.board || "CBSE",
-          },
-        }),
-      });
-      const data  = await res.json();
-      const reply = typeof data?.reply === "string" ? data.reply : "";
-      if (reply) setMessages(p => [...p, { role: "assistant", content: reply }]);
-    } catch {
-      setMessages(p => [...p, { role: "assistant", content: "⚠️ Network error. Please try again." }]);
-    } finally {
-      sendingRef.current = false;
-      setLoading(false);
+      const res = await fetch("/api/progress?all=true");
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
+      const data = await res.json();
+      const raw: StudentRow[] = data.attempts ?? data.data ?? data ?? [];
+      setRows(Array.isArray(raw) ? raw : []);
+      setLastSynced(new Date());
+    } catch (e: any) {
+      setError(e.message || "Could not load data");
     }
+    setLoading(false);
   }
 
-  async function handleSend(text: string, uploadedText?: string, uploadType?: "syllabus" | "answer") {
-    if (!text.trim() && !uploadedText) return;
-    if (sendingRef.current) return;
+  useEffect(() => { fetchData(); }, []);
 
-    // Detect if user is asking about maths to pre-switch the panel
-    if (/\b(mathematics|maths?)\b/i.test(text)) setCurrentSubject("mathematics");
+  // Build per-student summaries
+  const students: StudentSummary[] = useMemo(() => {
+    const map: Record<string, StudentRow[]> = {};
+    rows.forEach(r => {
+      const key = `${r.student_name}__${r.class}`;
+      map[key] = map[key] || [];
+      map[key].push(r);
+    });
+    return Object.entries(map).map(([key, rows]) => {
+      const [name, cls] = key.split("__");
+      return buildSummary(name, cls, rows);
+    });
+  }, [rows]);
 
-    setMessages(p => [...p, { role: "user", content: text.trim() }]);
-    await callAPI(text, uploadedText, uploadType);
-  }
+  const classes = useMemo(() => {
+    return [...new Set(students.map(s => s.cls))].sort((a,b) => parseInt(a) - parseInt(b));
+  }, [students]);
+
+  const filtered = useMemo(() => {
+    return students
+      .filter(s => {
+        const matchSearch = !search || s.name.toLowerCase().includes(search.toLowerCase());
+        const matchClass  = !filterCls || s.cls === filterCls;
+        return matchSearch && matchClass;
+      })
+      .sort((a, b) => {
+        if (sortBy === "name")       return a.name.localeCompare(b.name);
+        if (sortBy === "score")      return (b.avgScore ?? -1) - (a.avgScore ?? -1);
+        if (sortBy === "time")       return b.totalTime - a.totalTime;
+        if (sortBy === "sessions")   return b.sessions.length - a.sessions.length;
+        if (sortBy === "lastActive") return new Date(b.lastActive).getTime() - new Date(a.lastActive).getTime();
+        return 0;
+      });
+  }, [students, search, filterCls, sortBy]);
+
+  // Class stats
+  const classStats = useMemo(() => {
+    const scored = students.filter(s => s.avgScore != null);
+    const avgAll = scored.length ? Math.round(scored.reduce((a,b) => a + b.avgScore!, 0) / scored.length) : null;
+    const totalTime = students.reduce((a,b) => a + b.totalTime, 0);
+    const needsHelp = students.filter(s => s.avgScore != null && s.avgScore < 45);
+    return { avgAll, totalTime, needsHelp };
+  }, [students]);
+
+  const trendIcon = (t: StudentSummary["trend"]) =>
+    t === "up" ? "📈" : t === "down" ? "📉" : t === "flat" ? "➡️" : "🆕";
 
   return (
-    <div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden", background: "#f8fafc" }}>
-      <style>{`
-        *{box-sizing:border-box}
-        @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
-        .dict-panel{display:none}
-        @media(min-width:700px){.dict-panel{display:flex!important;flex-direction:column}}
-      `}</style>
+    <div style={{ minHeight: "100vh", background: "#f8fafc", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
-      {/* ── TOP BAR ── */}
-      <div style={{
-        height: 52, display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 20px", background: "#fff", borderBottom: "1px solid #e2e8f0", flexShrink: 0,
-      }}>
-        <button
-          onClick={() => window.location.href = "/modes"}
-          style={{ padding: "7px 14px", background: "#f1f5f9", color: "#374151", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13, cursor: "pointer", fontWeight: 600 }}
-        >← Back</button>
-        <span style={{ fontSize: 15, fontWeight: 700, color: "#0f172a" }}>
-          📚 Teacher Mode
-        </span>
-        <div style={{ width: 80 }} />
+      {/* ── Header ── */}
+      <div style={{ background: "#0f172a", padding: "0 24px" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 60 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ fontSize: 18, fontWeight: 900, letterSpacing: "0.3em", color: "#FFD700" }}>SHAURI</span>
+            <span style={{ fontSize: 11, color: "#475569", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em" }}>Teacher Portal</span>
+          </div>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            {lastSynced && <span style={{ fontSize: 11, color: "#475569" }}>Synced {fmtDate(lastSynced.toISOString())}</span>}
+            <button onClick={fetchData} style={{ padding: "7px 14px", background: "#1e293b", color: "#94a3b8", border: "1px solid #334155", borderRadius: 8, fontSize: 12, cursor: "pointer" }}>
+              🔄 Refresh
+            </button>
+            <button onClick={() => window.location.href = "/"} style={{ padding: "7px 14px", background: "transparent", color: "#64748b", border: "1px solid #334155", borderRadius: 8, fontSize: 12, cursor: "pointer" }}>
+              ← Home
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* ── BODY ── */}
-      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "28px 24px 64px" }}>
 
-        {/* CHAT */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
-          <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px 8px" }}>
-            {messages.map((m, i) => <Bubble key={i} m={m} />)}
-            {isLoading && (
-              <div style={{ display: "flex", gap: 5, padding: "4px 8px", marginBottom: 8 }}>
-                {[0, 1, 2].map(i => (
-                  <div key={i} style={{
-                    width: 8, height: 8, borderRadius: "50%", background: "#38bdf8",
-                    animation: `bounce 1s ${i * 0.15}s infinite ease-in-out`,
-                  }} />
-                ))}
+        {/* ── Title ── */}
+        <div style={{ marginBottom: 24 }}>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: "#0f172a", margin: 0 }}>Class Dashboard</h1>
+          <p style={{ fontSize: 14, color: "#64748b", margin: "4px 0 0" }}>
+            {students.length} student{students.length !== 1 ? "s" : ""} · {rows.length} sessions recorded
+          </p>
+        </div>
+
+        {/* ── Loading / Error ── */}
+        {loading && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 10, padding: "12px 16px", marginBottom: 20, fontSize: 13, color: "#1d4ed8" }}>
+            <span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>🔄</span> Loading student data…
+          </div>
+        )}
+        {error && (
+          <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "12px 16px", marginBottom: 20, fontSize: 13, color: "#b91c1c" }}>
+            ⚠️ {error} — Make sure your /api/progress endpoint supports <code>?all=true</code>
+          </div>
+        )}
+
+        {/* ── Summary strip ── */}
+        {!loading && students.length > 0 && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 24 }}>
+            {[
+              { icon: "👥", label: "Total Students", value: String(students.length), sub: `${classes.length} class${classes.length !== 1?"es":""}`, color: "#2563eb" },
+              { icon: "📊", label: "Class Average", value: classStats.avgAll != null ? `${classStats.avgAll}%` : "—", sub: classStats.avgAll != null ? getGrade(classStats.avgAll).label : "", color: classStats.avgAll != null ? getGrade(classStats.avgAll).color : "#94a3b8" },
+              { icon: "⏱️", label: "Total Study Time", value: fmtTime(classStats.totalTime), sub: `${Math.round(classStats.totalTime/students.length/60)}m avg/student`, color: "#0d9488" },
+              { icon: "⚠️", label: "Need Attention", value: String(classStats.needsHelp.length), sub: classStats.needsHelp.length > 0 ? classStats.needsHelp.slice(0,2).map(s=>s.name).join(", ") + (classStats.needsHelp.length > 2 ? "…" : "") : "All passing", color: classStats.needsHelp.length > 0 ? "#dc2626" : "#059669" },
+            ].map(card => (
+              <div key={card.label} style={{ background: "#fff", borderRadius: 14, padding: "18px 18px 14px", border: "1px solid #e2e8f0", borderTop: `3px solid ${card.color}` }}>
+                <div style={{ fontSize: 20, marginBottom: 4 }}>{card.icon}</div>
+                <div style={{ fontSize: 10, color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>{card.label}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: "#0f172a", lineHeight: 1.2, margin: "2px 0" }}>{card.value}</div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: card.color }}>{card.sub}</div>
               </div>
-            )}
-            <div ref={bottomRef} />
+            ))}
           </div>
-          <div style={{ padding: "10px 16px", borderTop: "1px solid #e2e8f0", background: "#fff", flexShrink: 0 }}>
-            <ChatInput onSend={handleSend} disabled={isLoading} inline={true} />
-          </div>
-        </div>
+        )}
 
-        {/* REFERENCE PANEL — desktop only */}
-        <div className="dict-panel" style={{ width: 244, flexShrink: 0, borderLeft: "1.5px solid #e2e8f0" }}>
-          <DictionaryPanel subject={currentSubject} />
-        </div>
+        {/* ── Filters ── */}
+        {!loading && students.length > 0 && (
+          <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap", alignItems: "center" }}>
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="🔍 Search student…"
+              style={{ padding: "9px 14px", border: "1.5px solid #e2e8f0", borderRadius: 10, fontSize: 13, outline: "none", minWidth: 180, fontFamily: "inherit" }}
+            />
+            <select value={filterCls} onChange={e => setFilterCls(e.target.value)}
+              style={{ padding: "9px 14px", border: "1.5px solid #e2e8f0", borderRadius: 10, fontSize: 13, outline: "none", fontFamily: "inherit", background: "#fff" }}>
+              <option value="">All Classes</option>
+              {classes.map(c => <option key={c} value={c}>Class {c}</option>)}
+            </select>
+            <div style={{ display: "flex", gap: 6, marginLeft: "auto", flexWrap: "wrap" }}>
+              {(["lastActive","score","time","sessions","name"] as const).map(s => (
+                <button key={s} onClick={() => setSortBy(s)} style={{
+                  padding: "7px 12px", borderRadius: 8, border: "1.5px solid #e2e8f0",
+                  background: sortBy === s ? "#2563eb" : "#fff",
+                  color: sortBy === s ? "#fff" : "#64748b",
+                  fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                  textTransform: "capitalize",
+                }}>
+                  {s === "lastActive" ? "Recent" : s === "score" ? "Score" : s === "time" ? "Time" : s === "sessions" ? "Sessions" : "A–Z"}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Student table ── */}
+        {!loading && filtered.length > 0 && (
+          <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #e2e8f0", overflow: "hidden" }}>
+            {/* Table header */}
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 80px 90px 80px 120px 90px 70px", gap: 0, padding: "10px 20px", background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+              {["Student", "Class", "Avg Score", "Sessions", "Time Spent", "Last Active", "Trend"].map(h => (
+                <div key={h} style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.07em" }}>{h}</div>
+              ))}
+            </div>
+
+            {filtered.map((s, i) => {
+              const grade = s.avgScore != null ? getGrade(s.avgScore) : null;
+              return (
+                <div key={`${s.name}-${s.cls}`}
+                  onClick={() => setSelected(s)}
+                  style={{
+                    display: "grid", gridTemplateColumns: "2fr 80px 90px 80px 120px 90px 70px",
+                    gap: 0, padding: "14px 20px",
+                    background: i % 2 === 0 ? "#fff" : "#fafafa",
+                    borderBottom: "1px solid #f1f5f9",
+                    cursor: "pointer", transition: "background 0.15s",
+                    alignItems: "center",
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#eff6ff")}
+                  onMouseLeave={e => (e.currentTarget.style.background = i % 2 === 0 ? "#fff" : "#fafafa")}
+                >
+                  {/* Name */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{
+                      width: 34, height: 34, borderRadius: "50%",
+                      background: "linear-gradient(135deg, #2563eb, #0d9488)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 13, fontWeight: 800, color: "#fff", flexShrink: 0,
+                    }}>{s.name.charAt(0).toUpperCase()}</div>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>{s.name}</div>
+                      <div style={{ fontSize: 11, color: "#94a3b8" }}>{s.strongest ? `Strong: ${s.strongest}` : "No data"}</div>
+                    </div>
+                  </div>
+                  {/* Class */}
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#334155" }}>Class {s.cls}</div>
+                  {/* Score */}
+                  <div>
+                    {s.avgScore != null ? (
+                      <span style={{ fontSize: 14, fontWeight: 800, color: grade!.color }}>{s.avgScore}%
+                        <span style={{ fontSize: 10, fontWeight: 700, marginLeft: 5, padding: "2px 6px", background: grade!.color + "20", borderRadius: 4 }}>{grade!.label}</span>
+                      </span>
+                    ) : <span style={{ fontSize: 12, color: "#94a3b8" }}>No scores</span>}
+                  </div>
+                  {/* Sessions */}
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#334155" }}>{s.sessions.length}</div>
+                  {/* Time */}
+                  <div style={{ fontSize: 13, color: "#334155" }}>{fmtTime(s.totalTime)}</div>
+                  {/* Last active */}
+                  <div style={{ fontSize: 12, color: "#64748b" }}>{fmtDate(s.lastActive)}</div>
+                  {/* Trend */}
+                  <div style={{ fontSize: 16 }}>{trendIcon(s.trend)}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!loading && students.length === 0 && !error && (
+          <div style={{ textAlign: "center", padding: "64px 24px", background: "#fff", borderRadius: 20, border: "1.5px dashed #cbd5e1" }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>👩‍🏫</div>
+            <p style={{ fontSize: 17, fontWeight: 700, color: "#0f172a", marginBottom: 8 }}>No student data yet</p>
+            <p style={{ fontSize: 14, color: "#64748b" }}>Students need to complete at least one exam session to appear here.</p>
+          </div>
+        )}
+
       </div>
+
+      {/* Student detail modal */}
+      {selected && <StudentModal student={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }

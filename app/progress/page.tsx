@@ -4,10 +4,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import Header from "../components/Header";
 
 // ─── Types ────────────────────────────────────────────────────
-// ExamAttempt accepts BOTH the frontend camelCase shape AND the raw
-// Supabase snake_case shape so merging never silently drops rows.
 type ExamAttempt = {
-  // canonical fields (used everywhere in the UI)
   id: string;
   date: string;
   mode: "examiner";
@@ -16,8 +13,6 @@ type ExamAttempt = {
   timeTakenSeconds: number;
   rawAnswerText: string;
   scorePercent?: number;
-
-  // raw Supabase fields that may arrive un-mapped from /api/progress
   percentage?: number;
   marks_obtained?: number;
   total_marks?: number;
@@ -40,6 +35,19 @@ type SubjectStat = {
 };
 
 type SyncState = "idle" | "loading" | "success" | "error";
+
+// OSM types
+type OSMStatus = "idle" | "uploading" | "evaluating" | "done" | "error";
+type OSMResult = {
+  studentName: string;
+  subject: string;
+  score: number;
+  total: number;
+  percentage: number;
+  grade: string;
+  breakdown: Array<{ section: string; obtained: number; max: number }>;
+  remarks: string;
+};
 
 // ─── Helpers ──────────────────────────────────────────────────
 const GRADES = [
@@ -70,7 +78,6 @@ function getTrend(scores: number[]): { label: string; color: string; delta: numb
   return           { label: "No change",               color: "#d97706", delta: 0 };
 }
 
-// Parse "1h 2m 3s" / "2m 3s" / "45s" → seconds number
 function parseTimeTaken(raw: string | number | undefined): number {
   if (typeof raw === "number") return raw;
   if (!raw) return 0;
@@ -84,15 +91,11 @@ function parseTimeTaken(raw: string | number | undefined): number {
   return secs;
 }
 
-// Normalise a raw DB row OR an already-mapped ExamAttempt into the
-// canonical ExamAttempt shape so the UI always gets consistent fields.
 function normaliseAttempt(raw: any): ExamAttempt {
-  // scorePercent: prefer the camelCase key, fall back to DB "percentage"
   const scorePercent =
     typeof raw.scorePercent === "number" ? raw.scorePercent :
     typeof raw.percentage   === "number" ? raw.percentage   :
     undefined;
-
   return {
     id:               raw.id ?? raw.created_at ?? String(Math.random()),
     date:             raw.date ?? raw.created_at ?? new Date().toISOString(),
@@ -102,8 +105,6 @@ function normaliseAttempt(raw: any): ExamAttempt {
     timeTakenSeconds: parseTimeTaken(raw.timeTakenSeconds ?? raw.time_taken),
     rawAnswerText:    raw.rawAnswerText ?? raw.evaluation_text ?? "",
     scorePercent,
-
-    // keep originals for reference
     percentage:       raw.percentage,
     marks_obtained:   raw.marks_obtained,
     total_marks:      raw.total_marks,
@@ -166,19 +167,345 @@ function StatCard({ icon, label, value, sub, subColor, accent }: {
   );
 }
 
-// ── Load from localStorage as fallback ───────────────────────
 function loadLocalAttempts(): ExamAttempt[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem("shauri_exam_attempts");
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map(normaliseAttempt);
-      }
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed.map(normaliseAttempt);
     }
   } catch {}
   return [];
+}
+
+// ─── OSM Modal ────────────────────────────────────────────────
+function OSMModal({ onClose }: { onClose: () => void }) {
+  const [studentName, setStudentName] = useState("");
+  const [subject, setSubject]         = useState("Science");
+  const [cls, setCls]                 = useState("9");
+  const [imageUrl, setImageUrl]       = useState("");
+  const [status, setStatus]           = useState<OSMStatus>("idle");
+  const [result, setResult]           = useState<OSMResult | null>(null);
+  const [error, setError]             = useState("");
+  const [userType, setUserType]       = useState<"teacher" | "student">("student");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Pre-fill student info
+  useEffect(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem("shauri_student") || "null");
+      if (s?.name) setStudentName(s.name);
+      if (s?.class) setCls(String(s.class).replace(/\D/g, "") || "9");
+    } catch {}
+  }, []);
+
+  const handleFile = (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    setStatus("uploading");
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setImageUrl(e.target?.result as string);
+      setStatus("idle");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const evaluate = async () => {
+    if (!imageUrl) return;
+    setStatus("evaluating");
+    setError("");
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "examiner",
+          message: "Please evaluate this answer sheet.",
+          uploadType: "answer",
+          // route.ts reads uploadedText with [IMAGE_BASE64] prefix format
+          uploadedText: `[IMAGE_BASE64]\n${imageUrl}`,
+          subject: subject,
+          student: {
+            name: studentName || "Student",
+            class: cls,
+            board: "CBSE",
+          },
+          history: [],
+        }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      // Parse result from reply
+      const reply = data.reply || "";
+      const pctMatch = reply.match(/(\d+(?:\.\d+)?)\s*%/);
+      const pct = pctMatch ? parseFloat(pctMatch[1]) : 0;
+      const gradeInfo = getGrade(pct);
+
+      setResult({
+        studentName: studentName || "Student",
+        subject,
+        score: pct,
+        total: 100,
+        percentage: pct,
+        grade: gradeInfo.label,
+        breakdown: [],
+        remarks: reply.slice(0, 300),
+      });
+      setStatus("done");
+    } catch (e: any) {
+      setError(e.message || "Evaluation failed. Please try again.");
+      setStatus("error");
+    }
+  };
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000,
+      display: "flex", alignItems: "flex-end", justifyContent: "center",
+    }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{
+        background: "#fff", borderRadius: "20px 20px 0 0",
+        width: "100%", maxWidth: 640, maxHeight: "90vh",
+        overflow: "auto", padding: "28px 24px 40px",
+        boxShadow: "0 -8px 40px rgba(0,0,0,0.2)",
+      }}>
+        {/* Handle */}
+        <div style={{ width: 40, height: 4, background: "#e2e8f0", borderRadius: 2, margin: "0 auto 20px" }} />
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+          <div>
+            <h2 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", margin: 0 }}>📄 OSM Evaluator</h2>
+            <p style={{ fontSize: 13, color: "#64748b", margin: "4px 0 0" }}>
+              On-Screen Marking — AI evaluates scanned answer sheets
+            </p>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#94a3b8" }}>✕</button>
+        </div>
+
+        {/* User type toggle */}
+        <div style={{ display: "flex", background: "#f1f5f9", borderRadius: 10, padding: 4, marginBottom: 20 }}>
+          {(["student", "teacher"] as const).map(t => (
+            <button key={t} onClick={() => setUserType(t)} style={{
+              flex: 1, padding: "8px", border: "none", borderRadius: 8, cursor: "pointer",
+              background: userType === t ? "#fff" : "transparent",
+              fontWeight: userType === t ? 700 : 500,
+              color: userType === t ? "#0f172a" : "#64748b",
+              fontSize: 13,
+              boxShadow: userType === t ? "0 1px 4px rgba(0,0,0,0.1)" : "none",
+              transition: "all 0.2s",
+            }}>
+              {t === "student" ? "👤 Student" : "👩‍🏫 Teacher"}
+            </button>
+          ))}
+        </div>
+
+        {status !== "done" && (
+          <>
+            {/* Form fields */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: 6 }}>
+                  {userType === "teacher" ? "Student Name" : "Your Name"}
+                </label>
+                <input
+                  value={studentName}
+                  onChange={e => setStudentName(e.target.value)}
+                  placeholder="e.g. Arjun Sharma"
+                  style={{ width: "100%", padding: "10px 12px", border: "1.5px solid #e2e8f0", borderRadius: 10, fontSize: 14, outline: "none", fontFamily: "inherit" }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: 6 }}>Class</label>
+                <select value={cls} onChange={e => setCls(e.target.value)} style={{ width: "100%", padding: "10px 12px", border: "1.5px solid #e2e8f0", borderRadius: 10, fontSize: 14, outline: "none", fontFamily: "inherit", background: "#fff" }}>
+                  {[6,7,8,9,10,11,12].map(c => <option key={c} value={c}>Class {c}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: 6 }}>Subject</label>
+              <select value={subject} onChange={e => setSubject(e.target.value)} style={{ width: "100%", padding: "10px 12px", border: "1.5px solid #e2e8f0", borderRadius: 10, fontSize: 14, outline: "none", fontFamily: "inherit", background: "#fff" }}>
+                {["Science","Mathematics","English","Hindi","Social Science","History","Geography","Economics","Physics","Chemistry","Biology"].map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Upload zone */}
+            <div
+              onClick={() => fileRef.current?.click()}
+              style={{
+                border: `2px dashed ${imageUrl ? "#2563eb" : "#e2e8f0"}`,
+                borderRadius: 14, padding: imageUrl ? 8 : 28,
+                textAlign: "center", cursor: "pointer", marginBottom: 16,
+                background: imageUrl ? "#eff6ff" : "#f8fafc",
+                transition: "all 0.2s",
+              }}
+            >
+              {imageUrl ? (
+                <div style={{ position: "relative" }}>
+                  <img src={imageUrl} alt="Answer sheet" style={{ width: "100%", maxHeight: 200, objectFit: "contain", borderRadius: 8 }} />
+                  <span style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.6)", color: "#fff", fontSize: 11, padding: "3px 8px", borderRadius: 6 }}>Tap to change</span>
+                </div>
+              ) : (
+                <>
+                  <div style={{ fontSize: 36, marginBottom: 8 }}>📷</div>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: "#334155", marginBottom: 4 }}>
+                    {userType === "teacher" ? "Upload scanned answer sheet" : "Photograph your answer sheet"}
+                  </div>
+                  <div style={{ fontSize: 12, color: "#94a3b8" }}>Tap to take photo or browse — JPG, PNG</div>
+                </>
+              )}
+            </div>
+            <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+
+            {error && (
+              <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "10px 14px", color: "#b91c1c", fontSize: 13, marginBottom: 14 }}>
+                ⚠ {error}
+              </div>
+            )}
+
+            <button
+              onClick={evaluate}
+              disabled={!imageUrl || status === "evaluating"}
+              style={{
+                ...btnBase, width: "100%", padding: "14px",
+                fontSize: 15, letterSpacing: "0.05em",
+                opacity: (!imageUrl || status === "evaluating") ? 0.5 : 1,
+                position: "relative", overflow: "hidden",
+              }}
+            >
+              {status === "evaluating" ? "🔍 AI is evaluating…" : "⚡ Evaluate Answer Sheet"}
+            </button>
+
+            <p style={{ fontSize: 11, color: "#94a3b8", textAlign: "center", marginTop: 10 }}>
+              Powered by Gemini AI · CBSE 2026 marking scheme · OSM-aligned
+            </p>
+          </>
+        )}
+
+        {/* Result */}
+        {status === "done" && result && (
+          <div>
+            {/* Score banner */}
+            <div style={{
+              background: `linear-gradient(135deg, ${getGrade(result.percentage).color}15, ${getGrade(result.percentage).color}05)`,
+              border: `1px solid ${getGrade(result.percentage).color}40`,
+              borderRadius: 16, padding: "24px", textAlign: "center", marginBottom: 16,
+            }}>
+              <div style={{ fontSize: 52, fontWeight: 800, color: getGrade(result.percentage).color, lineHeight: 1 }}>
+                {result.percentage}%
+              </div>
+              <div style={{ fontSize: 14, color: "#64748b", margin: "4px 0 8px" }}>
+                {result.studentName} · Class {cls} · {result.subject}
+              </div>
+              <span style={{
+                display: "inline-block", padding: "4px 16px", borderRadius: 999,
+                background: getGrade(result.percentage).color,
+                color: "#fff", fontSize: 13, fontWeight: 700,
+              }}>
+                Grade {result.grade}
+              </span>
+            </div>
+
+            {/* AI remarks */}
+            {result.remarks && (
+              <div style={{ background: "#f8fafc", borderRadius: 12, padding: "14px 16px", marginBottom: 16, fontSize: 13, color: "#334155", lineHeight: 1.65, borderLeft: "3px solid #2563eb" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#2563eb", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>AI Remarks</div>
+                {result.remarks}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button style={{ ...btnGhost, flex: 1 }} onClick={() => { setStatus("idle"); setResult(null); setImageUrl(""); }}>
+                ↩ Evaluate Another
+              </button>
+              <button style={{ ...btnBase, flex: 1 }} onClick={onClose}>
+                Done ✓
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Tools Section ────────────────────────────────────────────
+function ToolsSection({ onOpenOSM }: { onOpenOSM: () => void }) {
+  return (
+    <div>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>
+        Evaluation Tools
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+
+        {/* OSM Card */}
+        <div
+          onClick={onOpenOSM}
+          style={{
+            background: "#fff", borderRadius: 16, padding: "20px",
+            border: "1px solid #e2e8f0", borderTop: "3px solid #2563eb",
+            cursor: "pointer", transition: "all 0.2s",
+          }}
+          onMouseEnter={e => (e.currentTarget.style.boxShadow = "0 4px 20px rgba(37,99,235,0.12)")}
+          onMouseLeave={e => (e.currentTarget.style.boxShadow = "none")}
+        >
+          <div style={{ fontSize: 28, marginBottom: 8 }}>📄</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>OSM Evaluator</div>
+          <div style={{ fontSize: 12, color: "#64748b", lineHeight: 1.5, marginBottom: 12 }}>
+            On-Screen Marking — AI reads scanned answer sheets and assigns marks. CBSE 2026 aligned.
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", background: "#eff6ff", color: "#2563eb", borderRadius: 6 }}>Teacher</span>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", background: "#f0fdf4", color: "#059669", borderRadius: 6 }}>Student</span>
+            <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: "auto" }}>Open →</span>
+          </div>
+        </div>
+
+        {/* OMR Card */}
+        <div
+          onClick={() => window.location.href = "/omr"}
+          style={{
+            background: "#fff", borderRadius: 16, padding: "20px",
+            border: "1px solid #e2e8f0", borderTop: "3px solid #7c3aed",
+            cursor: "pointer", transition: "all 0.2s",
+          }}
+          onMouseEnter={e => (e.currentTarget.style.boxShadow = "0 4px 20px rgba(124,58,237,0.12)")}
+          onMouseLeave={e => (e.currentTarget.style.boxShadow = "none")}
+        >
+          <div style={{ fontSize: 28, marginBottom: 8 }}>⚫</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>OMR Scanner</div>
+          <div style={{ fontSize: 12, color: "#64748b", lineHeight: 1.5, marginBottom: 12 }}>
+            Photograph any MCQ bubble sheet — AI reads filled circles and scores instantly. No machine needed.
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", background: "#faf5ff", color: "#7c3aed", borderRadius: 6 }}>MCQ Sheets</span>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", background: "#faf5ff", color: "#7c3aed", borderRadius: 6 }}>JEE / NEET</span>
+            <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: "auto" }}>Open →</span>
+          </div>
+        </div>
+
+      </div>
+
+      {/* CBSE 2026 notice */}
+      <div style={{
+        marginTop: 12, background: "#fffbeb", border: "1px solid #fde68a",
+        borderRadius: 10, padding: "10px 14px",
+        display: "flex", alignItems: "flex-start", gap: 8,
+      }}>
+        <span style={{ fontSize: 16, flexShrink: 0 }}>⚡</span>
+        <div style={{ fontSize: 12, color: "#92400e", lineHeight: 1.5 }}>
+          <strong>CBSE 2026 Update:</strong> Shauri now generates 50% competency-based questions per the new board format. Exam papers align with On-Screen Marking (OSM) evaluation standards.
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ─── Main page ────────────────────────────────────────────────
@@ -189,59 +516,36 @@ export default function ProgressPage() {
   const [syncState, setSyncState]   = useState<SyncState>("loading");
   const [errorMsg, setErrorMsg]     = useState("");
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
+  const [showOSM, setShowOSM]       = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // ── Fetch via /api/progress (server-side Supabase) ───────────
   const fetchAttempts = useCallback(async () => {
     setSyncState("loading");
     setErrorMsg("");
-
-    // Always load local data first so UI isn't blank while fetching
     const local = loadLocalAttempts();
     if (local.length > 0) setAttempts(local);
-
-    // Get student info
     let name = "", cls = "";
     try {
       const s = JSON.parse(localStorage.getItem("shauri_student") || "null");
       name = s?.name?.trim() || "";
       cls  = s?.class?.trim() || "";
     } catch {}
-
-    // No student info — just use local
     if (!name && !cls) {
       setSyncState(local.length > 0 ? "success" : "idle");
       if (local.length > 0) setLastSynced(new Date());
       return;
     }
-
-    // Fetch from server
     try {
       const params = new URLSearchParams();
       if (name) params.set("name", name);
       if (cls)  params.set("class", cls);
-
       const res = await fetch(`/api/progress?${params.toString()}`);
-
-      if (!res.ok) {
-        throw new Error(`Server error: ${res.status}`);
-      }
-
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
-
-      if (data.error) {
-        throw new Error(data.error);
-      }
-
-      // Normalise every row regardless of whether /api/progress already
-      // mapped field names or returned raw Supabase snake_case rows.
+      if (data.error) throw new Error(data.error);
       const rawRemote: any[] = data.attempts ?? data.data ?? data ?? [];
-      const remote: ExamAttempt[] = Array.isArray(rawRemote)
-        ? rawRemote.map(normaliseAttempt)
-        : [];
-
+      const remote: ExamAttempt[] = Array.isArray(rawRemote) ? rawRemote.map(normaliseAttempt) : [];
       if (remote.length > 0) {
-        // Merge: remote takes priority, keep any local-only entries not yet synced
         const remoteIds = new Set(remote.map((a) => a.id));
         const localOnly = local.filter((a) => !remoteIds.has(a.id));
         const merged = [...remote, ...localOnly].sort(
@@ -249,73 +553,46 @@ export default function ProgressPage() {
         );
         setAttempts(merged);
       } else if (local.length > 0) {
-        // No remote data yet — use local
         setAttempts(local);
       }
-
       setSyncState("success");
       setLastSynced(new Date());
-
     } catch (err: any) {
-      console.error("[Progress] fetch error:", err);
       setErrorMsg(err?.message || "Could not sync. Showing local data.");
       setSyncState("error");
     }
   }, []);
 
-  useEffect(() => {
-    fetchAttempts();
-  }, [fetchAttempts]);
+  useEffect(() => { fetchAttempts(); }, [fetchAttempts]);
 
-  // ── Derive per-subject stats ─────────────────────────────────
   const subjects: SubjectStat[] = useMemo(() => {
     const map: Record<string, number[]> = {};
     attempts.forEach((a) => {
-      // Accept scorePercent OR percentage — normaliseAttempt should have unified
-      // them but guard here as a second safety net
       const score =
         typeof a.scorePercent === "number" ? a.scorePercent :
-        typeof a.percentage   === "number" ? a.percentage   :
-        NaN;
-
-      if (!isNaN(score)) {
-        map[a.subject] ??= [];
-        map[a.subject].push(score);
-      }
+        typeof a.percentage   === "number" ? a.percentage   : NaN;
+      if (!isNaN(score)) { map[a.subject] ??= []; map[a.subject].push(score); }
     });
     return Object.entries(map).map(([subject, scores], idx) => {
       const latest = scores[scores.length - 1];
       return {
-        subject, scores, latest,
-        best: Math.max(...scores),
-        band: getGrade(latest),
-        trend: getTrend(scores),
+        subject, scores, latest, best: Math.max(...scores),
+        band: getGrade(latest), trend: getTrend(scores),
         color: SUBJECT_COLORS[idx % SUBJECT_COLORS.length],
         gapToNext: getGapToNext(latest),
       };
     });
   }, [attempts]);
 
-  const overallAvg = subjects.length
-    ? Math.round(subjects.reduce((s, x) => s + x.latest, 0) / subjects.length)
-    : null;
+  const overallAvg   = subjects.length ? Math.round(subjects.reduce((s, x) => s + x.latest, 0) / subjects.length) : null;
+  const bestSubject  = subjects.length ? subjects.reduce((a, b) => (a.latest >= b.latest ? a : b)) : null;
+  const mostImproved = subjects.filter((s) => s.trend.delta !== null && (s.trend.delta as number) > 0).sort((a, b) => (b.trend.delta as number) - (a.trend.delta as number))[0] ?? null;
+  const totalExams   = attempts.length;
 
-  const bestSubject = subjects.length
-    ? subjects.reduce((a, b) => (a.latest >= b.latest ? a : b))
-    : null;
-
-  const mostImproved = subjects
-    .filter((s) => s.trend.delta !== null && (s.trend.delta as number) > 0)
-    .sort((a, b) => (b.trend.delta as number) - (a.trend.delta as number))[0] ?? null;
-
-  const totalExams = attempts.length;
-
-  // ── AI summary ───────────────────────────────────────────────
   useEffect(() => {
     if (!subjects.length || aiSummary) return;
     generateAISummary(subjects);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subjects.length]);
+  }, [subjects.length]); // eslint-disable-line
 
   async function generateAISummary(data: SubjectStat[]) {
     setAiLoading(true);
@@ -377,9 +654,9 @@ export default function ProgressPage() {
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
       <Header onLogout={() => (window.location.href = "/")} />
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 24px 0" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 24px 0", flexWrap: "wrap", gap: 10 }}>
         <button style={btnBase} onClick={() => (window.location.href = "/modes")}>← Modes</button>
-        <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <button style={btnGhost} onClick={fetchAttempts}>🔄 Refresh</button>
           <button style={btnGhost} onClick={exportProgress}>Export</button>
           <button style={btnGhost} onClick={() => fileInputRef.current?.click()}>Import</button>
@@ -396,10 +673,10 @@ export default function ProgressPage() {
           Progress Dashboard
         </h1>
         <p style={{ textAlign: "center", color: "#64748b", marginBottom: 20, fontSize: 15 }}>
-          Track your performance across all subjects
+          Track performance · Evaluate sheets · Scan OMR
         </p>
 
-        {/* Sync status bar */}
+        {/* Sync status */}
         <div style={{ marginBottom: 24 }}>
           {syncState === "loading" && (
             <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 10, padding: "10px 16px", fontSize: 13, color: "#1d4ed8" }}>
@@ -416,13 +693,14 @@ export default function ProgressPage() {
           {syncState === "success" && lastSynced && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: "8px 14px", fontSize: 12, color: "#15803d" }}>
               ✅ Synced at {lastSynced.toLocaleTimeString()}
-              {attempts.length > 0 && (
-                <span style={{ color: "#64748b", marginLeft: 8 }}>
-                  · {attempts.length} exam{attempts.length !== 1 ? "s" : ""} found
-                </span>
-              )}
+              {attempts.length > 0 && <span style={{ color: "#64748b", marginLeft: 8 }}>· {attempts.length} exam{attempts.length !== 1 ? "s" : ""} found</span>}
             </div>
           )}
+        </div>
+
+        {/* ── TOOLS SECTION — always visible ── */}
+        <div style={{ marginBottom: 28 }}>
+          <ToolsSection onOpenOSM={() => setShowOSM(true)} />
         </div>
 
         {/* Loading skeleton */}
@@ -443,9 +721,9 @@ export default function ProgressPage() {
             </p>
             <p style={{ fontSize: 14, color: "#64748b", marginBottom: 24 }}>
               {syncState === "error"
-                ? "Check your connection and retry. Local data shown if available."
+                ? "Check your connection and retry."
                 : attempts.length > 0
-                  ? `${attempts.length} exam record${attempts.length !== 1 ? "s" : ""} found but score data is missing — exams may not have been fully evaluated.`
+                  ? `${attempts.length} exam record${attempts.length !== 1 ? "s" : ""} found but score data is missing.`
                   : "Complete an exam in Examiner Mode to see your progress here."}
             </p>
             {syncState === "error"
@@ -482,7 +760,6 @@ export default function ProgressPage() {
 
             {/* Bar chart + AI insight */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 24, alignItems: "start" }}>
-
               <div style={{ background: "#fff", borderRadius: 20, padding: "28px 32px", border: "1px solid #e2e8f0" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
                   <h2 style={{ fontSize: 16, fontWeight: 700, color: "#0f172a", margin: 0 }}>Subject Performance</h2>
@@ -497,7 +774,6 @@ export default function ProgressPage() {
                     </div>
                   </div>
                 </div>
-
                 <div style={{ position: "relative", height: CHART_H }}>
                   <div style={{ position: "absolute", left: 0, right: 0, top: passY, borderTop: "2px dashed #f59e0b", zIndex: 2 }}>
                     <span style={{ position: "absolute", right: 0, top: -16, fontSize: 10, color: "#f59e0b", fontWeight: 600 }}>33%</span>
@@ -505,12 +781,7 @@ export default function ProgressPage() {
                   <div style={{ position: "absolute", left: 0, right: 0, top: distY, borderTop: "2px dashed #2563eb", zIndex: 2 }}>
                     <span style={{ position: "absolute", right: 0, top: -16, fontSize: 10, color: "#2563eb", fontWeight: 600 }}>75%</span>
                   </div>
-                  <div style={{
-                    position: "absolute", bottom: 0, left: 0, right: 0,
-                    display: "flex", alignItems: "flex-end",
-                    gap: subjects.length > 5 ? 10 : 20, height: "100%",
-                    borderBottom: "2px solid #f1f5f9",
-                  }}>
+                  <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, display: "flex", alignItems: "flex-end", gap: subjects.length > 5 ? 10 : 20, height: "100%", borderBottom: "2px solid #f1f5f9" }}>
                     {subjects.map((s) => {
                       const barH = Math.max((s.latest / 100) * CHART_H, 6);
                       return (
@@ -522,7 +793,6 @@ export default function ProgressPage() {
                     })}
                   </div>
                 </div>
-
                 <div style={{ display: "flex", gap: subjects.length > 5 ? 10 : 20, marginTop: 10, borderTop: "2px solid #f1f5f9", paddingTop: 10 }}>
                   {subjects.map((s) => (
                     <div key={s.subject} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
@@ -607,6 +877,9 @@ export default function ProgressPage() {
           </div>
         )}
       </main>
+
+      {/* OSM Modal */}
+      {showOSM && <OSMModal onClose={() => setShowOSM(false)} />}
     </div>
   );
 }
