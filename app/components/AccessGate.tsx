@@ -1,713 +1,331 @@
 "use client";
-import { useState, useEffect } from "react";
+
+import { useState, useEffect, useRef } from "react";
 import { grantAccess } from "../lib/session";
 
-// ── Types ─────────────────────────────────────────────────────
-type Side = "student" | "teacher";
-
-// ── Styles ────────────────────────────────────────────────────
 const styles = `
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Orbitron:wght@600;700;900&display=swap');
 
   .ag-root {
-    min-height: 100vh;
-    background: #f0f4ff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 24px 16px;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    min-height: 100dvh; width: 100%;
+    background: #020818; font-family: 'Nunito', sans-serif;
+    position: relative; overflow: hidden; display: flex; align-items: stretch;
   }
+  .ag-canvas { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
 
-  .ag-window {
-    width: 100%;
-    max-width: 860px;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    border-radius: 24px;
-    overflow: hidden;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.12), 0 4px 16px rgba(0,0,0,0.06);
-    min-height: 520px;
+  .ag-earth-wrap {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%); z-index: 1; pointer-events: none;
   }
+  .ag-earth {
+    width: clamp(160px, 24vw, 300px); height: clamp(160px, 24vw, 300px);
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #4fc3f7 0%, #0288d1 28%, #01579b 55%, #003a6e 80%, #001e3c 100%);
+    box-shadow: 0 0 0 2px rgba(100,200,255,0.15), 0 0 60px rgba(100,200,255,0.3), inset -30px -20px 60px rgba(0,0,0,0.5);
+    position: relative; animation: earthGlow 5s ease-in-out infinite;
+  }
+  .ag-earth::before {
+    content: ''; position: absolute; inset: 0; border-radius: 50%;
+    background:
+      radial-gradient(ellipse 28% 18% at 38% 42%, rgba(76,175,80,0.7) 0%, transparent 100%),
+      radial-gradient(ellipse 18% 28% at 62% 35%, rgba(76,175,80,0.6) 0%, transparent 100%),
+      radial-gradient(ellipse 22% 14% at 28% 65%, rgba(76,175,80,0.5) 0%, transparent 100%),
+      radial-gradient(ellipse 10% 14% at 72% 66%, rgba(76,175,80,0.4) 0%, transparent 100%);
+  }
+  .ag-earth::after {
+    content: ''; position: absolute; inset: -10px; border-radius: 50%;
+    background: radial-gradient(circle, transparent 45%, rgba(100,200,255,0.12) 65%, transparent 80%);
+    animation: atmospherePulse 4s ease-in-out infinite;
+  }
+  @keyframes earthGlow { 0%,100%{box-shadow:0 0 0 2px rgba(100,200,255,0.15),0 0 60px rgba(100,200,255,0.3),inset -30px -20px 60px rgba(0,0,0,0.5)} 50%{box-shadow:0 0 0 2px rgba(100,200,255,0.25),0 0 90px rgba(100,200,255,0.45),inset -30px -20px 60px rgba(0,0,0,0.5)} }
+  @keyframes atmospherePulse { 0%,100%{opacity:0.6;transform:scale(1)} 50%{opacity:1;transform:scale(1.05)} }
 
-  /* ── Student side ── */
+  .ag-orbit {
+    position: absolute; left: 50%; top: 50%;
+    width: clamp(220px, 32vw, 400px); height: clamp(220px, 32vw, 400px);
+    transform: translate(-50%,-50%) rotateX(70deg);
+    border-radius: 50%; border: 1px solid rgba(100,200,255,0.18);
+    pointer-events: none; z-index: 0;
+    animation: orbitSpin 22s linear infinite;
+  }
+  .ag-orbit::before { content:'🛰️'; position:absolute; top:-12px; left:50%; transform:translateX(-50%); font-size:16px; filter:drop-shadow(0 0 6px rgba(100,200,255,0.8)); }
+  @keyframes orbitSpin { from{transform:translate(-50%,-50%) rotateX(70deg) rotate(0deg)} to{transform:translate(-50%,-50%) rotateX(70deg) rotate(360deg)} }
+
+  .ag-wordmark {
+    position: absolute; top: 24px; left: 50%; transform: translateX(-50%);
+    z-index: 3; text-align: center; pointer-events: none;
+  }
+  .ag-wordmark-text {
+    font-family: 'Orbitron', sans-serif; font-size: clamp(12px,1.8vw,17px);
+    font-weight: 900; letter-spacing: 0.5em; color: rgba(255,215,0,0.9);
+    text-shadow: 0 0 20px rgba(255,215,0,0.4);
+  }
+  .ag-wordmark-sub { font-size: 9px; letter-spacing: 0.2em; color: rgba(255,255,255,0.28); font-weight: 700; text-transform: uppercase; margin-top: 2px; }
+
+  .ag-panels { position: relative; z-index: 2; width: 100%; display: grid; grid-template-columns: 1fr 1fr; min-height: 100dvh; }
+
   .ag-student {
-    background: #ffffff;
-    padding: 44px 40px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    border-right: 1px solid #e8edf5;
-    position: relative;
+    display: flex; flex-direction: column; justify-content: center; align-items: flex-end;
+    padding: clamp(60px,6vw,80px) clamp(20px,6vw,72px) clamp(40px,6vw,80px) clamp(20px,3vw,40px);
+    background: linear-gradient(135deg, rgba(2,20,60,0.88) 0%, rgba(1,10,30,0.55) 100%);
+    border-right: 1px solid rgba(100,200,255,0.08);
   }
+  .ag-form-box { width: 100%; max-width: 320px; }
 
-  /* ── Teacher side ── */
   .ag-teacher {
-    background: linear-gradient(145deg, #0f172a 0%, #1e293b 60%, #0f2044 100%);
-    padding: 44px 40px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    position: relative;
-    overflow: hidden;
+    display: flex; flex-direction: column; justify-content: center; align-items: flex-start;
+    padding: clamp(60px,6vw,80px) clamp(20px,3vw,40px) clamp(40px,6vw,80px) clamp(20px,6vw,72px);
+    background: linear-gradient(225deg, rgba(30,10,60,0.88) 0%, rgba(10,2,30,0.55) 100%);
+    border-left: 1px solid rgba(180,100,255,0.08);
   }
-  .ag-teacher::before {
-    content: '';
-    position: absolute;
-    top: -60px; right: -60px;
-    width: 220px; height: 220px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%);
-  }
-  .ag-teacher::after {
-    content: '';
-    position: absolute;
-    bottom: -40px; left: -40px;
-    width: 160px; height: 160px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(59,130,246,0.1) 0%, transparent 70%);
-  }
+  .ag-teacher-box { width: 100%; max-width: 320px; }
 
-  /* ── Shared panel styles ── */
   .ag-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 12px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin-bottom: 16px;
-    width: fit-content;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 12px; border-radius: 20px;
+    font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 14px;
   }
-  .ag-badge-student {
-    background: #eff6ff;
-    color: #2563eb;
-    border: 1px solid #bfdbfe;
-  }
-  .ag-badge-teacher {
-    background: rgba(99,102,241,0.15);
-    color: #a5b4fc;
-    border: 1px solid rgba(99,102,241,0.25);
-  }
+  .ag-badge-student { background: rgba(79,195,247,0.12); color: #4fc3f7; border: 1px solid rgba(79,195,247,0.25); }
+  .ag-badge-teacher { background: rgba(179,100,255,0.12); color: #ce93d8; border: 1px solid rgba(179,100,255,0.25); }
 
-  .ag-title {
-    font-size: 26px;
-    font-weight: 800;
-    line-height: 1.2;
-    margin-bottom: 6px;
-  }
-  .ag-title-student { color: #0f172a; }
-  .ag-title-teacher { color: #f1f5f9; }
+  .ag-title { font-family: 'Orbitron', sans-serif; font-size: clamp(18px,2.2vw,26px); font-weight: 900; line-height: 1.3; margin-bottom: 8px; }
+  .ag-title-student { color: #e0f7fa; }
+  .ag-title-teacher { color: #f3e5f5; }
 
-  .ag-sub {
-    font-size: 13px;
-    line-height: 1.5;
-    margin-bottom: 28px;
-  }
-  .ag-sub-student { color: #64748b; }
-  .ag-sub-teacher { color: #94a3b8; }
+  .ag-sub { font-size: 13px; line-height: 1.6; margin-bottom: 22px; font-weight: 600; }
+  .ag-sub-student { color: #80cbc4; }
+  .ag-sub-teacher { color: #b39ddb; }
 
-  /* ── Form ── */
-  .ag-field { margin-bottom: 14px; }
-  .ag-label {
-    display: block;
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    margin-bottom: 6px;
-  }
-  .ag-label-student { color: #64748b; }
-  .ag-label-teacher { color: #94a3b8; }
-
-  .ag-input {
-    width: 100%;
-    padding: 11px 14px;
-    border-radius: 10px;
-    font-size: 14px;
-    outline: none;
-    transition: border-color 0.2s, box-shadow 0.2s;
-    font-family: inherit;
-  }
-  .ag-input-student {
-    border: 1.5px solid #e2e8f0;
-    background: #f8fafc;
-    color: #0f172a;
-  }
-  .ag-input-student:focus {
-    border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
-    background: #fff;
-  }
-  .ag-input-student::placeholder { color: #cbd5e1; }
-
-  .ag-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-
-  .ag-select {
-    width: 100%;
-    padding: 11px 14px;
-    border-radius: 10px;
-    font-size: 14px;
-    outline: none;
-    cursor: pointer;
-    font-family: inherit;
-    appearance: none;
-    -webkit-appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2394a3b8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 12px center;
-  }
-  .ag-select-student {
-    border: 1.5px solid #e2e8f0;
-    background-color: #f8fafc;
-    color: #0f172a;
-  }
-  .ag-select-student:focus {
-    border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
-    background-color: #fff;
-  }
-
-  /* ── Buttons ── */
-  .ag-btn {
-    width: 100%;
-    padding: 13px;
-    border-radius: 12px;
-    border: none;
-    font-size: 15px;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.2s;
-    font-family: inherit;
-    letter-spacing: 0.02em;
-  }
-  .ag-btn-student {
-    background: #2563eb;
-    color: #fff;
-  }
-  .ag-btn-student:hover { background: #1d4ed8; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,0.3); }
-  .ag-btn-student:active { transform: none; }
-
-  /* ── Error ── */
-  .ag-error {
-    font-size: 12px;
-    font-weight: 600;
-    color: #dc2626;
-    margin-top: -8px;
-    margin-bottom: 10px;
-    padding: 8px 12px;
-    background: #fef2f2;
-    border-radius: 8px;
-    border: 1px solid #fecaca;
-  }
-
-  /* ── Teacher coming soon ── */
-  .ag-coming-soon {
-    position: relative;
-    z-index: 1;
-  }
-  .ag-features {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin-bottom: 28px;
-  }
-  .ag-feature {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 12px 14px;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px;
-  }
-  .ag-feature-icon {
-    font-size: 18px;
-    flex-shrink: 0;
-    margin-top: 1px;
-  }
-  .ag-feature-text {
-    font-size: 13px;
-    color: #cbd5e1;
-    line-height: 1.4;
-  }
-  .ag-feature-text strong {
-    display: block;
-    color: #f1f5f9;
-    font-weight: 600;
-    margin-bottom: 2px;
-    font-size: 13px;
-  }
-
-  .ag-notify-wrap { margin-bottom: 16px; }
-  .ag-notify-label {
-    display: block;
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    color: #94a3b8;
-    margin-bottom: 6px;
-  }
-  .ag-notify-row {
-    display: flex;
-    gap: 8px;
-  }
-  .ag-notify-input {
-    flex: 1;
-    padding: 10px 13px;
-    border-radius: 10px;
-    font-size: 13px;
-    border: 1.5px solid rgba(255,255,255,0.1);
-    background: rgba(255,255,255,0.06);
-    color: #f1f5f9;
-    outline: none;
-    font-family: inherit;
-    transition: border-color 0.2s;
-  }
-  .ag-notify-input::placeholder { color: #475569; }
-  .ag-notify-input:focus { border-color: rgba(99,102,241,0.5); }
-  .ag-notify-btn {
-    padding: 10px 16px;
-    border-radius: 10px;
-    border: none;
-    background: #4f46e5;
-    color: #fff;
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-    font-family: inherit;
-    white-space: nowrap;
-    transition: background 0.2s;
-  }
-  .ag-notify-btn:hover { background: #4338ca; }
-  .ag-notify-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-
-  .ag-soon-tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 14px;
-    border-radius: 999px;
-    background: rgba(99,102,241,0.15);
-    border: 1px solid rgba(99,102,241,0.3);
-    color: #a5b4fc;
-    font-size: 12px;
-    font-weight: 600;
-  }
-
-  .ag-divider {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .ag-divider-line {
-    position: absolute;
-    left: 0; right: 0;
-    height: 1px;
-    background: #e8edf5;
-  }
-  .ag-divider-label {
-    position: relative;
-    background: #fff;
-    padding: 0 10px;
-    font-size: 11px;
-    color: #94a3b8;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-  }
-
-  /* ── Shauri brand strip at top ── */
-  .ag-brand {
-    text-align: center;
-    margin-bottom: 28px;
-  }
-  .ag-brand-name {
-    font-size: 22px;
-    font-weight: 900;
-    letter-spacing: 0.3em;
-    color: #0f172a;
-  }
-  .ag-brand-tag {
-    font-size: 10px;
-    color: #94a3b8;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    margin-top: 2px;
-  }
-
-  /* ── Notify success ── */
-  .ag-notify-success {
-    padding: 10px 14px;
-    background: rgba(74,222,128,0.1);
-    border: 1px solid rgba(74,222,128,0.2);
-    border-radius: 10px;
-    color: #4ade80;
-    font-size: 13px;
-    font-weight: 600;
-    text-align: center;
-  }
-
-  /* ── Returning user card ── */
-  .ag-returning {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-  }
   .ag-profile-card {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 16px;
-    background: #f8fafc;
-    border: 1.5px solid #e2e8f0;
-    border-radius: 14px;
-    margin-bottom: 14px;
-    cursor: pointer;
-    transition: all 0.2s;
+    display: flex; align-items: center; gap: 12px;
+    padding: 13px 15px; background: rgba(79,195,247,0.07);
+    border: 1.5px solid rgba(79,195,247,0.22); border-radius: 14px;
+    margin-bottom: 12px; cursor: pointer; transition: all 0.2s;
   }
-  .ag-profile-card:hover {
-    border-color: #2563eb;
-    background: #eff6ff;
-    box-shadow: 0 2px 12px rgba(37,99,235,0.1);
-  }
-  .ag-avatar {
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #2563eb, #0d9488);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18px;
-    font-weight: 800;
-    color: #fff;
-    flex-shrink: 0;
-  }
-  .ag-profile-info { flex: 1; min-width: 0; }
-  .ag-profile-name {
-    font-size: 15px;
-    font-weight: 700;
-    color: #0f172a;
-    margin-bottom: 2px;
-  }
-  .ag-profile-class {
-    font-size: 12px;
-    color: #64748b;
-  }
-  .ag-profile-arrow {
-    font-size: 18px;
-    color: #2563eb;
-  }
-  .ag-or-divider {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 14px;
-  }
-  .ag-or-line {
-    flex: 1;
-    height: 1px;
-    background: #e2e8f0;
-  }
-  .ag-or-text {
-    font-size: 11px;
-    color: #94a3b8;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    white-space: nowrap;
-  }
-  .ag-diff-btn {
-    font-size: 12px;
-    color: #64748b;
-    background: none;
-    border: none;
-    cursor: pointer;
-    text-decoration: underline;
-    padding: 0;
-    font-family: inherit;
-    margin-bottom: 16px;
-  }
-  .ag-diff-btn:hover { color: #2563eb; }
+  .ag-profile-card:hover { background: rgba(79,195,247,0.14); border-color: rgba(79,195,247,0.45); transform: translateY(-1px); }
+  .ag-avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #4fc3f7, #00bcd4); display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 900; color: #fff; flex-shrink: 0; }
+  .ag-profile-name { font-size: 14px; font-weight: 800; color: #e0f7fa; }
+  .ag-profile-class { font-size: 11px; color: #80cbc4; margin-top: 1px; }
+  .ag-profile-arrow { margin-left: auto; font-size: 16px; color: #4fc3f7; }
 
-  /* ── Mobile: stack vertically ── */
-  @media (max-width: 600px) {
-    .ag-window {
-      grid-template-columns: 1fr;
-      border-radius: 20px;
-    }
-    .ag-student {
-      border-right: none;
-      border-bottom: 1px solid #e8edf5;
-      padding: 32px 28px;
-    }
-    .ag-teacher { padding: 32px 28px; }
-    .ag-title { font-size: 22px; }
+  .ag-or-divider { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .ag-or-line { flex: 1; height: 1px; background: rgba(255,255,255,0.07); }
+  .ag-or-text { font-size: 10px; color: rgba(255,255,255,0.25); font-weight: 700; letter-spacing: 0.1em; white-space: nowrap; }
+
+  .ag-field { margin-bottom: 11px; }
+  .ag-label { display: block; font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 5px; color: rgba(224,247,250,0.5); }
+  .ag-input {
+    width: 100%; padding: 10px 13px;
+    background: rgba(255,255,255,0.05); border: 1.5px solid rgba(79,195,247,0.18);
+    border-radius: 10px; color: #e0f7fa; font-size: 14px;
+    font-family: 'Nunito', sans-serif; outline: none; transition: all 0.2s;
+    box-sizing: border-box;
+  }
+  .ag-input:focus { border-color: rgba(79,195,247,0.55); background: rgba(79,195,247,0.07); box-shadow: 0 0 0 3px rgba(79,195,247,0.1); }
+  .ag-input::placeholder { color: rgba(224,247,250,0.22); }
+  .ag-select { appearance: none; cursor: pointer; }
+  .ag-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .ag-btn-student { width: 100%; padding: 12px; background: linear-gradient(135deg, #0277bd, #00acc1); color: #fff; border: none; border-radius: 12px; font-size: 14px; font-weight: 800; cursor: pointer; font-family: 'Nunito', sans-serif; letter-spacing: 0.04em; transition: all 0.2s; margin-top: 4px; box-shadow: 0 4px 20px rgba(2,119,189,0.4); }
+  .ag-btn-student:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(2,119,189,0.5); }
+
+  .ag-btn-teacher { width: 100%; padding: 12px; background: linear-gradient(135deg, #6a1b9a, #8e24aa); color: #fff; border: none; border-radius: 12px; font-size: 14px; font-weight: 800; cursor: pointer; font-family: 'Nunito', sans-serif; letter-spacing: 0.04em; transition: all 0.2s; margin-top: 4px; box-shadow: 0 4px 20px rgba(106,27,154,0.4); }
+  .ag-btn-teacher:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(106,27,154,0.5); }
+
+  .ag-diff-btn { background: none; border: none; cursor: pointer; font-size: 12px; color: rgba(224,247,250,0.35); font-family: 'Nunito', sans-serif; font-weight: 700; text-decoration: underline; margin-top: 10px; display: block; transition: color 0.15s; }
+  .ag-diff-btn:hover { color: #4fc3f7; }
+
+  .ag-error { font-size: 12px; color: #ff8a80; font-weight: 700; margin-bottom: 8px; padding: 7px 12px; background: rgba(255,138,128,0.08); border-radius: 8px; border: 1px solid rgba(255,138,128,0.2); }
+
+  .ag-features { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+  .ag-feature { display: flex; align-items: flex-start; gap: 10px; padding: 9px 11px; background: rgba(179,100,255,0.06); border: 1px solid rgba(179,100,255,0.1); border-radius: 10px; }
+  .ag-feature-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .ag-feature-text { font-size: 12px; color: #d1c4e9; line-height: 1.5; font-weight: 600; }
+  .ag-feature-text strong { color: #f3e5f5; font-weight: 800; display: block; }
+
+  .ag-notify-row { display: flex; gap: 8px; margin-top: 14px; }
+  .ag-notify-input { flex: 1; padding: 9px 12px; background: rgba(255,255,255,0.05); border: 1.5px solid rgba(179,100,255,0.2); border-radius: 10px; color: #f3e5f5; font-size: 12px; font-family: 'Nunito', sans-serif; outline: none; }
+  .ag-notify-input::placeholder { color: rgba(243,229,245,0.25); }
+  .ag-notify-btn { padding: 0 14px; background: rgba(179,100,255,0.18); border: 1.5px solid rgba(179,100,255,0.35); border-radius: 10px; color: #ce93d8; font-size: 12px; font-weight: 800; cursor: pointer; font-family: 'Nunito', sans-serif; white-space: nowrap; transition: all 0.15s; }
+  .ag-notify-btn:hover { background: rgba(179,100,255,0.3); }
+  .ag-notify-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .ag-soon-tag { display: block; font-size: 10px; color: rgba(206,147,216,0.45); font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; margin-top: 10px; }
+  .ag-notify-success { margin-top: 14px; padding: 10px 13px; background: rgba(76,175,80,0.1); border: 1px solid rgba(76,175,80,0.28); border-radius: 10px; font-size: 12px; color: #a5d6a7; font-weight: 700; }
+
+  @media (max-width: 640px) {
+    .ag-panels { grid-template-columns: 1fr; }
+    .ag-teacher { display: none; }
+    .ag-student { align-items: center; padding: 70px 24px 48px; background: rgba(2,15,45,0.97); min-height: 100dvh; }
+    .ag-form-box { max-width: 100%; }
+    .ag-earth-wrap { top: 10%; transform: translate(-50%, 0) scale(0.45); opacity: 0.4; }
+    .ag-orbit { top: 10%; transform: translate(-50%, 0) rotateX(70deg) scale(0.45); opacity: 0.3; }
   }
 `;
 
-// ── Component ─────────────────────────────────────────────────
+function Starfield() {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = ref.current; if (!canvas) return;
+    const ctx = canvas.getContext("2d"); if (!ctx) return;
+    const resize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
+    resize(); window.addEventListener("resize", resize);
+    const stars = Array.from({ length: 300 }, () => ({ x: Math.random(), y: Math.random(), r: Math.random() * 1.3 + 0.2, a: Math.random() * 0.8 + 0.2, phase: Math.random() * Math.PI * 2, speed: Math.random() * 0.005 + 0.001 }));
+    const shoots: any[] = [];
+    let f = 0;
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const t = f * 0.015;
+      stars.forEach(s => {
+        const a = 0.25 + 0.75 * Math.abs(Math.sin(t * s.speed * 8 + s.phase));
+        ctx.beginPath(); ctx.arc(s.x * canvas.width, s.y * canvas.height, s.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,255,255,${a * s.a})`; ctx.fill();
+      });
+      if (Math.random() < 0.003) shoots.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height * 0.5, vx: 5 + Math.random() * 5, vy: 1.5 + Math.random() * 2, life: 0, max: 35 + Math.random() * 25 });
+      shoots.forEach((s, i) => {
+        const p = s.life / s.max, a = p < 0.3 ? p / 0.3 : 1 - (p - 0.3) / 0.7;
+        const g = ctx.createLinearGradient(s.x, s.y, s.x - s.vx * 7, s.y - s.vy * 7);
+        g.addColorStop(0, `rgba(255,255,255,${a * 0.85})`); g.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(s.x - s.vx * 7, s.y - s.vy * 7);
+        ctx.strokeStyle = g; ctx.lineWidth = 1.5; ctx.stroke();
+        s.x += s.vx; s.y += s.vy; s.life++;
+        if (s.life >= s.max) shoots.splice(i, 1);
+      });
+      f++; requestAnimationFrame(draw);
+    }
+    draw();
+    return () => window.removeEventListener("resize", resize);
+  }, []);
+  return <canvas ref={ref} className="ag-canvas" />;
+}
+
 export default function AccessGate({ onSuccess }: { onSuccess: () => void }) {
-  // Returning user
-  const [savedStudent, setSavedStudent] = useState<{name: string; class: string} | null>(null);
-  const [showForm, setShowForm]         = useState(false);
-
-  // Student state
-  const [name, setName]         = useState("");
-  const [cls, setCls]           = useState("");
-  const [code, setCode]         = useState("");
-  const [error, setError]       = useState("");
-
-  // Teacher notify state
-  const [email, setEmail]       = useState("");
-  const [notified, setNotified] = useState(false);
+  const [savedStudent, setSavedStudent] = useState<{name:string;class:string}|null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [name, setName]   = useState("");
+  const [cls, setCls]     = useState("");
+  const [code, setCode]   = useState("");
+  const [error, setError] = useState("");
+  const [email, setEmail]         = useState("");
+  const [notified, setNotified]   = useState(false);
   const [notifying, setNotifying] = useState(false);
 
-  // Check localStorage on mount for returning user
   useEffect(() => {
-    try {
-      const s = JSON.parse(localStorage.getItem("shauri_student") || "null");
-      if (s?.name && s?.class) setSavedStudent(s);
-    } catch {}
+    try { const s = JSON.parse(localStorage.getItem("shauri_student") || "null"); if (s?.name && s?.class) setSavedStudent(s); } catch {}
   }, []);
 
-  function continueAsSaved() {
-    grantAccess();
-    onSuccess();
-  }
+  function continueAsSaved() { grantAccess(); onSuccess(); }
 
   function submitStudent() {
     if (!name.trim()) { setError("Please enter your name."); return; }
     if (!cls)         { setError("Please select your class."); return; }
     if (code !== "0330") { setError("Invalid access code."); return; }
-
-    if (typeof window !== "undefined") {
-      localStorage.setItem("shauri_student", JSON.stringify({
-        name: name.trim(),
-        class: cls,
-        board: "CBSE",
-      }));
-    }
-
-    grantAccess();
-    onSuccess();
+    localStorage.setItem("shauri_student", JSON.stringify({ name: name.trim(), class: cls, board: "CBSE" }));
+    grantAccess(); onSuccess();
   }
 
   async function notifyTeacher() {
     if (!email.trim() || !email.includes("@")) return;
     setNotifying(true);
-    // Store email locally — in production this would POST to an API
-    try {
-      const existing = JSON.parse(localStorage.getItem("shauri_teacher_waitlist") || "[]");
-      existing.push({ email: email.trim(), date: new Date().toISOString() });
-      localStorage.setItem("shauri_teacher_waitlist", JSON.stringify(existing));
-    } catch {}
-    await new Promise(r => setTimeout(r, 800)); // simulate API
-    setNotified(true);
-    setNotifying(false);
+    try { const e = JSON.parse(localStorage.getItem("shauri_teacher_waitlist") || "[]"); e.push({ email: email.trim(), date: new Date().toISOString() }); localStorage.setItem("shauri_teacher_waitlist", JSON.stringify(e)); } catch {}
+    await new Promise(r => setTimeout(r, 700));
+    setNotified(true); setNotifying(false);
   }
 
   return (
     <>
       <style>{styles}</style>
       <div className="ag-root">
-        <div className="ag-window">
+        <Starfield />
+        <div className="ag-earth-wrap"><div className="ag-earth" /></div>
+        <div className="ag-orbit" />
+        <div className="ag-wordmark">
+          <div className="ag-wordmark-text">SHAURI</div>
+          <div className="ag-wordmark-sub">CBSE · Adaptive · AI-Powered</div>
+        </div>
 
-          {/* ── LEFT: Student ── */}
+        <div className="ag-panels">
+
+          {/* LEFT: Student */}
           <div className="ag-student">
-            <div className="ag-brand">
-              <div className="ag-brand-name">SHAURI</div>
-              <div className="ag-brand-tag">CBSE Adaptive Learning</div>
-            </div>
+            <div className="ag-form-box">
+              <div className="ag-badge ag-badge-student">🚀 Student Login</div>
 
-            <div className="ag-badge ag-badge-student">
-              👤 Student Login
-            </div>
-
-            {/* ── Returning user: show profile card ── */}
-            {savedStudent && !showForm ? (
-              <div className="ag-returning">
-                <h2 className="ag-title ag-title-student" style={{marginBottom: 6}}>
-                  Welcome back!
-                </h2>
-                <p className="ag-sub ag-sub-student" style={{marginBottom: 20}}>
-                  Continue where you left off.
-                </p>
-
-                {/* Profile card — tap to continue */}
-                <div className="ag-profile-card" onClick={continueAsSaved}>
-                  <div className="ag-avatar">
-                    {savedStudent.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="ag-profile-info">
-                    <div className="ag-profile-name">{savedStudent.name}</div>
-                    <div className="ag-profile-class">Class {savedStudent.class} · CBSE</div>
-                  </div>
-                  <span className="ag-profile-arrow">→</span>
-                </div>
-
-                {/* Or sign in as someone else */}
-                <div className="ag-or-divider">
-                  <div className="ag-or-line" />
-                  <span className="ag-or-text">or</span>
-                  <div className="ag-or-line" />
-                </div>
-                <button className="ag-diff-btn" onClick={() => setShowForm(true)}>
-                  Sign in as a different student
-                </button>
-              </div>
-            ) : (
-              <>
-                <h2 className="ag-title ag-title-student">
-                  {showForm ? "Different student?" : "Begin your"}<br />
-                  {showForm ? "Enter your details" : "learning journey"}
-                </h2>
-                <p className="ag-sub ag-sub-student">
-                  Practice exams, oral sessions, AI teacher — all in one place.
-                </p>
-
-                <div className="ag-field">
-                  <label className="ag-label ag-label-student">Your Name</label>
-                  <input
-                    className="ag-input ag-input-student"
-                    placeholder="e.g. Arjun Sharma"
-                    value={name}
-                    onChange={e => { setName(e.target.value); setError(""); }}
-                    onKeyDown={e => e.key === "Enter" && submitStudent()}
-                  />
-                </div>
-
-                <div className="ag-field ag-row">
-                  <div>
-                    <label className="ag-label ag-label-student">Class</label>
-                    <select
-                      className="ag-select ag-select-student ag-input"
-                      value={cls}
-                      onChange={e => { setCls(e.target.value); setError(""); }}
-                    >
-                      <option value="">Select</option>
-                      {[6,7,8,9,10,11,12].map(c => (
-                        <option key={c} value={String(c)}>Class {c}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="ag-label ag-label-student">Access Code</label>
-                    <input
-                      className="ag-input ag-input-student"
-                      placeholder="••••"
-                      type="password"
-                      value={code}
-                      onChange={e => { setCode(e.target.value); setError(""); }}
-                      onKeyDown={e => e.key === "Enter" && submitStudent()}
-                    />
-                  </div>
-                </div>
-
-                {error && <div className="ag-error">⚠ {error}</div>}
-
-                <button className="ag-btn ag-btn-student" onClick={submitStudent}>
-                  Enter Shauri →
-                </button>
-
-                {showForm && (
-                  <button className="ag-diff-btn" style={{marginTop: 10, textAlign: "center"}}
-                    onClick={() => { setShowForm(false); setError(""); }}>
-                    ← Back
-                  </button>
-                )}
-              </>
-            )}
-
-            <p style={{ fontSize: 11, color: "#cbd5e1", textAlign: "center", marginTop: 14 }}>
-              Access code from your school or teacher
-            </p>
-          </div>
-
-          {/* ── RIGHT: Teacher ── */}
-          <div className="ag-teacher">
-            <div className="ag-coming-soon">
-              <div className="ag-badge ag-badge-teacher">
-                👩‍🏫 Teacher Portal
-              </div>
-
-              <h2 className="ag-title ag-title-teacher">
-                Your classroom,<br />fully visible
-              </h2>
-              <p className="ag-sub ag-sub-teacher">
-                See every student's progress, screen time, weak chapters, and scores — in real time.
-              </p>
-
-              <div className="ag-features">
-                <div className="ag-feature">
-                  <span className="ag-feature-icon">📊</span>
-                  <div className="ag-feature-text">
-                    <strong>Class Dashboard</strong>
-                    Every student's score, subject, and activity at a glance.
-                  </div>
-                </div>
-                <div className="ag-feature">
-                  <span className="ag-feature-icon">⏱️</span>
-                  <div className="ag-feature-text">
-                    <strong>Screen Time & Engagement</strong>
-                    See who's practicing, how long, and on which subjects.
-                  </div>
-                </div>
-                <div className="ag-feature">
-                  <span className="ag-feature-icon">📄</span>
-                  <div className="ag-feature-text">
-                    <strong>OSM + OMR Evaluation</strong>
-                    Upload answer sheets — AI marks them in seconds.
-                  </div>
-                </div>
-                <div className="ag-feature">
-                  <span className="ag-feature-icon">⚠️</span>
-                  <div className="ag-feature-text">
-                    <strong>Weak Area Alerts</strong>
-                    Instantly see which students need attention and in which chapters.
-                  </div>
-                </div>
-              </div>
-
-              {!notified ? (
+              {savedStudent && !showForm ? (
                 <>
-                  <div className="ag-notify-wrap">
-                    <span className="ag-notify-label">Get notified when teacher login launches</span>
-                    <div className="ag-notify-row">
-                      <input
-                        className="ag-notify-input"
-                        type="email"
-                        placeholder="your@school.edu"
-                        value={email}
-                        onChange={e => setEmail(e.target.value)}
-                        onKeyDown={e => e.key === "Enter" && notifyTeacher()}
-                      />
-                      <button
-                        className="ag-notify-btn"
-                        onClick={notifyTeacher}
-                        disabled={notifying || !email.trim()}
-                      >
-                        {notifying ? "..." : "Notify Me"}
-                      </button>
+                  <h2 className="ag-title ag-title-student">Welcome back,<br />{savedStudent.name.split(" ")[0]}! 🌍</h2>
+                  <p className="ag-sub ag-sub-student">Continue your journey from where you left off.</p>
+                  <div className="ag-profile-card" onClick={continueAsSaved}>
+                    <div className="ag-avatar">{savedStudent.name.charAt(0).toUpperCase()}</div>
+                    <div>
+                      <div className="ag-profile-name">{savedStudent.name}</div>
+                      <div className="ag-profile-class">Class {savedStudent.class} · CBSE</div>
                     </div>
+                    <span className="ag-profile-arrow">→</span>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span className="ag-soon-tag">
-                      🔒 Email login — coming soon
-                    </span>
-                    <span style={{ fontSize: 11, color: "#475569" }}>Free for schools</span>
-                  </div>
+                  <div className="ag-or-divider"><div className="ag-or-line" /><span className="ag-or-text">or</span><div className="ag-or-line" /></div>
+                  <button className="ag-diff-btn" onClick={() => setShowForm(true)}>Sign in as a different student</button>
                 </>
               ) : (
-                <div className="ag-notify-success">
-                  ✅ You're on the list — we'll email you when it's ready!
-                </div>
+                <>
+                  <h2 className="ag-title ag-title-student">Begin your<br />ascent 🌍</h2>
+                  <p className="ag-sub ag-sub-student">Your AI teacher, exams & progress — all in one place.</p>
+                  <div className="ag-field">
+                    <label className="ag-label">Your Name</label>
+                    <input className="ag-input" placeholder="e.g. Arjun Sharma" value={name}
+                      onChange={e => { setName(e.target.value); setError(""); }}
+                      onKeyDown={e => e.key === "Enter" && submitStudent()} />
+                  </div>
+                  <div className="ag-row ag-field">
+                    <div>
+                      <label className="ag-label">Class</label>
+                      <select className="ag-input ag-select" value={cls} onChange={e => { setCls(e.target.value); setError(""); }}>
+                        <option value="">Select</option>
+                        {[6,7,8,9,10,11,12].map(c => <option key={c} value={String(c)}>Class {c}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="ag-label">Access Code</label>
+                      <input className="ag-input" placeholder="••••" type="password" value={code}
+                        onChange={e => { setCode(e.target.value); setError(""); }}
+                        onKeyDown={e => e.key === "Enter" && submitStudent()} />
+                    </div>
+                  </div>
+                  {error && <div className="ag-error">⚠ {error}</div>}
+                  <button className="ag-btn-student" onClick={submitStudent}>Enter Shauri →</button>
+                  {showForm && <button className="ag-diff-btn" onClick={() => { setShowForm(false); setError(""); }}>← Back</button>}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* RIGHT: Teacher */}
+          <div className="ag-teacher">
+            <div className="ag-teacher-box">
+              <div className="ag-badge ag-badge-teacher">👩‍🏫 Teacher Portal</div>
+              <h2 className="ag-title ag-title-teacher">Your classroom,<br />fully visible 🔭</h2>
+              <p className="ag-sub ag-sub-teacher">Real-time scores, weak areas, and AI evaluation — for every student.</p>
+              <div className="ag-features">
+                <div className="ag-feature"><span className="ag-feature-icon">📊</span><div className="ag-feature-text"><strong>Class Dashboard</strong>Every student's score, subject, and activity.</div></div>
+                <div className="ag-feature"><span className="ag-feature-icon">📄</span><div className="ag-feature-text"><strong>OSM + OMR Evaluation</strong>AI marks answer sheets in seconds.</div></div>
+                <div className="ag-feature"><span className="ag-feature-icon">⚠️</span><div className="ag-feature-text"><strong>Weak Area Alerts</strong>See who needs attention and in which chapters.</div></div>
+              </div>
+              <button className="ag-btn-teacher" onClick={() => { window.location.href = "/teacher"; }}>
+                Open Teacher Dashboard →
+              </button>
+              {!notified ? (
+                <>
+                  <div className="ag-notify-row">
+                    <input className="ag-notify-input" type="email" placeholder="your@school.edu"
+                      value={email} onChange={e => setEmail(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && notifyTeacher()} />
+                    <button className="ag-notify-btn" onClick={notifyTeacher} disabled={notifying || !email.trim()}>
+                      {notifying ? "…" : "Notify Me"}
+                    </button>
+                  </div>
+                  <span className="ag-soon-tag">🔒 Email login coming soon · Free for schools</span>
+                </>
+              ) : (
+                <div className="ag-notify-success">✅ You're on the list — we'll email you when it's ready!</div>
               )}
             </div>
           </div>
