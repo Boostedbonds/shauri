@@ -29,6 +29,8 @@ export async function GET(req: NextRequest) {
         evaluation_text,
         chapters
       `)
+      .not("student_name", "is", null)
+      .not("student_name", "is", null)
       .order("created_at", { ascending: false })
       .limit(limit);
 

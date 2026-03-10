@@ -230,11 +230,13 @@ export default function TeacherPage() {
   // Build per-student summaries
   const students: StudentSummary[] = useMemo(() => {
     const map: Record<string, StudentRow[]> = {};
-    rows.forEach(r => {
-      const key = `${r.student_name}__${r.class}`;
-      map[key] = map[key] || [];
-      map[key].push(r);
-    });
+    rows
+      .filter(r => r.student_name && r.student_name !== "null" && r.class && r.class !== "null")
+      .forEach(r => {
+        const key = `${r.student_name}__${r.class}`;
+        map[key] = map[key] || [];
+        map[key].push(r);
+      });
     return Object.entries(map).map(([key, rows]) => {
       const [name, cls] = key.split("__");
       return buildSummary(name, cls, rows);
