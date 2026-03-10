@@ -201,16 +201,27 @@ export default function OralPage() {
     r.continuous = true;
     r.interimResults = true;
     r.lang = lang === "auto" ? "en-IN" : lang;
+    // Track which result indices we have already finalised to prevent duplication
+    // when the browser fires onresult multiple times for the same segment.
+    let lastFinalIdx = -1;
     r.onresult = (e: any) => {
       let fin = "", int = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const t = e.results[i][0].transcript;
-        if (e.results[i].isFinal) fin += t; else int += t;
+        if (e.results[i].isFinal) {
+          if (i > lastFinalIdx) { fin += t; lastFinalIdx = i; }
+        } else {
+          int += t;
+        }
       }
       if (fin) { transcriptRef.current += fin; setTranscript(transcriptRef.current); }
       else if (int) setTranscript(transcriptRef.current + int);
     };
-    r.onend  = () => setListening(false);
+    r.onend = () => {
+      // Reset lastFinalIdx when recognition session ends
+      lastFinalIdx = -1;
+      setListening(false);
+    };
     r.onerror = () => setListening(false);
     recogRef.current = r;
     return () => { try { r.stop(); } catch {} r.onresult = null; };
@@ -221,7 +232,16 @@ export default function OralPage() {
   // ── Mic toggle ─────────────────────────────────────────────
   function toggleMic() {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) { alert("Speech recognition requires Chrome browser."); return; }
+    if (!SR) {
+      // iOS Safari doesn't support SpeechRecognition — guide user
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      if (isIOS) {
+        alert("Voice input is not supported on Safari/iOS yet.\nPlease type your message, or open Shauri in Chrome on Android for voice features.");
+      } else {
+        alert("Voice input requires Chrome browser. Please switch to Chrome for the best experience.");
+      }
+      return;
+    }
     if (listening) {
       recogRef.current?.stop();
       setListening(false);
@@ -412,17 +432,18 @@ export default function OralPage() {
       </div>
 
       {/* ── LIVE TRANSCRIPT (shown only when mic is active) ── */}
-      {(listening || (transcript && !loading)) && (
+      {(listening || (transcript.trim() && !loading)) && (
         <div style={{
           margin: "8px 14px 0",
           background: listening ? "#f0fdf4" : "#f8fafc",
           border: `1.5px solid ${listening ? "#86efac" : "#e2e8f0"}`,
           borderRadius: 12, padding: "8px 12px",
         }}>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", marginBottom: 3,
-            color: listening ? "#22c55e" : "#94a3b8" }}>
-            {listening ? (isHindi ? "● सुन रहा है…" : "● LISTENING…") : (isHindi ? "सुना हुआ" : "TRANSCRIPT")}
-          </div>
+          {listening && (
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", marginBottom: 3, color: "#22c55e" }}>
+              {isHindi ? "● सुन रहा है…" : "● LISTENING…"}
+            </div>
+          )}
           <div style={{ fontSize: 14, color: listening ? "#166534" : "#64748b", lineHeight: 1.6 }}>
             {transcript || <em style={{ color: "#94a3b8" }}>{isHindi ? "बोलिए…" : "Speak now…"}</em>}
           </div>
@@ -522,4 +543,4 @@ export default function OralPage() {
       </div>
     </div>
   );
-}
+}	

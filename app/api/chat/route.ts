@@ -51,7 +51,9 @@ function sanitiseBoard(raw: string): string {
 }
 
 function sanitiseClass(raw: string): string {
-  const n = parseInt(raw);
+  // Strip "Class " prefix so "Class 6" parses correctly as 6
+  const cleaned = (raw || "").replace(/^class\s*/i, "").trim();
+  const n = parseInt(cleaned);
   if (isNaN(n)) return String(syllabus.class);
   return String(Math.min(Math.max(n, MIN_CLASS), MAX_CLASS));
 }
@@ -457,7 +459,7 @@ function getKey(student?: StudentContext): string {
 }
 
 function isGreeting(text: string) {
-  return /^(hi|hello|hey)\b/i.test(text.trim());
+  return /^(hi|hello|hey|good\s*morning|good\s*evening|good\s*afternoon|good\s*night|gm\b|howdy|namaste|hola)\b/i.test(text.trim());
 }
 
 function isSubmit(text: string) {
@@ -972,7 +974,7 @@ export async function POST(req: NextRequest) {
 
       // ── Count consecutive off-topic messages (from the END of history) ──
       const OFF_TOPIC_PATTERNS =
-        /\b(how are you|how r u|what'?s up|whatsup|wazzup|sup\b|good morning|good night|good evening|i love you|tell me a joke|sing|dance|what'?s your name|who are you|are you alive|are you human|can we chat|can we talk|let'?s talk|wanna be friends|best friend|boyfriend|girlfriend|favourite (color|food|movie)|hobbies|fav\b|lol\b|haha|hehe|😂|🤣|💕|❤️|tell me something funny|roast me|dare|truth or dare)\b/i;
+        /\b(how are you|how r u|what'?s up|whatsup|wazzup|sup\b|i love you|tell me a joke|sing a song|let'?s dance|what'?s your name|who are you|are you alive|are you human|can we chat|can we talk|let'?s talk|wanna be friends|best friend|boyfriend|girlfriend|favourite (color|food|movie)|hobbies|fav\b|haha|hehe|tell me something funny|roast me|truth or dare)\b/i;
 
       const lastUserMsgs = history.filter(m => m.role === "user").slice(-3);
       const offTopicCount = lastUserMsgs.filter(m => OFF_TOPIC_PATTERNS.test(m.content)).length;
@@ -981,13 +983,14 @@ export async function POST(req: NextRequest) {
 
       // Strike 1: Be warm, friendly, and gently guide back
       if (currentIsOffTopic && totalOffTopic === 1) {
-        const warmResponses: Record<string, string> = {
-          "how are you": `Doing great, thanks for asking, ${greetName}! 😄 Always energised when I get to help a student. Now — what subject are we tackling today?`,
-          "how r u": `All good here! 😊 Ready to help you ace your studies, ${greetName}. What topic shall we start with?`,
-          default: `Ha, I appreciate you chatting with me, ${greetName}! 😊 I'm best at helping you learn — ask me anything from your syllabus and I'll make it super easy to understand. What's your first question?`,
-        };
-        const key = Object.keys(warmResponses).find(k => message.toLowerCase().includes(k));
-        return NextResponse.json({ reply: warmResponses[key || "default"] });
+        const msgL = message.toLowerCase();
+        let warmReply: string;
+        if (/how are you|how r u/.test(msgL)) {
+          warmReply = `Doing great, thanks for asking, ${greetName}! 😄 Ready to help you with your studies. What subject are we tackling today?`;
+        } else {
+          warmReply = `Appreciate you chatting, ${greetName}! 😊 I'm best when helping you learn — ask me anything from your syllabus and I'll make it super clear. What's your first question?`;
+        }
+        return NextResponse.json({ reply: warmReply });
       }
 
       // Strike 2+: Politely but firmly redirect
@@ -1026,10 +1029,14 @@ export async function POST(req: NextRequest) {
           ? "mathematics"
           : undefined;
 
-      const reply = await callAI(
-        systemPrompt("teacher", subjectOverride),
-        teacherConversation
-      );
+      // Prepend student identity to system prompt so AI never calls them "Student"
+      const teacherSystemPrompt = name
+        ? systemPrompt("teacher", subjectOverride) +
+          `\n\nSTUDENT IDENTITY: The student's name is ${name}${cls ? `, Class ${cls}` : ""}${board ? `, ${board}` : ""}. Always address them as ${name} — NEVER as "Student" or "there".` +
+          `\n\nRESPONSE RULES: Be concise and natural — like a real classroom teacher, not a chatbot. For greetings or small talk, reply in 1-2 sentences max. Only give longer explanations when the student asks about a concept or topic. Never bullet-point conversational replies. Be warm, direct, encouraging.`
+        : systemPrompt("teacher", subjectOverride);
+
+      const reply = await callAI(teacherSystemPrompt, teacherConversation);
       return NextResponse.json({ reply });
     }
 
@@ -1649,7 +1656,9 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
           message.trim().length > 40 ||                          // long message
           /^\d+[.)]/m.test(message.trim()) ||                   // starts with "1." or "1)"
           /[।\.]{2,}/.test(message) ||                         // Hindi sentence endings
-          /\b(answer|ans|q\d|question|ques)\b/i.test(message); // answer keywords
+          /\b(answer|ans|q\d|question|ques)\b/i.test(message) || // answer keywords
+          message.trim().split(/\s+/).length >= 3 ||            // 3+ words = likely an answer
+          /^[A-Z][a-z]/.test(message.trim());                   // Proper sentence case
 
         if (looksLikeAnswer) {
           // Try harder to find an active session
@@ -1689,14 +1698,24 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
 
         const isExamCommand = /^(submit|done|finish|finished|start|answers?)\s*$/i.test(message.trim());
         if (isExamCommand) {
-          return NextResponse.json({
-            reply:
-              `⚠️ It looks like you typed **"${message.trim()}"** — but there's no active exam session${callName}.\n\n` +
-              `To get started, please tell me the **subject** you want to be tested on:\n` +
-              `Science | Mathematics | SST | History | Geography | Civics | Economics | English | Hindi\n\n` +
-              `📎 Or **upload your syllabus** as a PDF or image for a custom paper.\n\n` +
-              `Once a subject is set, type **start** to begin — the timer starts immediately.`,
-          });
+          // Last-chance recovery: ignore class, search by name only
+          let rescuedSession: ExamSession | null = null;
+          if (name) rescuedSession = await getSessionByStudent(name, "", "IN_EXAM");
+          if (!rescuedSession && name) rescuedSession = await getSessionByStudent(name, "", "READY");
+          if (rescuedSession && rescuedSession.status !== "IDLE") {
+            // Found session — patch current session and fall through to correct handler
+            session = rescuedSession;
+            console.log("[EXAM-CMD RESCUE] recovered by name-only:", rescuedSession.session_key, rescuedSession.status);
+          } else {
+            return NextResponse.json({
+              reply:
+                `⚠️ It looks like you typed **"${message.trim()}"** — but there's no active exam session${callName}.\n\n` +
+                `To get started, please tell me the **subject** you want to be tested on:\n` +
+                `Science | Mathematics | SST | History | Geography | Civics | Economics | English | Hindi\n\n` +
+                `📎 Or **upload your syllabus** as a PDF or image for a custom paper.\n\n` +
+                `Once a subject is set, type **start** to begin — the timer starts immediately.`,
+            });
+          }
         }
 
         if (!message.trim()) {
@@ -2410,10 +2429,11 @@ QUALITY RULES:
         /[\u0900-\u097F]{5,}/.test(oralConversationText) ||
         /hindi|हिंदी/i.test(oralConversationText);
 
-      const reply = await callAI(
-        systemPrompt("oral", isHindiOral ? "hindi" : undefined),
-        oralConversation
-      );
+      const oralSystemPrompt = name
+        ? systemPrompt("oral", isHindiOral ? "hindi" : undefined) + `\n\nSTUDENT IDENTITY: The student's name is ${name}${cls ? `, Class ${cls}` : ""}. Always use their name — never call them "Student".`
+        : systemPrompt("oral", isHindiOral ? "hindi" : undefined);
+
+      const reply = await callAI(oralSystemPrompt, oralConversation);
       return NextResponse.json({ reply });
     }
 

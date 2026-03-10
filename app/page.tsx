@@ -60,11 +60,7 @@ export default function HomePage() {
   // Mountain: triangle from bottom-left and bottom-right to the peak
   const mountainPath = `M0,${SVG_H} L${PEAK_X},${PEAK_Y} L${SVG_W},${SVG_H} Z`;
 
-  // Button foreignObject — centred on peak, narrower on mobile
-  const FO_W = isPortrait ? 300 : 400;
-  const FO_H = 56;
-  const FO_X = PEAK_X - FO_W / 2;
-  const FO_Y = PEAK_Y - FO_H / 2;
+  // Button positioned via CSS (no SVG foreignObject) — fully iOS Safari compatible
 
   // Beam: from top of SVG down to peak
   const BEAM_TOP_Y = 0;
@@ -307,32 +303,31 @@ export default function HomePage() {
                   transition={{ delay: 0.2, duration: 0.9 }}
                 />
 
-                {/* CTA button, centred on mountain peak */}
-                <foreignObject
-                  x={FO_X} y={FO_Y}
-                  width={FO_W} height={FO_H}
-                  style={{ overflow: "visible" }}
-                >
-                  <div
-                    // @ts-ignore
-                    xmlns="http://www.w3.org/1999/xhtml"
-                    style={{
-                      width: "100%", height: "100%",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      opacity:    showBtn ? 1 : 0,
-                      transform:  showBtn ? "translateY(0)" : "translateY(10px)",
-                      transition: "opacity 0.65s ease, transform 0.65s ease",
-                    }}
-                  >
-                    <button
-                      className={`ascent-btn ${orbitron.className}`}
-                      onClick={handleEnter}
-                    >
-                      BEGIN THE ASCENT
-                    </button>
-                  </div>
-                </foreignObject>
+                {/* Button rendered outside SVG for iOS Safari compatibility */}
               </svg>
+            )}
+
+            {/* ── CTA Button — CSS absolute, iOS Safari safe ── */}
+            {ready && (
+              <div style={{
+                position: "absolute",
+                top: `calc(${peakFraction * 100}% - 52px)`,
+                left: "50%",
+                transform: showBtn
+                  ? "translateX(-50%) translateY(0px)"
+                  : "translateX(-50%) translateY(12px)",
+                zIndex: 20,
+                opacity: showBtn ? 1 : 0,
+                transition: "opacity 0.65s ease, transform 0.65s ease",
+                pointerEvents: showBtn ? "auto" : "none",
+              }}>
+                <button
+                  className={`ascent-btn ${orbitron.className}`}
+                  onClick={handleEnter}
+                >
+                  BEGIN THE ASCENT
+                </button>
+              </div>
             )}
 
             {/* Warp flash to white on enter */}
