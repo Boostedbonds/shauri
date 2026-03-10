@@ -201,15 +201,23 @@ export default function OralPage() {
     r.continuous = true;
     r.interimResults = true;
     r.lang = lang === "auto" ? "en-IN" : lang;
-    // Track which result indices we have already finalised to prevent duplication
-    // when the browser fires onresult multiple times for the same segment.
+    // Robust deduplication: track both index AND a set of already-finalised texts.
+    // Some Android Chrome versions fire onresult with isFinal=true twice for the
+    // same result index, causing "hellohello" doubling.
     let lastFinalIdx = -1;
+    const finalisedTexts = new Set<string>();
     r.onresult = (e: any) => {
       let fin = "", int = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const t = e.results[i][0].transcript;
         if (e.results[i].isFinal) {
-          if (i > lastFinalIdx) { fin += t; lastFinalIdx = i; }
+          // Block if: already seen this index OR exact text already finalised
+          const key = `${i}:${t.trim()}`;
+          if (i > lastFinalIdx && !finalisedTexts.has(key)) {
+            fin += t;
+            lastFinalIdx = i;
+            finalisedTexts.add(key);
+          }
         } else {
           int += t;
         }
@@ -218,8 +226,8 @@ export default function OralPage() {
       else if (int) setTranscript(transcriptRef.current + int);
     };
     r.onend = () => {
-      // Reset lastFinalIdx when recognition session ends
       lastFinalIdx = -1;
+      finalisedTexts.clear();
       setListening(false);
     };
     r.onerror = () => setListening(false);
@@ -543,4 +551,4 @@ export default function OralPage() {
       </div>
     </div>
   );
-}	
+}

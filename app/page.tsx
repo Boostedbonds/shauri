@@ -108,12 +108,12 @@ export default function HomePage() {
           50%       { opacity: 0.80; }
         }
         @keyframes glowBreathe {
-          0%, 100% { transform: translate(-50%, -50%) scale(1.00); opacity: 0.85; }
-          50%       { transform: translate(-50%, -50%) scale(1.07); opacity: 1.00; }
+          0%, 100% { transform: translate(-50%, -50%) scale(1.00); opacity: 0.82; }
+          50%       { transform: translate(-50%, -50%) scale(1.06); opacity: 1.00; }
         }
         @keyframes beamPulse {
-          0%, 100% { opacity: 0.40; }
-          50%       { opacity: 0.75; }
+          0%, 100% { opacity: 0.55; }
+          50%       { opacity: 1.00; }
         }
 
         .ascent-btn {
@@ -180,12 +180,13 @@ export default function HomePage() {
             ))}
 
             {/* ── Sun / glow orb ── */}
-            {/* Positioned at 30% from top — matches title */}
+            {/* Centred at 30% from top — translate(-50%,-50%) puts centre on that point */}
             <div style={{
               position: "absolute",
               top: "30%", left: "50%",
-              width:  isPortrait ? "min(340px, 85vw)" : 520,
-              height: isPortrait ? "min(340px, 85vw)" : 520,
+              transform: "translate(-50%, -50%)",
+              width:  isPortrait ? "min(260px, 72vw)" : 520,
+              height: isPortrait ? "min(260px, 72vw)" : 520,
               borderRadius: "50%",
               background: "radial-gradient(circle, rgba(255,215,120,1) 0%, rgba(255,175,50,0.55) 45%, transparent 72%)",
               animationName: "glowBreathe",
@@ -263,15 +264,48 @@ export default function HomePage() {
                   overflow: "visible",
                 }}
               >
-                {/* Vertical light beam from top to peak */}
-                <motion.line
-                  x1={PEAK_X} y1={BEAM_TOP_Y}
-                  x2={PEAK_X} y2={PEAK_Y}
-                  stroke="rgba(255, 215, 80, 0.32)"
-                  strokeWidth="2"
+                {/* ── Beam of hope: tapered gold light rising from peak ── */}
+                <defs>
+                  {/* Vertical fade: bright at peak base, invisible at top */}
+                  <linearGradient id="beamFade" x1="0" y1="1" x2="0" y2="0">
+                    <stop offset="0%" stopColor="rgba(255,215,80,0.55)" />
+                    <stop offset="60%" stopColor="rgba(255,215,80,0.12)" />
+                    <stop offset="100%" stopColor="rgba(255,215,80,0)" />
+                  </linearGradient>
+                  {/* Glow layer: softer, wider */}
+                  <linearGradient id="beamGlow" x1="0" y1="1" x2="0" y2="0">
+                    <stop offset="0%" stopColor="rgba(255,200,60,0.22)" />
+                    <stop offset="50%" stopColor="rgba(255,200,60,0.06)" />
+                    <stop offset="100%" stopColor="rgba(255,200,60,0)" />
+                  </linearGradient>
+                  <filter id="beamBlur">
+                    <feGaussianBlur stdDeviation="6" />
+                  </filter>
+                </defs>
+
+                {/* Outer soft glow — wide trapezoid, blurred */}
+                <motion.polygon
+                  points={`${PEAK_X - (isPortrait ? 60 : 80)},0 ${PEAK_X + (isPortrait ? 60 : 80)},0 ${PEAK_X + 4},${PEAK_Y} ${PEAK_X - 4},${PEAK_Y}`}
+                  fill="url(#beamGlow)"
+                  filter="url(#beamBlur)"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  transition={{ delay: 0.5, duration: 1.0 }}
+                  transition={{ delay: 0.4, duration: 1.4 }}
+                  style={{
+                    animationName: "beamPulse",
+                    animationDuration: "4s",
+                    animationIterationCount: "infinite",
+                    animationTimingFunction: "ease-in-out",
+                  }}
+                />
+
+                {/* Inner bright core — narrow trapezoid */}
+                <motion.polygon
+                  points={`${PEAK_X - (isPortrait ? 18 : 24)},0 ${PEAK_X + (isPortrait ? 18 : 24)},0 ${PEAK_X + 2},${PEAK_Y} ${PEAK_X - 2},${PEAK_Y}`}
+                  fill="url(#beamFade)"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.5, duration: 1.2 }}
                   style={{
                     animationName: "beamPulse",
                     animationDuration: "3.5s",
@@ -279,20 +313,6 @@ export default function HomePage() {
                     animationTimingFunction: "ease-in-out",
                   }}
                 />
-
-                {/* Flanking rays */}
-                {([-1, 1] as const).map((dir, i) => (
-                  <motion.line
-                    key={i}
-                    x1={PEAK_X} y1={PEAK_Y}
-                    x2={PEAK_X + dir * (isPortrait ? 100 : 150)} y2={BEAM_TOP_Y}
-                    stroke="rgba(255, 215, 80, 0.10)"
-                    strokeWidth="1"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.7, duration: 1.0 }}
-                  />
-                ))}
 
                 {/* Mountain silhouette */}
                 <motion.path

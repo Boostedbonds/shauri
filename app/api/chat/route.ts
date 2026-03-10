@@ -453,9 +453,13 @@ function getChaptersForSubject(
 // GENERAL HELPERS
 // ─────────────────────────────────────────────────────────────
 
-function getKey(student?: StudentContext): string {
+function getKey(student?: StudentContext, sanitisedClass?: string): string {
   if (student?.sessionId) return student.sessionId;
-  return `${student?.name || "anon"}_${student?.class || "x"}`;
+  // Always use sanitised class for key consistency.
+  // If sanitisedClass is passed, use it. Otherwise sanitise on the fly.
+  const rawCls = sanitisedClass || sanitiseClass(student?.class || "");
+  const cls = rawCls.replace(/^class\s*/i, "").trim() || "x";
+  return `${student?.name?.trim() || "anon"}_${cls}`;
 }
 
 function isGreeting(text: string) {
@@ -1044,7 +1048,7 @@ export async function POST(req: NextRequest) {
     // EXAMINER MODE
     // ═══════════════════════════════════════════════════════════
     if (mode === "examiner") {
-      const key = getKey(student);
+      const key = getKey(student, clsRaw);
 
       let session: ExamSession = (await getSession(key)) || {
         session_key:   key,
@@ -1763,7 +1767,7 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
           return NextResponse.json({
             reply:
               `📚 Got it! I'll prepare a **custom paper** for:\n` +
-              `**${subjectName} — Class ${cls}**\n\n` +
+              `**${subjectName.replace(/\s*[–-]\s*Class\s*\d+$/i, "")} — Class ${cls}**\n\n` +
               `📝 **Paper format:**\n` +
               `   Marks: ${totalDesc}${timeDesc}${typeDesc}${chapterDesc}\n\n` +
               `The paper will be generated **exactly** as you described — no extra sections added.\n\n` +
@@ -1775,7 +1779,7 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
         return NextResponse.json({
           reply:
             `📚 Got it! I'll prepare a **strict CBSE Board question paper** for:\n` +
-            `**${subjectName} — Class ${cls}**\n\n` +
+            `**${subjectName.replace(/\s*[–-]\s*Class\s*\d+$/i, "")} — Class ${cls}**\n\n` +
             `Paper will strictly follow the NCERT Class ${cls} syllabus chapters.\n\n` +
             `📎 **Tip:** Want a paper based on YOUR specific syllabus?\n` +
             `Upload your syllabus as a PDF or image now, before typing start.\n\n` +
