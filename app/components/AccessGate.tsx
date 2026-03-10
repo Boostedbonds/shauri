@@ -173,6 +173,7 @@ function Starfield() {
     const shoots: any[] = [];
     let f = 0;
     function draw() {
+      if (!ctx || !canvas) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const t = f * 0.015;
       stars.forEach(s => {
