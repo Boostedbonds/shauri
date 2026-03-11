@@ -11,48 +11,60 @@ const styles = `
     min-height: 100dvh; width: 100%;
     background: #000008; font-family: 'Nunito', sans-serif;
     position: relative; overflow: hidden;
-    display: flex; flex-direction: column; align-items: center;
   }
   .ag-canvas { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
   .ag-warp-canvas { position: fixed; inset: 0; z-index: 50; pointer-events: none; opacity: 0; transition: opacity 0.1s; }
   .ag-warp-canvas.active { opacity: 1; }
 
   .ag-wordmark {
-    position: relative; z-index: 10; text-align: center;
-    padding-top: clamp(28px, 4vw, 44px);
-    pointer-events: none;
+    position: fixed; top: clamp(22px,3vw,34px); left: 50%; transform: translateX(-50%);
+    z-index: 10; text-align: center; pointer-events: none; white-space: nowrap;
   }
   .ag-wordmark-text {
     font-family: 'Orbitron', sans-serif;
-    font-size: clamp(22px, 3vw, 30px);
-    font-weight: 900; letter-spacing: 0.5em;
-    color: rgba(255,215,0,0.95);
-    text-shadow: 0 0 30px rgba(255,215,0,0.5), 0 0 60px rgba(255,215,0,0.2);
+    font-size: clamp(36px, 6vw, 72px);
+    font-weight: 900; letter-spacing: 0.38em;
+    color: rgba(255,215,0,1);
+    text-shadow:
+      0 0 20px rgba(255,215,0,0.8),
+      0 0 60px rgba(255,215,0,0.4),
+      0 0 120px rgba(255,180,0,0.2);
   }
-  .ag-wordmark-sub { font-size: 10px; letter-spacing: 0.24em; color: rgba(255,255,255,0.3); font-weight: 700; text-transform: uppercase; margin-top: 4px; }
+  .ag-wordmark-sub {
+    font-size: clamp(8px, 1vw, 11px);
+    letter-spacing: 0.3em;
+    color: rgba(255,255,255,0.38);
+    font-weight: 800;
+    text-transform: uppercase;
+    margin-top: 6px;
+    font-family: 'Nunito', sans-serif;
+  }
 
+  /* Portal fills entire background */
   .ag-portal-wrap {
-    position: relative; z-index: 5; pointer-events: none;
-    width: clamp(320px, 56vw, 640px);
-    height: clamp(320px, 56vw, 640px);
-    margin-top: clamp(-40px, -3vw, -60px);
-    flex-shrink: 0;
+    position: fixed; inset: 0; z-index: 1; pointer-events: none;
+    display: flex; align-items: center; justify-content: center;
   }
-  .ag-portal-canvas { width: 100%; height: 100%; display: block; }
+  .ag-portal-canvas {
+    width: clamp(480px, 90vmin, 900px);
+    height: clamp(480px, 90vmin, 900px);
+    display: block;
+  }
 
+  /* Card centered over portal */
   .ag-card-wrap {
     position: relative; z-index: 10;
-    width: 100%; display: flex; justify-content: center;
-    padding: 0 20px 48px;
-    margin-top: clamp(-80px, -8vw, -120px);
+    width: 100%; display: flex; justify-content: center; align-items: center;
+    min-height: 100dvh;
+    padding: 80px 20px 40px;
   }
   .ag-card {
     width: 100%; max-width: 390px;
-    background: rgba(2, 4, 28, 0.9);
-    border: 1px solid rgba(130,80,255,0.3);
+    background: rgba(2, 4, 28, 0.88);
+    border: 1px solid rgba(130,80,255,0.32);
     border-radius: 24px; padding: 28px 28px 24px;
-    backdrop-filter: blur(28px);
-    box-shadow: 0 8px 60px rgba(0,0,0,0.7), 0 0 40px rgba(100,50,255,0.08);
+    backdrop-filter: blur(32px);
+    box-shadow: 0 8px 60px rgba(0,0,0,0.7), 0 0 60px rgba(100,50,255,0.1), inset 0 1px 0 rgba(180,140,255,0.08);
     transition: opacity 0.4s, transform 0.4s;
   }
   .ag-card.warping { opacity: 0; transform: scale(0.92); pointer-events: none; }
@@ -89,8 +101,7 @@ const styles = `
   .ag-error { font-size: 12px; color: #ff8a80; font-weight: 700; margin-bottom: 8px; padding: 7px 12px; background: rgba(255,138,128,0.07); border-radius: 8px; border: 1px solid rgba(255,138,128,0.18); }
 
   @media (max-width: 640px) {
-    .ag-portal-wrap { width: clamp(280px, 90vw, 380px); height: clamp(280px, 90vw, 380px); margin-top: -20px; }
-    .ag-card-wrap { margin-top: clamp(-60px,-6vw,-80px); }
+    .ag-portal-canvas { width: 100vw; height: 100vw; }
   }
 `;
 
@@ -424,15 +435,19 @@ export default function AccessGate({ onSuccess }: { onSuccess: () => void }) {
       <div className="ag-root">
         <GalaxyCanvas />
 
-        <div className="ag-wordmark">
-          <div className="ag-wordmark-text">SHAURI</div>
-          <div className="ag-wordmark-sub">CBSE · Adaptive · AI-Powered</div>
-        </div>
-
+        {/* Portal fills background */}
         <div className="ag-portal-wrap">
           <PortalCanvas />
         </div>
 
+        {/* Wordmark fixed top */}
+        <div className="ag-wordmark">
+          <div className="ag-wordmark-text">SHAURI</div>
+          <div className="ag-wordmark-sub" style={{letterSpacing:"0.18em", marginBottom:4}}>THE COURAGE TO MASTER THE FUTURE</div>
+          <div className="ag-wordmark-sub" style={{fontSize:"clamp(7px,0.8vw,9px)", letterSpacing:"0.22em", opacity:0.55}}>CBSE&#8209;ALIGNED · ADAPTIVE LEARNING PLATFORM</div>
+        </div>
+
+        {/* Card centered over portal */}
         <div className="ag-card-wrap">
           <div className={`ag-card ${warping ? "warping" : ""}`}>
             <div className="ag-badge">🚀 Student Login</div>
