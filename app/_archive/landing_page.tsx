@@ -1,9 +1,10 @@
+// @ts-nocheck
 "use client";
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Orbitron } from "next/font/google";
-import AccessGate from "./components/AccessGate";
+import AccessGate from "../components/AccessGate";
 
 const orbitron = Orbitron({
   subsets: ["latin"],
