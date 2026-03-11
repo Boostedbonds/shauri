@@ -225,7 +225,13 @@ export default function TeacherPage() {
     setLoading(false);
   }
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    // Auth guard — redirect to home if no teacher token
+    const token = localStorage.getItem("shauri_teacher_token");
+    const session = localStorage.getItem("shauri_teacher");
+    if (!token || !session) { window.location.href = "/"; return; }
+    fetchData();
+  }, []);
 
   // Build per-student summaries
   const students: StudentSummary[] = useMemo(() => {
@@ -294,6 +300,17 @@ export default function TeacherPage() {
             </button>
             <button onClick={() => window.location.href = "/"} style={{ padding: "7px 14px", background: "transparent", color: "#64748b", border: "1px solid #334155", borderRadius: 8, fontSize: 12, cursor: "pointer" }}>
               ← Home
+            </button>
+            <button onClick={async () => {
+              const token = localStorage.getItem("shauri_teacher_token");
+              if (token) {
+                await fetch("/api/teacher-auth", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }, body: JSON.stringify({ action: "signout" }) });
+              }
+              localStorage.removeItem("shauri_teacher_token");
+              localStorage.removeItem("shauri_teacher");
+              window.location.href = "/";
+            }} style={{ padding: "7px 14px", background: "transparent", color: "#ef4444", border: "1px solid #ef4444", borderRadius: 8, fontSize: 12, cursor: "pointer" }}>
+              Sign Out
             </button>
           </div>
         </div>

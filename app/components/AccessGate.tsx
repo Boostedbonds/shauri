@@ -56,7 +56,7 @@ const styles = `
     z-index: 3; text-align: center; pointer-events: none;
   }
   .ag-wordmark-text {
-    font-family: 'Orbitron', sans-serif; font-size: clamp(12px,1.8vw,17px);
+    font-family: 'Orbitron', sans-serif; font-size: clamp(16px,2.2vw,22px);
     font-weight: 900; letter-spacing: 0.5em; color: rgba(255,215,0,0.9);
     text-shadow: 0 0 20px rgba(255,215,0,0.4);
   }
@@ -88,7 +88,7 @@ const styles = `
   .ag-badge-student { background: rgba(79,195,247,0.12); color: #4fc3f7; border: 1px solid rgba(79,195,247,0.25); }
   .ag-badge-teacher { background: rgba(179,100,255,0.12); color: #ce93d8; border: 1px solid rgba(179,100,255,0.25); }
 
-  .ag-title { font-family: 'Orbitron', sans-serif; font-size: clamp(18px,2.2vw,26px); font-weight: 900; line-height: 1.3; margin-bottom: 8px; }
+  .ag-title { font-family: 'Orbitron', sans-serif; font-size: clamp(26px,3.2vw,38px); font-weight: 900; line-height: 1.25; margin-bottom: 10px; }
   .ag-title-student { color: #e0f7fa; }
   .ag-title-teacher { color: #f3e5f5; }
 
@@ -123,7 +123,7 @@ const styles = `
   }
   .ag-input:focus { border-color: rgba(79,195,247,0.55); background: rgba(79,195,247,0.07); box-shadow: 0 0 0 3px rgba(79,195,247,0.1); }
   .ag-input::placeholder { color: rgba(224,247,250,0.22); }
-  .ag-select { appearance: none; cursor: pointer; }
+  .ag-select { appearance: none; cursor: pointer; background: #0a1628 !important; color: #e0f7fa !important; }
   .ag-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
   .ag-btn-student { width: 100%; padding: 12px; background: linear-gradient(135deg, #0277bd, #00acc1); color: #fff; border: none; border-radius: 12px; font-size: 14px; font-weight: 800; cursor: pointer; font-family: 'Nunito', sans-serif; letter-spacing: 0.04em; transition: all 0.2s; margin-top: 4px; box-shadow: 0 4px 20px rgba(2,119,189,0.4); }
@@ -206,9 +206,12 @@ export default function AccessGate({ onSuccess }: { onSuccess: () => void }) {
   const [cls, setCls]     = useState("");
   const [code, setCode]   = useState("");
   const [error, setError] = useState("");
-  const [email, setEmail]         = useState("");
-  const [notified, setNotified]   = useState(false);
-  const [notifying, setNotifying] = useState(false);
+  const [email, setEmail]               = useState("");
+  const [teacherPass, setTeacherPass]   = useState("");
+  const [teacherError, setTeacherError] = useState("");
+  const [teacherMode, setTeacherMode]   = useState<"signin" | "signup">("signin");
+  const [teacherLoading, setTeacherLoading] = useState(false);
+  const [teacherMsg, setTeacherMsg]     = useState("");
 
   useEffect(() => {
     try { const s = JSON.parse(localStorage.getItem("shauri_student") || "null"); if (s?.name && s?.class) setSavedStudent(s); } catch {}
@@ -224,12 +227,39 @@ export default function AccessGate({ onSuccess }: { onSuccess: () => void }) {
     grantAccess(); onSuccess();
   }
 
-  async function notifyTeacher() {
-    if (!email.trim() || !email.includes("@")) return;
-    setNotifying(true);
-    try { const e = JSON.parse(localStorage.getItem("shauri_teacher_waitlist") || "[]"); e.push({ email: email.trim(), date: new Date().toISOString() }); localStorage.setItem("shauri_teacher_waitlist", JSON.stringify(e)); } catch {}
-    await new Promise(r => setTimeout(r, 700));
-    setNotified(true); setNotifying(false);
+  async function submitTeacher() {
+    if (!email.trim() || !email.includes("@")) { setTeacherError("Please enter a valid email."); return; }
+    if (teacherPass.length < 6) { setTeacherError("Password must be at least 6 characters."); return; }
+    setTeacherLoading(true);
+    setTeacherError("");
+    setTeacherMsg("");
+    try {
+      const res = await fetch("/api/teacher-auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: teacherMode, email: email.trim(), password: teacherPass }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setTeacherError(data.error || "Something went wrong.");
+        setTeacherLoading(false);
+        return;
+      }
+      if (teacherMode === "signup" && data.needsConfirmation) {
+        setTeacherMsg(data.message);
+        setTeacherLoading(false);
+        return;
+      }
+      // Store token in localStorage
+      if (data.accessToken) {
+        localStorage.setItem("shauri_teacher_token", data.accessToken);
+        localStorage.setItem("shauri_teacher", JSON.stringify({ email: email.trim(), loginAt: Date.now() }));
+      }
+      window.location.href = "/teacher";
+    } catch {
+      setTeacherError("Network error. Please try again.");
+    }
+    setTeacherLoading(false);
   }
 
   return (
@@ -305,29 +335,57 @@ export default function AccessGate({ onSuccess }: { onSuccess: () => void }) {
               <div className="ag-badge ag-badge-teacher">👩‍🏫 Teacher Portal</div>
               <h2 className="ag-title ag-title-teacher">Your classroom,<br />fully visible 🔭</h2>
               <p className="ag-sub ag-sub-teacher">Real-time scores, weak areas, and AI evaluation — for every student.</p>
-              <div className="ag-features">
-                <div className="ag-feature"><span className="ag-feature-icon">📊</span><div className="ag-feature-text"><strong>Class Dashboard</strong>Every student's score, subject, and activity.</div></div>
-                <div className="ag-feature"><span className="ag-feature-icon">📄</span><div className="ag-feature-text"><strong>OSM + OMR Evaluation</strong>AI marks answer sheets in seconds.</div></div>
-                <div className="ag-feature"><span className="ag-feature-icon">⚠️</span><div className="ag-feature-text"><strong>Weak Area Alerts</strong>See who needs attention and in which chapters.</div></div>
+
+              {/* Sign In / Sign Up toggle */}
+              <div style={{display:"flex", background:"rgba(255,255,255,0.05)", borderRadius:10, padding:3, marginBottom:16, border:"1px solid rgba(179,100,255,0.15)"}}>
+                {(["signin","signup"] as const).map(m => (
+                  <button key={m} onClick={() => { setTeacherMode(m); setTeacherError(""); setTeacherMsg(""); }} style={{
+                    flex:1, padding:"8px", border:"none", borderRadius:8, cursor:"pointer",
+                    background: teacherMode === m ? "rgba(142,36,170,0.6)" : "transparent",
+                    color: teacherMode === m ? "#f3e5f5" : "rgba(206,147,216,0.5)",
+                    fontWeight: teacherMode === m ? 800 : 600,
+                    fontSize:13, fontFamily:"Nunito, sans-serif",
+                    transition:"all 0.2s",
+                  }}>
+                    {m === "signin" ? "Sign In" : "Create Account"}
+                  </button>
+                ))}
               </div>
-              <button className="ag-btn-teacher" onClick={() => { window.location.href = "/teacher"; }}>
-                Open Teacher Dashboard →
-              </button>
-              {!notified ? (
-                <>
-                  <div className="ag-notify-row">
-                    <input className="ag-notify-input" type="email" placeholder="your@school.edu"
-                      value={email} onChange={e => setEmail(e.target.value)}
-                      onKeyDown={e => e.key === "Enter" && notifyTeacher()} />
-                    <button className="ag-notify-btn" onClick={notifyTeacher} disabled={notifying || !email.trim()}>
-                      {notifying ? "…" : "Notify Me"}
-                    </button>
-                  </div>
-                  <span className="ag-soon-tag">🔒 Email login coming soon · Free for schools</span>
-                </>
+
+              {teacherMsg ? (
+                <div style={{padding:"16px", background:"rgba(76,175,80,0.1)", border:"1px solid rgba(76,175,80,0.3)", borderRadius:12, color:"#a5d6a7", fontSize:13, fontWeight:700, lineHeight:1.6, marginBottom:16}}>
+                  ✅ {teacherMsg}
+                  <button onClick={() => { setTeacherMode("signin"); setTeacherMsg(""); }} style={{display:"block", marginTop:10, background:"none", border:"none", color:"#ce93d8", fontSize:12, fontWeight:700, cursor:"pointer", textDecoration:"underline", fontFamily:"Nunito, sans-serif"}}>
+                    Go to Sign In →
+                  </button>
+                </div>
               ) : (
-                <div className="ag-notify-success">✅ You're on the list — we'll email you when it's ready!</div>
+                <>
+                  <div className="ag-field">
+                    <label className="ag-label" style={{color:"rgba(243,229,245,0.5)"}}>School Email</label>
+                    <input className="ag-input" type="email" placeholder="teacher@school.edu"
+                      value={email} onChange={e => { setEmail(e.target.value); setTeacherError(""); }}
+                      style={{borderColor:"rgba(179,100,255,0.25)"}}
+                      onKeyDown={e => e.key === "Enter" && submitTeacher()} />
+                  </div>
+                  <div className="ag-field">
+                    <label className="ag-label" style={{color:"rgba(243,229,245,0.5)"}}>Password</label>
+                    <input className="ag-input" type="password" placeholder="••••••••"
+                      value={teacherPass} onChange={e => { setTeacherPass(e.target.value); setTeacherError(""); }}
+                      style={{borderColor:"rgba(179,100,255,0.25)"}}
+                      onKeyDown={e => e.key === "Enter" && submitTeacher()} />
+                  </div>
+                  {teacherError && <div className="ag-error">⚠ {teacherError}</div>}
+                  <button className="ag-btn-teacher" onClick={submitTeacher} disabled={teacherLoading}
+                    style={{opacity: teacherLoading ? 0.6 : 1}}>
+                    {teacherLoading ? "Please wait…" : teacherMode === "signin" ? "Sign In →" : "Create Account →"}
+                  </button>
+                </>
               )}
+
+              <div style={{marginTop:12, fontSize:11, color:"rgba(206,147,216,0.4)", fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase"}}>
+                🔒 Secure · Free for schools
+              </div>
             </div>
           </div>
 

@@ -88,7 +88,6 @@ export default function ModeSelector() {
           border: 1px solid rgba(212,175,55,0.35);
           text-decoration: none;
           display: flex;
-          /* Mobile: row layout (icon left, text right) */
           flex-direction: row;
           align-items: center;
           gap: 16px;
@@ -97,7 +96,6 @@ export default function ModeSelector() {
           -webkit-tap-highlight-color: transparent;
         }
         .mode-card:active { transform: scale(0.97); }
-        /* Desktop: column layout */
         @media (min-width: 1100px) {
           .mode-card {
             flex-direction: column; align-items: flex-start;
@@ -121,7 +119,6 @@ export default function ModeSelector() {
           color: #425466; line-height: 1.55;
           letter-spacing: 0;
         }
-        /* CTA button hidden on mobile (whole card is the tap target) */
         .card-cta { display: none; }
         @media (min-width: 1100px) {
           .card-cta {
@@ -152,9 +149,9 @@ export default function ModeSelector() {
         <p className="choose-sub">SELECT YOUR PATH TO BEGIN THE ASCENT</p>
 
         <div className="cards-grid">
-          <ModeCard icon="👩‍🏫" title="TEACHER MODE"
+          <ModeCard icon="🧠" title="LEARN MODE"
             desc="Learn concepts with clear CBSE-aligned explanations and examples."
-            href="/teacher" cta="BEGIN LEARNING" />
+            href="/learn" cta="BEGIN LEARNING" />
           <ModeCard icon="🧪" title="EXAMINER MODE"
             desc="Practice full-length question papers in real exam conditions."
             href="/examiner" cta="BEGIN TEST" />
