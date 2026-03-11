@@ -195,6 +195,7 @@ function PortalCanvas() {
     const arcSegs = 48;
 
     function drawArc(radius: number, roughness: number, color: string, width: number, offset: number) {
+      if (!ctx) return;
       ctx.beginPath();
       for (let i = 0; i <= arcSegs; i++) {
         const a = (i / arcSegs) * Math.PI * 2 + offset;
