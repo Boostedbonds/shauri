@@ -46,9 +46,10 @@ const styles = `
     display: flex; align-items: center; justify-content: center;
   }
   .ag-portal-canvas {
-    width: clamp(480px, 90vmin, 900px);
-    height: clamp(480px, 90vmin, 900px);
+    width: min(110vw, 110vh);
+    height: min(110vw, 110vh);
     display: block;
+    opacity: 0.92;
   }
 
   /* Card centered over portal */
@@ -56,15 +57,16 @@ const styles = `
     position: relative; z-index: 10;
     width: 100%; display: flex; justify-content: center; align-items: center;
     min-height: 100dvh;
-    padding: 80px 20px 40px;
+    padding: 20px 20px 20px;
   }
   .ag-card {
     width: 100%; max-width: 390px;
-    background: rgba(2, 4, 28, 0.88);
-    border: 1px solid rgba(130,80,255,0.32);
+    background: rgba(4, 2, 24, 0.45);
+    border: 1px solid rgba(160,100,255,0.25);
     border-radius: 24px; padding: 28px 28px 24px;
-    backdrop-filter: blur(32px);
-    box-shadow: 0 8px 60px rgba(0,0,0,0.7), 0 0 60px rgba(100,50,255,0.1), inset 0 1px 0 rgba(180,140,255,0.08);
+    backdrop-filter: blur(18px) saturate(1.4);
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    box-shadow: 0 0 0 1px rgba(120,60,255,0.1), 0 8px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(200,160,255,0.06);
     transition: opacity 0.4s, transform 0.4s;
   }
   .ag-card.warping { opacity: 0; transform: scale(0.92); pointer-events: none; }
