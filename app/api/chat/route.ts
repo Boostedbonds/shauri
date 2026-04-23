@@ -51,7 +51,6 @@ function sanitiseBoard(raw: string): string {
 }
 
 function sanitiseClass(raw: string): string {
-  // Strip "Class " prefix so "Class 6" parses correctly as 6
   const cleaned = (raw || "").replace(/^class\s*/i, "").trim();
   const n = parseInt(cleaned);
   if (isNaN(n)) return String(syllabus.class);
@@ -63,36 +62,24 @@ function sanitiseClass(raw: string): string {
 // ─────────────────────────────────────────────────────────────
 
 interface PaperRequirements {
-  totalMarks: number | null;         // e.g. 30
-  timeMinutes: number | null;        // e.g. 60
-  questionTypes: string[];           // e.g. ["mcq", "short answer"]
-  questionCount: number | null;      // e.g. 20
-  marksEach: number | null;          // e.g. 1
-  chapterFilter: string | null;      // e.g. "chapters 1-3"
-  topicKeyword: string | null;       // e.g. "Gravitation", "Polynomials"
+  totalMarks: number | null;
+  timeMinutes: number | null;
+  questionTypes: string[];
+  questionCount: number | null;
+  marksEach: number | null;
+  chapterFilter: string | null;
+  topicKeyword: string | null;
   isCustom: boolean;
 }
 
-/**
- * Parse a student's free-form command into structured paper requirements.
- * Examples:
- *   "prepare 30 marks exam"          → totalMarks: 30
- *   "give me 20 MCQ questions"       → questionCount: 20, questionTypes: ["mcq"]
- *   "1 hour test"                    → timeMinutes: 60
- *   "30 min practice"                → timeMinutes: 30
- *   "10 questions of 2 marks each"   → questionCount: 10, marksEach: 2, totalMarks: 20
- *   "chapters 1-3 only"              → chapterFilter: "chapters 1-3"
- */
 function parsePaperRequirements(text: string): PaperRequirements {
   const t = text.toLowerCase();
 
-  // Total marks
   const marksMatch =
     t.match(/(\d+)\s*(?:marks?|mark)\s*(?:exam|test|paper|quiz)?/) ||
     t.match(/(?:exam|test|paper|quiz)\s*(?:of|for)?\s*(\d+)\s*marks?/);
   const totalMarks = marksMatch ? parseInt(marksMatch[1]) : null;
 
-  // Time
   let timeMinutes: number | null = null;
   const hoursMatch   = t.match(/(\d+)\s*(?:hour|hr)s?\b/);
   const minutesMatch = t.match(/(\d+)\s*(?:minute|min)s?\b/);
@@ -100,7 +87,6 @@ function parsePaperRequirements(text: string): PaperRequirements {
   if (minutesMatch) timeMinutes = (timeMinutes || 0) + parseInt(minutesMatch[1]);
   if (timeMinutes === 0) timeMinutes = null;
 
-  // Question types
   const questionTypes: string[] = [];
   if (/\b(mcq|multiple.?choice)\b/.test(t))      questionTypes.push("MCQ");
   if (/\bshort\s*answer\b/.test(t))               questionTypes.push("Short Answer");
@@ -110,39 +96,31 @@ function parsePaperRequirements(text: string): PaperRequirements {
   if (/\bone.word\b/.test(t))                     questionTypes.push("One-Word");
   if (/\bvery\s*short\b/.test(t))                 questionTypes.push("Very Short Answer");
 
-  // Question count
   const countMatch =
     t.match(/(\d+)\s*(?:mcq|questions?|q\.?s?|problems?|items?)/) ||
     t.match(/(?:give|prepare|make|create)\s*(\d+)/);
   const questionCount = countMatch ? parseInt(countMatch[1]) : null;
 
-  // Marks each
   const marksEachMatch =
     t.match(/(\d+)\s*marks?\s*each/) ||
     t.match(/each\s*(?:carrying|of|worth)\s*(\d+)\s*marks?/);
   const marksEach = marksEachMatch ? parseInt(marksEachMatch[1]) : null;
 
-  // Compute totalMarks from count × marksEach if not explicit
   let computedTotal = totalMarks;
   if (!computedTotal && questionCount && marksEach) {
     computedTotal = questionCount * marksEach;
   }
 
-  // Chapter / topic filter — catches:
-  //   "chapters 3 and 4", "chapter 5", "on ch 2", "from unit 3", "topics 1-3"
   const chapterMatch =
     t.match(/chapters?\s*([\d,\-–\s]+(?:and\s*\d+)?)/) ||
     t.match(/(?:from|only|on)\s*ch(?:apter)?s?\s*([\d,\-–\s]+(?:and\s*\d+)?)/) ||
     t.match(/(?:unit|topic)s?\s*([\d,\-–\s]+(?:and\s*\d+)?)/);
   const chapterFilter = chapterMatch ? `chapters ${chapterMatch[1].trim()}` : null;
 
-  // Also detect topic/subject keyword restrictions like "on Gravitation", "on Polynomials"
   const topicKeywordMatch = !chapterFilter
     ? text.match(/(?:on|about|for|covering|from)\s+([A-Z][a-zA-Z\s]{3,30})(?:\s|$)/)
     : null;
-  const topicKeyword = topicKeywordMatch
-    ? topicKeywordMatch[1].trim()
-    : null;
+  const topicKeyword = topicKeywordMatch ? topicKeywordMatch[1].trim() : null;
 
   const isCustom =
     computedTotal !== null ||
@@ -152,7 +130,7 @@ function parsePaperRequirements(text: string): PaperRequirements {
     chapterFilter !== null;
 
   return {
-    totalMarks:    computedTotal,
+    totalMarks: computedTotal,
     timeMinutes,
     questionTypes,
     questionCount,
@@ -163,17 +141,10 @@ function parsePaperRequirements(text: string): PaperRequirements {
   };
 }
 
-/**
- * Returns true if the message contains specific paper-format instructions
- * beyond just naming a subject.
- */
 function hasCustomInstructions(text: string): boolean {
   return /\b(mcq|multiple.?choice|chapter|chapters|marks?\s+each|carrying|only\s+\d|q\d|question\s+\d|\d+\s+question|\d+\s+mcq|short\s+answer|long\s+answer|fill\s+in|true.false|one.word|very\s+short|section\s+[a-z]|\d+\s*marks?|\d+\s*(?:hour|hr|minute|min))\b/i.test(text);
 }
 
-/**
- * Extract the core subject keyword from a custom instruction message.
- */
 function extractSubjectFromInstruction(text: string): string {
   const subjectPatterns = [
     /\b(science|physics|chemistry|biology)\b/i,
@@ -193,9 +164,6 @@ function extractSubjectFromInstruction(text: string): string {
   return text;
 }
 
-/**
- * Format minutes into a human-readable time string.
- */
 function formatTimeAllowed(minutes: number): string {
   if (minutes >= 60 && minutes % 60 === 0) {
     const h = minutes / 60;
@@ -220,9 +188,7 @@ async function getSession(key: string): Promise<ExamSession | null> {
       .select("*")
       .eq("session_key", key)
       .single();
-
     if (error || !data) return null;
-
     return {
       ...data,
       answer_log: Array.isArray(data.answer_log) ? data.answer_log : [],
@@ -264,20 +230,12 @@ async function getSessionByStudent(
         .from("exam_sessions")
         .select("*")
         .eq("student_name", nameVal);
-
-      if (classVal) {
-        q = (q as any).eq("student_class", classVal);
-      }
-      if (requiredStatus) {
-        q = (q as any).eq("status", requiredStatus);
-      }
-
+      if (classVal) q = (q as any).eq("student_class", classVal);
+      if (requiredStatus) q = (q as any).eq("status", requiredStatus);
       const { data, error } = await (q as any)
         .order("updated_at", { ascending: false })
         .limit(1);
-
       console.log("[getSessionByStudent]", { nameVal, classVal, requiredStatus, found: data?.length, error: error?.message });
-
       if (error || !data || data.length === 0) return null;
       return {
         ...data[0],
@@ -291,12 +249,10 @@ async function getSessionByStudent(
 
   const r1 = await runQuery(studentName, studentClass);
   if (r1) return r1;
-
   if (studentClass) {
     const r2 = await runQuery(studentName);
     if (r2) return r2;
   }
-
   return null;
 }
 
@@ -317,83 +273,59 @@ function getChaptersForSubject(
     if (/science|physics|chemistry|biology/.test(req)) {
       return {
         subjectName: s.science.name,
-        chapterList:
-          (s.science.chapters as ChapterEntry[])
-            .map((c) => `Chapter ${c.number}: ${c.name}`)
-            .join("\n"),
+        chapterList: (s.science.chapters as ChapterEntry[])
+          .map((c) => `Chapter ${c.number}: ${c.name}`).join("\n"),
       };
     }
-
     if (/math/.test(req)) {
       return {
         subjectName: s.mathematics.name,
-        chapterList:
-          (s.mathematics.chapters as ChapterEntry[])
-            .map((c) => `Chapter ${c.number}: ${c.name}`)
-            .join("\n"),
+        chapterList: (s.mathematics.chapters as ChapterEntry[])
+          .map((c) => `Chapter ${c.number}: ${c.name}`).join("\n"),
       };
     }
-
     if (/history/.test(req)) {
       return {
         subjectName: "Social Science – History",
-        chapterList:
-          (s.social_science.history.chapters as ChapterEntry[])
-            .map((c) => `Chapter ${c.number}: ${c.name}`)
-            .join("\n"),
+        chapterList: (s.social_science.history.chapters as ChapterEntry[])
+          .map((c) => `Chapter ${c.number}: ${c.name}`).join("\n"),
       };
     }
-
     if (/geo|geography/.test(req)) {
       return {
         subjectName: "Social Science – Geography (Contemporary India I)",
-        chapterList:
-          (s.social_science.geography.chapters as ChapterEntry[])
-            .map((c) => `Chapter ${c.number}: ${c.name}`)
-            .join("\n"),
+        chapterList: (s.social_science.geography.chapters as ChapterEntry[])
+          .map((c) => `Chapter ${c.number}: ${c.name}`).join("\n"),
       };
     }
-
     if (/civic|politic|democracy/.test(req)) {
       return {
         subjectName: "Social Science – Civics (Democratic Politics I)",
-        chapterList:
-          (s.social_science.civics.chapters as ChapterEntry[])
-            .map((c) => `Chapter ${c.number}: ${c.name}`)
-            .join("\n"),
+        chapterList: (s.social_science.civics.chapters as ChapterEntry[])
+          .map((c) => `Chapter ${c.number}: ${c.name}`).join("\n"),
       };
     }
-
     if (/econ/.test(req)) {
       return {
         subjectName: "Social Science – Economics",
-        chapterList:
-          (s.social_science.economics.chapters as ChapterEntry[])
-            .map((c) => `Chapter ${c.number}: ${c.name}`)
-            .join("\n"),
+        chapterList: (s.social_science.economics.chapters as ChapterEntry[])
+          .map((c) => `Chapter ${c.number}: ${c.name}`).join("\n"),
       };
     }
-
     if (/sst|social/.test(req)) {
       const hist = (s.social_science.history.chapters as ChapterEntry[])
-        .map((c) => `[History] Ch${c.number}: ${c.name}`)
-        .join("\n");
+        .map((c) => `[History] Ch${c.number}: ${c.name}`).join("\n");
       const geo = (s.social_science.geography.chapters as ChapterEntry[])
-        .map((c) => `[Geography] Ch${c.number}: ${c.name}`)
-        .join("\n");
+        .map((c) => `[Geography] Ch${c.number}: ${c.name}`).join("\n");
       const civ = (s.social_science.civics.chapters as ChapterEntry[])
-        .map((c) => `[Civics] Ch${c.number}: ${c.name}`)
-        .join("\n");
+        .map((c) => `[Civics] Ch${c.number}: ${c.name}`).join("\n");
       const eco = (s.social_science.economics.chapters as ChapterEntry[])
-        .map((c) => `[Economics] Ch${c.number}: ${c.name}`)
-        .join("\n");
+        .map((c) => `[Economics] Ch${c.number}: ${c.name}`).join("\n");
       return {
         subjectName: "Social Science (SST)",
-        chapterList:
-          `HISTORY:\n${hist}\n\nGEOGRAPHY:\n${geo}\n\nCIVICS:\n${civ}\n\nECONOMICS:\n${eco}`,
+        chapterList: `HISTORY:\n${hist}\n\nGEOGRAPHY:\n${geo}\n\nCIVICS:\n${civ}\n\nECONOMICS:\n${eco}`,
       };
     }
-
     if (/english/.test(req)) {
       const { fiction, poetry, drama } = s.english.sections;
       return {
@@ -404,7 +336,6 @@ function getChaptersForSubject(
           `DRAMA:\n${drama.map((t: string, i: number) => `${i + 1}. ${t}`).join("\n")}`,
       };
     }
-
     if (/hindi/.test(req)) {
       const { prose_poetry, grammar } = s.hindi.sections;
       return {
@@ -414,13 +345,11 @@ function getChaptersForSubject(
           `GRAMMAR:\n${grammar.map((t: string, i: number) => `${i + 1}. ${t}`).join("\n")}`,
       };
     }
-
     return {
       subjectName: subjectRequest,
       chapterList:
         `INSTRUCTION FOR AI: Retrieve the complete official NCERT Class 9 ` +
-        `${subjectRequest} chapter list from your training knowledge and use those exact ` +
-        `chapters. Do NOT invent chapters.`,
+        `${subjectRequest} chapter list from your training knowledge and use those exact chapters. Do NOT invent chapters.`,
     };
   }
 
@@ -455,8 +384,6 @@ function getChaptersForSubject(
 
 function getKey(student?: StudentContext, sanitisedClass?: string): string {
   if (student?.sessionId) return student.sessionId;
-  // Always use sanitised class for key consistency.
-  // If sanitisedClass is passed, use it. Otherwise sanitise on the fly.
   const rawCls = sanitisedClass || sanitiseClass(student?.class || "");
   const cls = rawCls.replace(/^class\s*/i, "").trim() || "x";
   return `${student?.name?.trim() || "anon"}_${cls}`;
@@ -485,7 +412,6 @@ function formatDuration(ms: number): string {
 }
 
 function parseScore(text: string): { obtained: number; total: number } {
-  // First try JSON eval format
   try {
     const jsonMatch = text.match(/\{[\s\S]*"totalObtained"[\s\S]*\}/);
     if (jsonMatch) {
@@ -495,7 +421,6 @@ function parseScore(text: string): { obtained: number; total: number } {
       }
     }
   } catch {}
-  // Fallback: regex on plain text
   const match =
     text.match(/total\s*marks\s*obtained\s*[:\|]\s*(\d+)\s*\/\s*(\d+)/i) ||
     text.match(/total[:\s]+(\d+)\s*\/\s*(\d+)/i) ||
@@ -509,7 +434,7 @@ function parseScore(text: string): { obtained: number; total: number } {
 }
 
 // ─────────────────────────────────────────────────────────────
-// BUILD RICH HTML EVALUATION REPORT (matches docx colour scheme)
+// BUILD RICH HTML EVALUATION REPORT
 // ─────────────────────────────────────────────────────────────
 function buildEvalHtml(evalJson: Record<string, unknown>, fallbackText: string): string {
   try {
@@ -550,7 +475,6 @@ function buildEvalHtml(evalJson: Record<string, unknown>, fallbackText: string):
             <td style="padding:7px 10px;text-align:center;font-weight:700;color:${statusColor};border:1px solid #ddd;white-space:nowrap;">${statusIcon} ${q.obtained}/${q.maxMarks}</td>
           </tr>`;
       }).join("");
-
       return `
         <div style="margin-bottom:24px;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.10);">
           <div style="background:#2C3E50;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;">
@@ -581,21 +505,15 @@ function buildEvalHtml(evalJson: Record<string, unknown>, fallbackText: string):
 
     return `
 <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:860px;margin:0 auto;">
-
-  <!-- Header -->
   <div style="background:#1F4E79;padding:20px 24px;border-radius:10px 10px 0 0;">
     <div style="color:#fff;font-size:22px;font-weight:700;">📋 CBSE Evaluation Report</div>
     <div style="color:#BDD7EE;font-size:14px;margin-top:4px;">${subject} &nbsp;|&nbsp; Class ${cls} &nbsp;|&nbsp; ${board}</div>
   </div>
-
-  <!-- Info bar -->
   <div style="background:#EBF3FB;padding:12px 24px;display:flex;flex-wrap:wrap;gap:20px;border:1px solid #c8ddf0;border-top:none;">
     <span style="font-size:13px;color:#333;"><b>Student:</b> ${studentName || "—"}</span>
     <span style="font-size:13px;color:#333;"><b>Time Taken:</b> ${timeTaken}${overtime ? " ⚠️ Over limit" : ""}</span>
     <span style="font-size:13px;color:#333;"><b>Max Marks:</b> ${totalMarks}</span>
   </div>
-
-  <!-- Score banner -->
   <div style="background:${gradeBg};border:2px solid ${gradeColor};border-radius:0 0 10px 10px;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:24px;">
     <div>
       <div style="font-size:36px;font-weight:800;color:${gradeColor};">${totalObtained} <span style="font-size:20px;color:#555;">/ ${totalMarks}</span></div>
@@ -606,12 +524,8 @@ function buildEvalHtml(evalJson: Record<string, unknown>, fallbackText: string):
       <div style="font-size:14px;color:#555;">${gradeLabel}</div>
     </div>
   </div>
-
-  <!-- Section breakdown heading -->
   <div style="font-size:17px;font-weight:700;color:#1F4E79;border-bottom:3px solid #1F4E79;padding-bottom:6px;margin-bottom:16px;">📊 Section-wise Breakdown</div>
   ${sectionHtml}
-
-  <!-- Summary table -->
   <div style="font-size:17px;font-weight:700;color:#1F4E79;border-bottom:3px solid #1F4E79;padding-bottom:6px;margin-bottom:16px;margin-top:8px;">📈 Summary</div>
   <table style="width:100%;border-collapse:collapse;margin-bottom:24px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.08);border-radius:6px;overflow:hidden;">
     <thead>
@@ -629,27 +543,21 @@ function buildEvalHtml(evalJson: Record<string, unknown>, fallbackText: string):
       </tr>
     </tbody>
   </table>
-
-  <!-- Examiner Remarks -->
   <div style="font-size:17px;font-weight:700;color:#1F4E79;border-bottom:3px solid #1F4E79;padding-bottom:6px;margin-bottom:16px;">💬 Examiner's Remarks</div>
   <div style="background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.08);padding:16px 20px;margin-bottom:8px;">
     <div style="margin-bottom:10px;"><span style="color:#27AE60;font-weight:700;">✦ Strengths:</span> <span style="color:#333;">${strengths || "—"}</span></div>
     <div style="margin-bottom:10px;"><span style="color:#E74C3C;font-weight:700;">✦ Weaknesses:</span> <span style="color:#333;">${weaknesses || "—"}</span></div>
     <div><span style="color:#1F4E79;font-weight:700;">✦ Study Tip:</span> <span style="color:#333;">${studyTip || "—"}</span></div>
   </div>
-
   <div style="text-align:center;padding:16px 0;color:#1F4E79;font-weight:700;font-size:15px;">✦ End of Evaluation Report ✦</div>
 </div>`;
   } catch (e) {
-    // If JSON parse / build fails, return a simple HTML-wrapped plain text
     return `<pre style="font-family:monospace;white-space:pre-wrap;">${fallbackText}</pre>`;
   }
 }
 
 function parseTotalMarksFromPaper(paper: string): number {
-  const match = paper.match(
-    /(?:maximum\s*marks?|total\s*marks?)\s*[:\-]\s*(\d+)/i
-  );
+  const match = paper.match(/(?:maximum\s*marks?|total\s*marks?)\s*[:\-]\s*(\d+)/i);
   if (!match) {
     console.warn("[parseTotalMarksFromPaper] Could not extract total marks — defaulting to 80.");
     return 80;
@@ -738,7 +646,7 @@ async function handleSyllabusUpload(
   key: string,
   name: string,
   currentStatus: "IDLE" | "READY",
-  customInstructions?: string          // ← NEW: format command sent alongside upload
+  customInstructions?: string
 ): Promise<NextResponse> {
   if (!uploadedText || uploadedText.length <= 30) {
     return NextResponse.json({
@@ -754,7 +662,6 @@ async function handleSyllabusUpload(
   const { subjectName, chapterList, raw } =
     await parseSyllabusFromUpload(uploadedText, cls, board);
 
-  // Parse any format requirements from the accompanying message
   const reqs = customInstructions ? parsePaperRequirements(customInstructions) : null;
 
   const updatedSession: ExamSession = {
@@ -764,7 +671,6 @@ async function handleSyllabusUpload(
     subject:              subjectName,
     answer_log:           [],
     syllabus_from_upload: chapterList,
-    // Save custom instructions if they contain real format requirements
     custom_instructions:  (reqs?.isCustom && customInstructions) ? customInstructions : undefined,
     student_name:         name,
     student_class:        cls,
@@ -778,15 +684,14 @@ async function handleSyllabusUpload(
 
   const isOverride = currentStatus === "READY";
 
-  // Build a summary of detected format requirements to show the student
   let formatConfirmation = "";
   if (reqs?.isCustom) {
     const parts: string[] = [];
-    if (reqs.totalMarks)              parts.push(`**${reqs.totalMarks} marks**`);
-    if (reqs.timeMinutes)             parts.push(`${formatTimeAllowed(reqs.timeMinutes)}`);
-    if (reqs.questionTypes.length)    parts.push(reqs.questionTypes.join(" + "));
-    if (reqs.questionCount)           parts.push(`${reqs.questionCount} questions`);
-    if (reqs.chapterFilter)           parts.push(reqs.chapterFilter);
+    if (reqs.totalMarks)           parts.push(`**${reqs.totalMarks} marks**`);
+    if (reqs.timeMinutes)          parts.push(`${formatTimeAllowed(reqs.timeMinutes)}`);
+    if (reqs.questionTypes.length) parts.push(reqs.questionTypes.join(" + "));
+    if (reqs.questionCount)        parts.push(`${reqs.questionCount} questions`);
+    if (reqs.chapterFilter)        parts.push(reqs.chapterFilter);
     if (parts.length > 0) {
       formatConfirmation =
         `\n✅ **Format detected:** ${parts.join(" · ")}\n` +
@@ -813,7 +718,7 @@ async function handleSyllabusUpload(
 }
 
 // ─────────────────────────────────────────────────────────────
-// CORE AI CALLER
+// CORE AI CALLER — GROQ (chat) + GEMINI (vision/OCR only)
 // ─────────────────────────────────────────────────────────────
 
 async function callAI(
@@ -821,35 +726,39 @@ async function callAI(
   messages: ChatMessage[],
   timeoutMs = 30_000
 ): Promise<string> {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) return "AI error: missing API key.";
+  const key = process.env.GROQ_API_KEY;
+  if (!key) return "AI error: missing GROQ_API_KEY.";
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${key}`,
+      "https://api.groq.com/openai/v1/chat/completions",
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${key}`,
+        },
         signal: controller.signal,
         body: JSON.stringify({
-          systemInstruction: { parts: [{ text: sysPrompt }] },
-          contents: messages
-            .filter((m) => m.role !== "system")
-            .map((m) => ({
-              role: m.role === "assistant" ? "model" : "user",
-              parts: [{ text: m.content || "" }],
-            })),
+          model: "llama-3.3-70b-versatile",
+          messages: [
+            { role: "system", content: sysPrompt },
+            ...messages
+              .filter((m) => m.role !== "system")
+              .map((m) => ({
+                role: m.role === "assistant" ? "assistant" : "user",
+                content: m.content || "",
+              })),
+          ],
         }),
       }
     );
     clearTimeout(timer);
     const data = await res.json();
-    return (
-      data?.candidates?.[0]?.content?.parts?.[0]?.text || "Unable to respond."
-    );
+    return data?.choices?.[0]?.message?.content || "Unable to respond.";
   } catch (e) {
     clearTimeout(timer);
     if (e instanceof Error && e.name === "AbortError") {
@@ -896,9 +805,7 @@ export async function POST(req: NextRequest) {
     const cls    = clsRaw.replace(/^class\s*/i, "").trim();
     const board  = sanitiseBoard(student?.board || "");
 
-    const history: ChatMessage[] = Array.isArray(body?.history)
-      ? body.history
-      : [];
+    const history: ChatMessage[] = Array.isArray(body?.history) ? body.history : [];
 
     const message: string =
       body?.message ||
@@ -913,6 +820,7 @@ export async function POST(req: NextRequest) {
 
     let uploadedText: string = sanitiseUpload(rawUploadedText);
 
+    // ── VISION/OCR — still uses Gemini API key ──────────────────
     if (rawUploadedText.includes("[IMAGE_BASE64]")) {
       const base64Match = rawUploadedText.match(/\[IMAGE_BASE64\]\n(data:image\/[^;]+;base64,[^\n]+)/);
       if (base64Match) {
@@ -976,7 +884,6 @@ export async function POST(req: NextRequest) {
       const teacherConversationText = [...history, { role: "user", content: message }]
         .map((m) => m.content).join(" ");
 
-      // ── Count consecutive off-topic messages (from the END of history) ──
       const OFF_TOPIC_PATTERNS =
         /\b(how are you|how r u|what'?s up|whatsup|wazzup|sup\b|i love you|tell me a joke|sing a song|let'?s dance|what'?s your name|who are you|are you alive|are you human|can we chat|can we talk|let'?s talk|wanna be friends|best friend|boyfriend|girlfriend|favourite (color|food|movie)|hobbies|fav\b|haha|hehe|tell me something funny|roast me|truth or dare)\b/i;
 
@@ -985,7 +892,6 @@ export async function POST(req: NextRequest) {
       const currentIsOffTopic = OFF_TOPIC_PATTERNS.test(message);
       const totalOffTopic = offTopicCount + (currentIsOffTopic ? 1 : 0);
 
-      // Strike 1: Be warm, friendly, and gently guide back
       if (currentIsOffTopic && totalOffTopic === 1) {
         const msgL = message.toLowerCase();
         let warmReply: string;
@@ -997,7 +903,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ reply: warmReply });
       }
 
-      // Strike 2+: Politely but firmly redirect
       if (currentIsOffTopic && totalOffTopic >= 2) {
         return NextResponse.json({
           reply: `I totally get it — sometimes you just want to chat! 😄 But I'm most useful as your study buddy, ${greetName}. Let's make the most of our time together — pick a subject and throw your toughest question at me! 💪`,
@@ -1027,13 +932,8 @@ export async function POST(req: NextRequest) {
           /\b(mathematics|maths?|algebra|calculus|geometry|trigonometry|statistics|probability|polynomials?|coordinate geometry|quadrilateral|heron'?s? formula|surface area|volume|number system|linear equation|circles?|triangles?|constructions?|pythagoras|mensuration)\b/i.test(teacherConversationText)
         );
 
-      const subjectOverride = isHindiTeacher
-        ? "hindi"
-        : isMathTeacher
-          ? "mathematics"
-          : undefined;
+      const subjectOverride = isHindiTeacher ? "hindi" : isMathTeacher ? "mathematics" : undefined;
 
-      // Prepend student identity to system prompt so AI never calls them "Student"
       const teacherSystemPrompt = name
         ? systemPrompt("teacher", subjectOverride) +
           `\n\nSTUDENT IDENTITY: The student's name is ${name}${cls ? `, Class ${cls}` : ""}${board ? `, ${board}` : ""}. Always address them as ${name} — NEVER as "Student" or "there".` +
@@ -1059,22 +959,11 @@ export async function POST(req: NextRequest) {
         student_board: board,
       };
 
-      // ── KEY-MISMATCH RECOVERY ──────────────────────────────
       if (session.status === "IDLE") {
         let recovered: ExamSession | null = null;
-
-        // Prioritise finding an IN_EXAM session first — this is the most
-        // critical case: student is mid-exam but session loaded as IDLE
-        if (name) {
-          recovered = await getSessionByStudent(name, cls, "IN_EXAM");
-        }
-        if (!recovered && name) {
-          recovered = await getSessionByStudent(name, cls, "READY");
-        }
-        if (!recovered && name) {
-          recovered = await getSessionByStudent(name, cls);
-        }
-
+        if (name) recovered = await getSessionByStudent(name, cls, "IN_EXAM");
+        if (!recovered && name) recovered = await getSessionByStudent(name, cls, "READY");
+        if (!recovered && name) recovered = await getSessionByStudent(name, cls);
         if (!recovered || recovered.status === "IDLE") {
           const nameClassKey = `${name || "anon"}_${cls}`;
           if (nameClassKey !== key) {
@@ -1082,7 +971,6 @@ export async function POST(req: NextRequest) {
             if (byKey && byKey.status !== "IDLE") recovered = byKey;
           }
         }
-
         if (!recovered || recovered.status === "IDLE") {
           const nameXKey = `${name || "anon"}_x`;
           if (nameXKey !== key) {
@@ -1090,7 +978,6 @@ export async function POST(req: NextRequest) {
             if (byKey && byKey.status !== "IDLE") recovered = byKey;
           }
         }
-
         if ((!recovered || recovered.status === "IDLE") && !name) {
           for (const anonKey of [`anon_${cls}`, `anon_x`]) {
             if (anonKey !== key) {
@@ -1099,7 +986,6 @@ export async function POST(req: NextRequest) {
             }
           }
         }
-
         if (recovered && recovered.status !== "IDLE") {
           console.log("[KEY-MISMATCH] recovered session:", recovered.session_key, recovered.status, "syllabus:", !!recovered.syllabus_from_upload);
           session = recovered;
@@ -1120,9 +1006,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (isGreeting(lower) && session.status === "IN_EXAM") {
-        const elapsed = session.started_at
-          ? formatDuration(Date.now() - session.started_at)
-          : "—";
+        const elapsed = session.started_at ? formatDuration(Date.now() - session.started_at) : "—";
         return NextResponse.json({
           reply:
             `⏱️ Your **${session.subject}** exam is still in progress!\n\n` +
@@ -1162,12 +1046,8 @@ export async function POST(req: NextRequest) {
 
       if (isStart(lower) && session.status === "IDLE") {
         const confirmedSubject: string = body?.confirmedSubject || "";
-
         let readySession: ExamSession | null = null;
-
-        if (name) {
-          readySession = await getSessionByStudent(name, cls, "READY");
-        }
+        if (name) readySession = await getSessionByStudent(name, cls, "READY");
         if (!readySession) {
           const nameClassKey = `${name || "anon"}_${cls}`;
           if (nameClassKey !== key) {
@@ -1190,14 +1070,10 @@ export async function POST(req: NextRequest) {
             }
           }
         }
-
-        // ── LAST RESORT: directly re-query the current key (DB might have READY) ──
         if (!readySession) {
           const directCheck = await getSession(key);
           if (directCheck?.status === "READY") readySession = directCheck;
         }
-
-        // ── Try name-only key variants (accounts without class set) ──
         if (!readySession && name) {
           for (const altKey of [`${name}_`, `${name.toLowerCase()}_`, `${name}_x`, `${name.toLowerCase()}_x`]) {
             if (altKey !== key) {
@@ -1206,9 +1082,7 @@ export async function POST(req: NextRequest) {
             }
           }
         }
-
         console.log("[isStart+IDLE] readySession found:", readySession?.session_key, readySession?.subject, "hasSyllabus:", !!readySession?.syllabus_from_upload);
-
         if (readySession) {
           session.status               = "READY";
           session.subject              = readySession.subject;
@@ -1268,15 +1142,11 @@ export async function POST(req: NextRequest) {
       if (isSubmit(lower) && session.status === "IN_EXAM") {
         const endTime   = Date.now();
         const overtime  = isOverTime(session.started_at);
-        const timeTaken = session.started_at
-          ? formatDuration(endTime - session.started_at)
-          : "Unknown";
+        const timeTaken = session.started_at ? formatDuration(endTime - session.started_at) : "Unknown";
 
         if (session.answer_log.length === 0) {
           return NextResponse.json({
-            reply:
-              `⚠️ No answers were recorded${callName}. ` +
-              `Please type or upload your answers before submitting.`,
+            reply: `⚠️ No answers were recorded${callName}. Please type or upload your answers before submitting.`,
           });
         }
 
@@ -1298,7 +1168,6 @@ SECTION A — READING [20 marks total]
 • Unseen passage MCQs (Q1a, Q2a): 1 mark each — correct = 1, wrong = 0
 • Short-answer reading questions (Q1b, Q2b): 1 mark each for relevant, on-point answer
   — Deduct 0.5 for vague/incomplete, award 0 for irrelevant
-
 SECTION B — WRITING SKILLS [20 marks total]
 • Each writing task has sub-marks for: Format / Content / Expression / Accuracy
 • Q3 Notice/Paragraph/Dialogue [5 marks]: Format 1 + Content 2 + Expression 2
@@ -1307,13 +1176,11 @@ SECTION B — WRITING SKILLS [20 marks total]
 • Q6 Long Composition [5 marks]: Content 2 + Expression 2 + Organisation 1
 • Award marks proportionally — a strong answer with wrong format loses only format marks
 • Language errors: deduct from Expression marks, not Content marks
-
 SECTION C — GRAMMAR [20 marks total]
 • Every grammar question is 1 mark — fully correct = 1, wrong/missing = 0
 • No partial marks for grammar answers
 • Accept alternate correct grammatical forms if they are standard English
 • Spelling errors in grammar answers: deduct mark only if the error changes the grammar
-
 SECTION D — LITERATURE [20 marks total]
 • Extract MCQs (Q12, Q13): 1 mark each — correct = 1, wrong = 0
 • Short answer (Q14): 2 marks each
@@ -1327,15 +1194,12 @@ SECTION D — LITERATURE [20 marks total]
 SECTION A — APATHIT (Unseen Reading) [20 marks]
 • MCQs: 1 mark each — correct = 1, wrong = 0
 • Short answers: 1 mark each for relevant answer in correct Hindi
-
 SECTION B — LEKHAN (Writing) [20 marks]
 • Each writing task [5 marks]: Format 1 + Content 2 + Bhasha (Language) 2
 • Deduct from Bhasha for grammatical/spelling errors, not from Content
-
 SECTION C — VYAKARAN (Grammar) [20 marks]
 • 1 mark each — fully correct = 1, wrong = 0
 • Accept grammatically valid alternatives
-
 SECTION D — PATHEN (Literature) [20 marks]
 • Extract MCQs: 1 mark each
 • Short answers: 2 marks each (content 1 + expression 1)
@@ -1343,22 +1207,18 @@ SECTION D — PATHEN (Literature) [20 marks]
 SECTION A — MCQ & Assertion-Reason [1 mark each]
 • MCQ: Correct option = 1, wrong = 0. No negative marking.
 • Assertion-Reason: Award 1 mark ONLY for the correct option (a/b/c/d). No partial.
-
 SECTION B — Very Short Answer [2 marks each]
 • Both steps correct = 2/2
 • Correct method but arithmetic error = 1/2
 • Wrong method = 0/2
-
 SECTION C — Short Answer [3 marks each]
 • Award step marks: setup (1) + working (1) + correct answer (1)
 • Correct method with wrong final answer due to arithmetic = 2/3
 • Incomplete but correct start = 1/3
-
 SECTION D — Long Answer [5 marks each]
 • Award step marks throughout: each correct step = 1 mark
 • Full working must be shown — answer without steps = 0
 • Theorem proofs: Statement (1) + Construction/Figure (1) + Proof steps (2) + Conclusion (1)
-
 SECTION E — Case Study [4 marks each]
 • Sub-question (i): 1 mark — correct answer only
 • Sub-question (ii): 1 mark — correct answer only
@@ -1367,23 +1227,18 @@ SECTION A — Objective [1 mark each]
 • MCQ: Correct = 1, Wrong = 0. No negative marking.
 • Assertion-Reason: Correct option = 1, wrong = 0.
 • Fill in blank: Correct term = 1. Accept close paraphrases only if factually identical.
-
 SECTION B — Short Answer [3 marks each]
 • Award 1 mark per valid NCERT-accurate point (max 3 points)
 • Must be from the correct chapter — off-topic answers = 0
-• Map-related answers: correct identification = full marks, partial = partial
-
 SECTION C — Long Answer [5 marks each]
 • Introduction/Context : 1 mark
 • Main explanation     : 2 marks (min 3 correct NCERT points)
 • Example/Evidence     : 1 mark
 • Conclusion           : 1 mark
-
 SECTION D — Source-Based [4 marks each]
 • Sub (i) 1 mark: factual identification from source
 • Sub (ii) 1 mark: inference or connection
 • Sub (iii) 2 marks: explanation using source + own knowledge
-
 SECTION E — Map [5 marks total]
 • Each correctly identified and labelled location = 1 mark
 • Marking in wrong location = 0 (no partial for map questions)` : evalIsScience ? `
@@ -1391,23 +1246,17 @@ SECTION A — Objective [1 mark each]
 • MCQ: Correct = 1, wrong = 0. No negative marking.
 • Assertion-Reason: Correct option = 1.
 • Fill in blank / one-word: Correct scientific term = 1. No partial.
-
 SECTION B — Very Short Answer [2 marks each]
 • 2 correct points / steps = 2/2
 • 1 correct point = 1/2
 • Diagrams in this section: optional but credited if labelled correctly
-
 SECTION C — Short Answer [3 marks each]
 • 3 correct NCERT-accurate points = 3/3
 • Diagram questions: correct diagram with all labels = full marks
   Missing labels = deduct 1 mark per missing key label (max deduction 2)
-• Partial answers awarded proportionally
-
 SECTION D — Long Answer [5 marks each]
 • Detailed marking: Introduction (1) + Explanation/Points (2) + Diagram/Example (1) + Conclusion (1)
 • Numerical questions: formula (1) + substitution (1) + calculation (2) + unit/answer (1)
-• At least 1 labelled diagram where relevant — missing diagram loses its 1 mark
-
 SECTION E — Case Study [4 marks each]
 • Sub (i) 1 mark + Sub (ii) 1 mark + Sub (iii) 2 marks
 • Scientific accuracy required — vague answers score 0` : `
@@ -1417,11 +1266,10 @@ SECTION C — Long Answer [5 marks each]: Introduction(1) + Content(2) + Example
 SECTION D — Long Answer [5 marks each]: Same as Section C.
 SECTION E — Case Study [4 marks each]: Sub(i) 1m + Sub(ii) 1m + Sub(iii) 2m.`;
 
-        // ── Build JSON-structured evaluation prompt ──────────────────
         const evaluationPrompt = `
 You are an official CBSE Board Examiner for Class ${cls}.
 Subject: ${session.subject || "General"} | Board: ${board} | Maximum Marks: ${totalMarks}
-${evalIsMath ? "MATH FORMATTING: Use LaTeX notation for all equations. Wrap inline math in $...$ and display math in $$...$$. Example: $x^2 + 3x = 0$, $$\\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$$" : ""}
+${evalIsMath ? "MATH FORMATTING: Use LaTeX notation for all equations. Wrap inline math in $...$ and display math in $$...$$." : ""}
 Time Taken: ${timeTaken}${overtime ? " ⚠️ SUBMITTED AFTER 3-HOUR LIMIT" : ""}
 
 MARKING RULES:
@@ -1450,18 +1298,18 @@ OUTPUT FORMAT — respond ONLY with a single valid JSON object, no markdown, no 
   "gradeLabel": "<Outstanding|Excellent|Very Good|Good|Average|Satisfactory|Pass|Needs Improvement>",
   "sections": [
     {
-      "name": "<Section name e.g. Section A — Reading>",
+      "name": "<Section name>",
       "maxMarks": <number>,
       "obtained": <number>,
       "questions": [
         {
-          "qNum": "<e.g. Q1 or Q1(a)>",
-          "topic": "<brief topic or question type>",
+          "qNum": "<e.g. Q1>",
+          "topic": "<brief topic>",
           "maxMarks": <number>,
           "obtained": <number>,
           "status": "<correct|partial|wrong|unattempted>",
-          "feedback": "<one sentence — what was right/wrong or what was missing; empty string if fully correct>",
-          "correctAnswer": "<correct answer if status is wrong or partial; empty string if correct>"
+          "feedback": "<one sentence>",
+          "correctAnswer": "<correct answer if wrong/partial, else empty>"
         }
       ]
     }
@@ -1492,20 +1340,15 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
         } catch (evalErr) {
           console.error("[evaluation] callAIForEvaluation threw:", evalErr);
           return NextResponse.json({
-            reply:
-              `⚠️ The evaluation timed out${callName}. Your answers are all safely saved.\n\n` +
-              `Type **submit** to try again.`,
+            reply: `⚠️ The evaluation timed out${callName}. Your answers are all safely saved.\n\nType **submit** to try again.`,
           });
         }
 
-        // Parse JSON from AI response
         let evalJson: Record<string, unknown> = {};
         let evaluationHtml = "";
         try {
           const jsonMatch = evalRaw.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            evalJson = JSON.parse(jsonMatch[0]);
-          }
+          if (jsonMatch) evalJson = JSON.parse(jsonMatch[0]);
           evaluationHtml = buildEvalHtml(evalJson, evalRaw);
         } catch (parseErr) {
           console.warn("[evaluation] JSON parse failed, using plain text fallback", parseErr);
@@ -1517,7 +1360,6 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
         const total2     = (evalJson.totalMarks    as number) || (total > 0 ? total : totalMarks);
         const percentage = total2 > 0 ? Math.round((obtained2 / total2) * 100) : 0;
 
-        // Plain-text summary for reply field (shown in chat before HTML card)
         const gradeLabel = (evalJson.gradeLabel as string) || "";
         const grade      = (evalJson.grade      as string) || "";
         const plainSummary =
@@ -1570,11 +1412,7 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
 
       if (session.status === "IN_EXAM") {
         const parts: string[] = [];
-
-        if (message.trim() && !isSubmit(lower)) {
-          parts.push(message.trim());
-        }
-
+        if (message.trim() && !isSubmit(lower)) parts.push(message.trim());
         if (uploadedText) {
           if (uploadType === "syllabus") {
             return NextResponse.json({
@@ -1587,16 +1425,11 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
           }
           parts.push(`[UPLOADED ANSWER — IMAGE/PDF]\n${uploadedText}`);
         }
-
         if (parts.length > 0) {
           session.answer_log.push(parts.join("\n\n"));
           await saveSession(session);
         }
-
-        const elapsed = session.started_at
-          ? formatDuration(Date.now() - session.started_at)
-          : "—";
-
+        const elapsed = session.started_at ? formatDuration(Date.now() - session.started_at) : "—";
         return NextResponse.json({
           reply:
             `✅ **Answer recorded** (Entry ${session.answer_log.length})\n` +
@@ -1610,14 +1443,10 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
       }
 
       if (session.status === "READY" && !isStart(lower)) {
-        const isSyllabusUpload =
-          uploadType === "syllabus" ||
-          (!uploadType && uploadedText.length > 30);
-
+        const isSyllabusUpload = uploadType === "syllabus" || (!uploadType && uploadedText.length > 30);
         if (isSyllabusUpload && uploadedText.length > 30) {
           return handleSyllabusUpload(uploadedText, cls, board, key, name, "READY", message.trim() || undefined);
         }
-
         if (isSubmit(lower)) {
           return NextResponse.json({
             reply:
@@ -1626,8 +1455,6 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
               `Type **start** when you're ready to begin. ⏱️ Timer starts immediately.`,
           });
         }
-
-        // ── Accept custom format commands while in READY state ──
         const reqs = parsePaperRequirements(message);
         if (reqs.isCustom) {
           session.custom_instructions = message.trim();
@@ -1643,7 +1470,6 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
               `Type **start** when ready. ⏱️ Timer starts immediately.`,
           });
         }
-
         return NextResponse.json({
           reply:
             `📚 Subject is set to **${session.subject}**.\n\n` +
@@ -1654,35 +1480,27 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
       }
 
       if (session.status === "IDLE" && !isGreeting(lower)) {
-        // ── SAFETY: If the message looks like a student answering exam questions,
-        // do one final aggressive session recovery before treating it as a subject name.
-        // This catches DB key mismatches where the student is IN_EXAM but we loaded IDLE.
         const looksLikeAnswer =
-          message.trim().length > 40 ||                          // long message
-          /^\d+[.)]/m.test(message.trim()) ||                   // starts with "1." or "1)"
-          /[।\.]{2,}/.test(message) ||                         // Hindi sentence endings
-          /\b(answer|ans|q\d|question|ques)\b/i.test(message) || // answer keywords
-          message.trim().split(/\s+/).length >= 3 ||            // 3+ words = likely an answer
-          /^[A-Z][a-z]/.test(message.trim());                   // Proper sentence case
+          message.trim().length > 40 ||
+          /^\d+[.)]/m.test(message.trim()) ||
+          /[।\.]{2,}/.test(message) ||
+          /\b(answer|ans|q\d|question|ques)\b/i.test(message) ||
+          message.trim().split(/\s+/).length >= 3 ||
+          /^[A-Z][a-z]/.test(message.trim());
 
         if (looksLikeAnswer) {
-          // Try harder to find an active session
           let activeSession: ExamSession | null = null;
           if (name) activeSession = await getSessionByStudent(name, cls, "IN_EXAM");
           if (!activeSession && name) activeSession = await getSessionByStudent(name, cls);
           if (activeSession && activeSession.status === "IN_EXAM") {
             session = activeSession;
             console.log("[IDLE-GUARD] Recovered IN_EXAM session for answer:", activeSession.session_key);
-            // Fall through to the IN_EXAM handler below by re-checking status
-            // We need to process this as an answer — record and return
             if (message.trim()) {
               const answerParts: string[] = [message.trim()];
               if (uploadedText) answerParts.push(`[UPLOADED ANSWER]\n${uploadedText}`);
               activeSession.answer_log.push(answerParts.join("\n\n"));
               await saveSession(activeSession);
-              const elapsed = activeSession.started_at
-                ? formatDuration(Date.now() - activeSession.started_at)
-                : "—";
+              const elapsed = activeSession.started_at ? formatDuration(Date.now() - activeSession.started_at) : "—";
               return NextResponse.json({
                 reply:
                   `✅ **Answer recorded** (Entry ${activeSession.answer_log.length})\n` +
@@ -1693,22 +1511,17 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
           }
         }
 
-        const isSyllabusUpload =
-          uploadType === "syllabus" ||
-          (!uploadType && uploadedText.length > 30);
-
+        const isSyllabusUpload = uploadType === "syllabus" || (!uploadType && uploadedText.length > 30);
         if (isSyllabusUpload && uploadedText.length > 30) {
           return handleSyllabusUpload(uploadedText, cls, board, key, name, "IDLE", message.trim() || undefined);
         }
 
         const isExamCommand = /^(submit|done|finish|finished|start|answers?)\s*$/i.test(message.trim());
         if (isExamCommand) {
-          // Last-chance recovery: ignore class, search by name only
           let rescuedSession: ExamSession | null = null;
           if (name) rescuedSession = await getSessionByStudent(name, "", "IN_EXAM");
           if (!rescuedSession && name) rescuedSession = await getSessionByStudent(name, "", "READY");
           if (rescuedSession && rescuedSession.status !== "IDLE") {
-            // Found session — patch current session and fall through to correct handler
             session = rescuedSession;
             console.log("[EXAM-CMD RESCUE] recovered by name-only:", rescuedSession.session_key, rescuedSession.status);
           } else {
@@ -1732,39 +1545,28 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
           });
         }
 
-        // ── Detect if the message has custom paper instructions ──
         const messageReqs = parsePaperRequirements(message);
-        const coreSubject = messageReqs.isCustom
-          ? extractSubjectFromInstruction(message)
-          : message;
-
+        const coreSubject = messageReqs.isCustom ? extractSubjectFromInstruction(message) : message;
         const { subjectName } = getChaptersForSubject(coreSubject, cls);
 
         const newSession: ExamSession = {
-          session_key:          key,
-          status:               "READY",
-          subject_request:      coreSubject,
-          subject:              subjectName,
-          custom_instructions:  messageReqs.isCustom ? message.trim() : undefined,
-          answer_log:           [],
-          student_name:         name,
-          student_class:        cls,
-          student_board:        board,
+          session_key:         key,
+          status:              "READY",
+          subject_request:     coreSubject,
+          subject:             subjectName,
+          custom_instructions: messageReqs.isCustom ? message.trim() : undefined,
+          answer_log:          [],
+          student_name:        name,
+          student_class:       cls,
+          student_board:       board,
         };
         await saveSession(newSession);
 
         if (messageReqs.isCustom) {
-          const totalDesc = messageReqs.totalMarks ? `**${messageReqs.totalMarks} marks**` : "custom marks";
-          const timeDesc  = messageReqs.timeMinutes
-            ? ` · Time: **${formatTimeAllowed(messageReqs.timeMinutes)}**`
-            : "";
-          const typeDesc  = messageReqs.questionTypes.length > 0
-            ? ` · Type: **${messageReqs.questionTypes.join(" + ")}**`
-            : "";
-          const chapterDesc = messageReqs.chapterFilter
-            ? ` · Scope: **${messageReqs.chapterFilter}**`
-            : "";
-
+          const totalDesc   = messageReqs.totalMarks ? `**${messageReqs.totalMarks} marks**` : "custom marks";
+          const timeDesc    = messageReqs.timeMinutes ? ` · Time: **${formatTimeAllowed(messageReqs.timeMinutes)}**` : "";
+          const typeDesc    = messageReqs.questionTypes.length > 0 ? ` · Type: **${messageReqs.questionTypes.join(" + ")}**` : "";
+          const chapterDesc = messageReqs.chapterFilter ? ` · Scope: **${messageReqs.chapterFilter}**` : "";
           return NextResponse.json({
             reply:
               `📚 Got it! I'll prepare a **custom paper** for:\n` +
@@ -1798,15 +1600,9 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
         let subjectName: string;
         let chapterList: string;
 
-        // ── Recover custom_instructions from chat history if DB did not persist it ──
-        // Supabase silently drops columns that don't exist in the table schema.
-        // As a robust fallback, scan recent user messages for any format command.
         let recoveredInstructions = session.custom_instructions || "";
         if (!recoveredInstructions) {
-          const recentUserMsgs = history
-            .filter((m) => m.role === "user")
-            .slice(-8)
-            .map((m) => m.content);
+          const recentUserMsgs = history.filter((m) => m.role === "user").slice(-8).map((m) => m.content);
           for (const msg of recentUserMsgs) {
             const r = parsePaperRequirements(msg);
             if (r.isCustom) {
@@ -1833,10 +1629,7 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
           console.log("[START] Using UPLOADED syllabus for:", subjectName, "| length:", chapterList.length);
         } else {
           console.log("[START] No uploaded syllabus — using NCERT default for:", session.subject_request);
-          const resolved = getChaptersForSubject(
-            session.subject_request || "",
-            cls
-          );
+          const resolved = getChaptersForSubject(session.subject_request || "", cls);
           subjectName = resolved.subjectName;
           chapterList = resolved.chapterList;
         }
@@ -1849,27 +1642,17 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
         const customInstructions  = recoveredInstructions;
         const hasCustomInstr      = !!customInstructions;
 
-        // ── Parse the custom requirements precisely ──────────────
         const reqs = hasCustomInstr ? parsePaperRequirements(customInstructions) : {} as PaperRequirements;
 
-        // Determine final marks & time.
-        // When a syllabus was uploaded with NO explicit marks/time, default to a
-        // compact practice paper (30 marks, 60 min) instead of the full 80-mark template.
         const defaultMarks   = hasUploadedSyllabus ? 30 : 80;
         const defaultMinutes = hasUploadedSyllabus ? 60 : 180;
         const finalMarks    = reqs.totalMarks  || defaultMarks;
         const finalMinutes  = reqs.timeMinutes || defaultMinutes;
         const timeAllowed   = formatTimeAllowed(finalMinutes);
-        const isStandardPaper = !hasCustomInstr && !hasUploadedSyllabus;
 
-        // ── CUSTOM PAPER PROMPT (for any custom instructions OR uploaded syllabus + command) ──
         if (hasCustomInstr || hasUploadedSyllabus) {
-
-          // Build question format spec from parsed requirements
           let formatSpec = "";
-
           if (reqs.questionTypes && reqs.questionTypes.length > 0) {
-            // Specific question types requested
             const qTypes = reqs.questionTypes.join(", ");
             if (reqs.questionCount && reqs.marksEach) {
               formatSpec = `${reqs.questionCount} questions of type: ${qTypes}, each worth ${reqs.marksEach} mark(s). Total = ${finalMarks} marks.`;
@@ -1883,31 +1666,15 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
           } else if (reqs.questionCount) {
             formatSpec = `${reqs.questionCount} questions distributed to total exactly ${finalMarks} marks.`;
           } else {
-            // No specific count — build formatSpec from the actual uploaded topics
             if (hasUploadedSyllabus) {
-              // For uploaded syllabus, derive question types from the topics themselves
-              // Never assume CBSE standard sections — use only what is explicitly listed
               formatSpec = `Design a simple numbered question paper using ONLY the topics listed in the authorised syllabus above. `;
               formatSpec += `Use a mix of: 1-mark objective questions (MCQ or fill-in-the-blank), 2-mark short-answer questions, and optionally 3-mark questions. `;
               formatSpec += `Total must be exactly ${finalMarks} marks. Do NOT create CBSE-style sections (A/B/C/D). Just number the questions 1, 2, 3...`;
             } else {
               formatSpec = `Design an appropriate mix of question types that totals exactly ${finalMarks} marks.`;
-              if (isMath) {
-                formatSpec += ` Include a mix of MCQ, short answer, and problem-solving questions.`;
-              }
+              if (isMath) formatSpec += ` Include a mix of MCQ, short answer, and problem-solving questions.`;
             }
           }
-
-          // Chapter/topic filter
-          const chapterNote = reqs.chapterFilter
-            ? `\nCHAPTER RESTRICTION: Only use questions from ${reqs.chapterFilter}.`
-            : "";
-
-          // ── STEP 1: Build the authorised topic list ──────────────────────
-          // Three sources, in priority order:
-          //   a) Uploaded syllabus (strip warning headers)
-          //   b) Chapter filter from custom instruction (e.g. "chapters 3 and 4")
-          //   c) Full NCERT chapter list for the subject (fallback)
 
           const cleanTopicList = chapterList
             .replace(/.*UPLOADED SYLLABUS.*\n/g, "")
@@ -1917,19 +1684,13 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
             .replace(/.*Do NOT "fill gaps".*\n/g, "")
             .trim();
 
-          // All chapter lines from the NCERT/uploaded list
           const allTopicLines = cleanTopicList
             .split("\n")
             .map(l => l.replace(/^\d+\.\s*/, "").trim())
             .filter(l => l.length > 2 && !/^(SUBJECT|CHAPTERS|TOPICS|Board|Class)/i.test(l));
 
-          // If the student asked for specific chapters (e.g. "chapters 1-3", "chapter 5"),
-          // filter the NCERT list to only those chapters. This is the critical fix for
-          // "prepare 30 marks exam on Chapter 3 Science" — without this the AI cycles
-          // through all NCERT chapters instead of staying on the requested ones.
           let topicLines = allTopicLines;
           if (!hasUploadedSyllabus && reqs.chapterFilter) {
-            // Parse chapter numbers from the filter string
             const chapterNums: number[] = [];
             const rangeMatch = reqs.chapterFilter.match(/(\d+)\s*[-–to]+\s*(\d+)/i);
             if (rangeMatch) {
@@ -1939,9 +1700,7 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
             }
             const singleMatches = reqs.chapterFilter.matchAll(/(\b|ch\.?\s*)(\d+)/gi);
             for (const m of singleMatches) chapterNums.push(parseInt(m[2]));
-
             if (chapterNums.length > 0) {
-              // Filter: keep only topics whose position in the list matches a requested chapter number
               const filtered = chapterNums
                 .filter(n => n > 0 && n <= allTopicLines.length)
                 .map(n => allTopicLines[n - 1])
@@ -1951,14 +1710,10 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
                 console.log("[CHAPTER FILTER] Narrowed to:", topicLines);
               }
             }
-
-            // If chapter numbers didn't resolve, try keyword matching
             if (topicLines === allTopicLines && reqs.chapterFilter) {
               const filterLower = reqs.chapterFilter.toLowerCase();
               const keywordFiltered = allTopicLines.filter(t =>
-                t.toLowerCase().split(/\s+/).some(word =>
-                  word.length > 3 && filterLower.includes(word)
-                )
+                t.toLowerCase().split(/\s+/).some(word => word.length > 3 && filterLower.includes(word))
               );
               if (keywordFiltered.length > 0) {
                 topicLines = keywordFiltered;
@@ -1967,12 +1722,10 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
             }
           }
 
-          // Also filter by topic keyword (e.g. "on Gravitation", "on Polynomials")
           if (topicLines === allTopicLines && reqs.topicKeyword) {
             const kw = reqs.topicKeyword.toLowerCase();
             const kwFiltered = allTopicLines.filter(t =>
-              t.toLowerCase().includes(kw) ||
-              kw.includes(t.toLowerCase().split(" ")[0])
+              t.toLowerCase().includes(kw) || kw.includes(t.toLowerCase().split(" ")[0])
             );
             if (kwFiltered.length > 0) {
               topicLines = kwFiltered;
@@ -1980,11 +1733,8 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
             }
           }
 
-          // Safety: if filtering left us with nothing, fall back to full list
           if (topicLines.length === 0) topicLines = allTopicLines;
 
-          // ── RANDOMISE topic order so every reattempt gets fresh questions ──
-          // Fisher-Yates shuffle seeded by current timestamp
           const shuffled = [...topicLines];
           for (let i = shuffled.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
@@ -1992,14 +1742,8 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
           }
           topicLines = shuffled;
 
-          // Unique attempt seed injected into each question prompt so the AI
-          // cannot fall back to a cached / remembered response
           const attemptSeed = `[Attempt-${Date.now()}-${Math.random().toString(36).slice(2,7)}]`;
 
-          // ── STEP 2: Pre-build a question plan in code ─────────────────────
-          // Distribute marks across topics. This means the AI gets a rigid
-          // per-question brief — it can ONLY write the question text for that
-          // exact topic. It cannot add new topics or sections.
           const marksPerQ = reqs.marksEach || (reqs.questionCount
             ? Math.round(finalMarks / reqs.questionCount)
             : finalMarks <= 20 ? 2 : finalMarks <= 40 ? 2 : 3);
@@ -2007,7 +1751,6 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
           const targetQCount = reqs.questionCount ||
             Math.min(Math.ceil(finalMarks / marksPerQ), topicLines.length * 2 || 15);
 
-          // Spread topics evenly across questions; cycle if more questions than topics
           const questionPlan: Array<{ qNum: number; topic: string; marks: number }> = [];
           let marksAssigned = 0;
           for (let i = 0; i < targetQCount; i++) {
@@ -2019,14 +1762,6 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
             marksAssigned += m;
           }
 
-          // ── STEP 3: Generate each question individually ───────────────────
-          // Call AI once per question with a locked single-topic prompt.
-          // This is the only reliable way to prevent topic bleed — the AI
-          // cannot invent extra questions or add prose/passage sections
-          // because each call produces exactly ONE question for ONE topic.
-
-          // Question types appropriate for grammar/concept topics
-          // (never passage-based, never requires an image)
           const safeQTypes = isHindi
             ? ["परिभाषा लिखिए", "उदाहरण सहित अंतर स्पष्ट कीजिए", "रिक्त स्थान भरिए", "सही विकल्प चुनिए", "शुद्ध कीजिए", "पहचान कीजिए", "वाक्य में प्रयोग कीजिए"]
             : isEnglish
@@ -2034,7 +1769,6 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
             : ["Define", "Give examples", "Fill in the blanks", "Identify", "Explain with example"];
 
           const questionTexts: string[] = [];
-          // Rotate question-type list starting from a random offset for variety
           const qTypeOffset = Math.floor(Math.random() * safeQTypes.length);
           for (const slot of questionPlan) {
             const qTypeSuggestion = safeQTypes[(slot.qNum + qTypeOffset) % safeQTypes.length];
@@ -2043,7 +1777,6 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
 Write EXACTLY ONE FRESH question on the grammar topic: "${slot.topic}"
 The question should be of type: ${qTypeSuggestion} (or similar grammar exercise).
 Marks: ${slot.marks}
-
 STRICT RULES:
 - The question must test ONLY "${slot.topic}" — a grammar concept.
 - Do NOT repeat questions you have generated before — always create a NEW question.
@@ -2056,7 +1789,6 @@ Write EXACTLY ONE FRESH question on the topic: "${slot.topic}"
 Question type: ${qTypeSuggestion}
 Marks: ${slot.marks}
 ${reqs.chapterFilter ? `This question is from: ${reqs.chapterFilter}.` : ""}
-
 STRICT RULES:
 - Test ONLY "${slot.topic}" from ${subjectName} Class ${cls}.
 - IMPORTANT: Generate a NEW, UNIQUE question — do NOT repeat or reuse previously asked questions.
@@ -2068,12 +1800,10 @@ STRICT RULES:
             const qText = await callAI(singleQPrompt, [
               { role: "user", content: `Write one ${slot.marks}-mark question on "${slot.topic}".` }
             ]);
-            // Strip any numbering the AI might have added
             const cleanQ = qText.trim().replace(/^(Q\.?\d+\.?\s*|\d+\.\s*)/i, "").trim();
             questionTexts.push(cleanQ);
           }
 
-          // ── STEP 4: Assemble the final paper in code ──────────────────────
           const paperHeader = `Subject       : ${subjectName}
 Class         : ${cls}
 Board         : ${board}
@@ -2089,7 +1819,6 @@ Maximum Marks : ${finalMarks}`;
             .join("\n\n");
 
           const paper = `${paperHeader}\n\n${generalInstructions}\n\n${questionBody}`;
-
           const totalMarksOnPaper = parseTotalMarksFromPaper(paper);
           const startTime         = Date.now();
 
@@ -2108,7 +1837,6 @@ Maximum Marks : ${finalMarks}`;
             student_class:        cls,
             student_board:        board,
           };
-
           await saveSession(activeSession);
 
           return NextResponse.json({
@@ -2128,195 +1856,120 @@ Maximum Marks : ${finalMarks}`;
 
         // ── Standard 80-mark CBSE paper generation ──────────────
         const englishSections = `
-⚠️ CBSE 2026 FORMAT: 50% competency-based. Reading comprehension MCQs and inferential questions count as competency. Writing tasks must include real-life formats (notices, emails, articles).
-
+⚠️ CBSE 2026 FORMAT: 50% competency-based.
 SECTION A — READING [20 Marks]
-━━━━━━━━━━━━━━━━━━
 Q1  Unseen Passage — Factual / Discursive [10 marks]
-  • One unseen prose passage of 350–400 words
   • (a) 5 MCQs × 1 mark = 5 marks  (b) 5 Short-answer questions × 1 mark = 5 marks
-
 Q2  Unseen Passage — Literary / Poem extract [10 marks]
-  • One poem or literary prose extract of 200–250 words
   • (a) 5 MCQs × 1 mark = 5 marks  (b) 5 Short-answer questions × 1 mark = 5 marks
-
 SECTION B — WRITING SKILLS [20 Marks]
-━━━━━━━━━━━━━━━━━━
 Q3  Descriptive Paragraph / Bio-sketch / Dialogue [5 marks]
 Q4  Notice / Message / Advertisement [5 marks]
 Q5  Letter Writing [5 marks]
 Q6  Long Composition — Article / Speech / Story [5 marks]
-
 SECTION C — GRAMMAR [20 Marks]
-━━━━━━━━━━━━━━━━━━
 Q7  Gap Filling — Tenses / Modals / Voice [4 × 1 = 4 marks]
 Q8  Editing — Error Correction [4 × 1 = 4 marks]
 Q9  Omission — Missing Words [4 × 1 = 4 marks]
 Q10 Sentence Reordering [4 × 1 = 4 marks]
 Q11 Sentence Transformation [4 × 1 = 4 marks]
-
 SECTION D — LITERATURE [20 Marks]
-━━━━━━━━━━━━━━━━━━
 Q12 Extract-based Questions — Prose [5 marks]
 Q13 Extract-based Questions — Poetry [5 marks]
 Q14 Short Answer Questions — Prose & Poetry [6 marks]
-Q15 Long Answer — Prose / Drama [4 marks]
-        `.trim();
+Q15 Long Answer — Prose / Drama [4 marks]`.trim();
 
         const hindiSections = `
-SECTION A — APATHIT GADYANSH / KAVYANSH (Unseen Reading) [20 Marks]
-━━━━━━━━━━━━━━━━━━
+SECTION A — APATHIT GADYANSH / KAVYANSH [20 Marks]
 Q1  Apathit Gadyansh (Unseen Prose Passage) [10 marks]
 Q2  Apathit Kavyansh (Unseen Poem Extract) [10 marks]
-
 SECTION B — LEKHAN (Writing) [20 Marks]
-━━━━━━━━━━━━━━━━━━
-Q3  Patra Lekhan — औपचारिक पत्र (Formal Letter) [5 marks]
-Q4  Anuched Lekhan (Paragraph Writing) [5 marks]
-Q5  Suchna Lekhan (Notice Writing) [5 marks]
-Q6  Sandesh / Vigyapan Lekhan (Message / Advertisement) [5 marks]
-
+Q3  Patra Lekhan — औपचारिक पत्र [5 marks]
+Q4  Anuched Lekhan [5 marks]
+Q5  Suchna Lekhan [5 marks]
+Q6  Sandesh / Vigyapan Lekhan [5 marks]
 SECTION C — VYAKARAN (Grammar) [20 Marks]
-━━━━━━━━━━━━━━━━━━
 Q7  Shabdalankar / Arth-bhed [4 marks]
 Q8  Sandhi-Viched [4 marks]
 Q9  Samas-Vigraha [4 marks]
 Q10 Muhavare / Lokoktiyan [4 marks]
 Q11 Vakya Bhed [4 marks]
-
 SECTION D — PATHEN (Literature) [20 Marks]
-━━━━━━━━━━━━━━━━━━
 Q12 Gadyansh-adharit prashn [5 marks]
 Q13 Kavyansh-adharit prashn [5 marks]
 Q14 Laghu Uttariya Prashn [6 marks]
-Q15 Dirgha Uttariya Prashn [4 marks]
-        `.trim();
+Q15 Dirgha Uttariya Prashn [4 marks]`.trim();
 
         const mathSections = `
 SECTION A — MCQ & Assertion-Reason [20 × 1 = 20 Marks]
-━━━━━━━━━━━━━━━━━━
 Q1–Q18   MCQs [1 mark each]
 Q19–Q20  Assertion-Reason [1 mark each]
-
 SECTION B — Very Short Answer [5 × 2 = 10 Marks]
-━━━━━━━━━━━━━━━━━━
 Q21–Q25  [2 marks each]
-
 SECTION C — Short Answer [6 × 3 = 18 Marks]
-━━━━━━━━━━━━━━━━━━
 Q26–Q31  [3 marks each]
-
 SECTION D — Long Answer [4 × 5 = 20 Marks]
-━━━━━━━━━━━━━━━━━━
 Q32–Q35  [5 marks each]
-
 SECTION E — Case-Based / Competency [3 × 4 = 12 Marks]
-━━━━━━━━━━━━━━━━━━
-⚠️ CBSE 2026: These MUST be real-life application problems, not textbook exercises.
-Q36  Case Study 1 — real-life maths scenario [4 marks: (i)1m + (ii)1m + (iii)2m]
-Q37  Case Study 2 — data interpretation / graph reading [4 marks]
-Q38  Case Study 3 — everyday application of maths [4 marks]
-
-NOTE: TOTAL competency-based marks across all sections must be ≥ 40 out of 80 (50%).
-        `.trim();
+Q36  Case Study 1 [4 marks: (i)1m + (ii)1m + (iii)2m]
+Q37  Case Study 2 [4 marks]
+Q38  Case Study 3 [4 marks]`.trim();
 
         const scienceSections = `
-⚠️ CBSE 2026 FORMAT: 50% of marks must be competency-based (application, analysis, case-based).
-Competency questions test real-life understanding — NOT direct recall. Always include case studies.
-
+⚠️ CBSE 2026 FORMAT: 50% competency-based.
 SECTION A — Objective [20 × 1 = 20 Marks]
-━━━━━━━━━━━━━━━━━━
-Q1–Q10   MCQs — Mix of recall (5) + application/competency MCQs (5) [1 mark each]
-Q11–Q16  Competency-based MCQs — real-life scenarios [1 mark each]
+Q1–Q10   MCQs [1 mark each]
+Q11–Q16  Competency-based MCQs [1 mark each]
 Q17–Q18  Assertion-Reason [1 mark each]
-Q19–Q20  Fill in the Blanks / One-Word Answer [1 mark each]
-
+Q19–Q20  Fill in the Blanks [1 mark each]
 SECTION B — Very Short Answer [5 × 2 = 10 Marks]
-━━━━━━━━━━━━━━━━━━
-Q21–Q22  Recall-based [2 marks each]
-Q23–Q25  Application-based — "Why does...", "What would happen if..." [2 marks each]
-
+Q21–Q25  [2 marks each]
 SECTION C — Short Answer [6 × 3 = 18 Marks]
-━━━━━━━━━━━━━━━━━━
-Q26–Q28  Concept explanation [3 marks each]
-Q29–Q31  Competency-based — experiments, diagrams, real-life connections [3 marks each]
-
+Q26–Q31  [3 marks each]
 SECTION D — Long Answer [4 × 5 = 20 Marks]
-━━━━━━━━━━━━━━━━━━
 Q32–Q35  [5 marks each]
-
 SECTION E — Case-Based [3 × 4 = 12 Marks]
-━━━━━━━━━━━━━━━━━━
 Q36  Case Study — Biology [4 marks]
 Q37  Case Study — Physics [4 marks]
-Q38  Case Study — Chemistry [4 marks]
-        `.trim();
+Q38  Case Study — Chemistry [4 marks]`.trim();
 
         const sstSections = `
 SECTION A — Objective [20 × 1 = 20 Marks]
-━━━━━━━━━━━━━━━━━━
 Q1–Q16   MCQs [1 mark each]
 Q17–Q18  Assertion-Reason [1 mark each]
 Q19–Q20  Fill in the Blank / Match [1 mark each]
-
 SECTION B — Short Answer Questions [6 × 3 = 18 Marks]
-━━━━━━━━━━━━━━━━━━
 Q21–Q26  [3 marks each]
-
 SECTION C — Long Answer Questions [5 × 5 = 25 Marks]
-━━━━━━━━━━━━━━━━━━
 Q27–Q31  [5 marks each]
-
 SECTION D — Source-Based [3 × 4 = 12 Marks]
-━━━━━━━━━━━━━━━━━━
 Q32  Source — History [4 marks]
 Q33  Source — Geography or Economics [4 marks]
 Q34  Source — Civics [4 marks]
-
 SECTION E — Map-Based Questions [2 + 3 = 5 Marks]
-━━━━━━━━━━━━━━━━━━
 Q35  History Map [2 marks]
-Q36  Geography Map [3 marks]
-        `.trim();
+Q36  Geography Map [3 marks]`.trim();
 
         const standardSections = `
 SECTION A — Objective Type [20 × 1 = 20 Marks]
-━━━━━━━━━━━━━━━━━━
 Q1–Q16   MCQs [1 mark each]
 Q17–Q18  Assertion-Reason [1 mark each]
 Q19–Q20  Fill in the Blank [1 mark each]
-
 SECTION B — Very Short Answer [5 × 2 = 10 Marks]
-━━━━━━━━━━━━━━━━━━
 Q21–Q25  [2 marks each]
-
 SECTION C — Short Answer [6 × 3 = 18 Marks]
-━━━━━━━━━━━━━━━━━━
 Q26–Q31  [3 marks each]
-
 SECTION D — Long Answer [4 × 5 = 20 Marks]
-━━━━━━━━━━━━━━━━━━
 Q32–Q35  [5 marks each]
-
 SECTION E — Case-Based [3 × 4 = 12 Marks]
-━━━━━━━━━━━━━━━━━━
-Q36–Q38  [4 marks each]
-        `.trim();
+Q36–Q38  [4 marks each]`.trim();
 
-        let sectionBlocks: string;
-        if (isMath) {
-          sectionBlocks = mathSections;
-        } else if (isEnglish) {
-          sectionBlocks = englishSections;
-        } else if (isHindi) {
-          sectionBlocks = hindiSections;
-        } else if (isSST) {
-          sectionBlocks = sstSections;
-        } else if (/science|physics|chemistry|biology/i.test(subjectName)) {
-          sectionBlocks = scienceSections;
-        } else {
-          sectionBlocks = standardSections;
-        }
+        const sectionBlocks = isMath ? mathSections
+          : isEnglish ? englishSections
+          : isHindi   ? hindiSections
+          : isSST     ? sstSections
+          : /science|physics|chemistry|biology/i.test(subjectName) ? scienceSections
+          : standardSections;
 
         const uploadCoverageNote = hasUploadedSyllabus ? `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -2324,8 +1977,7 @@ Q36–Q38  [4 marks each]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Every single question MUST come from a topic explicitly listed in the uploaded syllabus above.
 Do NOT include any chapter, unit, or concept absent from the uploaded list.
-Do NOT use NCERT or CBSE default chapter lists — the uploaded list replaces them entirely.
-        `.trim() : "";
+Do NOT use NCERT or CBSE default chapter lists — the uploaded list replaces them entirely.`.trim() : "";
 
         const standardPaperSeed = `[Paper-${Date.now()}-${Math.random().toString(36).slice(2,8)}]`;
         const paperPrompt = `
@@ -2396,7 +2048,6 @@ QUALITY RULES:
           student_class:        cls,
           student_board:        board,
         };
-
         await saveSession(activeSession);
 
         return NextResponse.json({
@@ -2435,20 +2086,15 @@ QUALITY RULES:
         ...history.slice(-12),
         { role: "user", content: message },
       ];
-
-      const oralConversationText = [...history, { role: "user", content: message }]
-        .map((m) => m.content).join(" ");
-
+      const oralConversationText = [...history, { role: "user", content: message }].map((m) => m.content).join(" ");
       const isHindiOral =
         /hindi/i.test(bodySubject) ||
         bodyLang === "hi-IN" ||
         /[\u0900-\u097F]{5,}/.test(oralConversationText) ||
         /hindi|हिंदी/i.test(oralConversationText);
-
       const oralSystemPrompt = name
         ? systemPrompt("oral", isHindiOral ? "hindi" : undefined) + `\n\nSTUDENT IDENTITY: The student's name is ${name}${cls ? `, Class ${cls}` : ""}. Always use their name — never call them "Student".`
         : systemPrompt("oral", isHindiOral ? "hindi" : undefined);
-
       const reply = await callAI(oralSystemPrompt, oralConversation);
       return NextResponse.json({ reply });
     }
@@ -2463,19 +2109,13 @@ QUALITY RULES:
         bodyLang === "hi-IN" ||
         /[\u0900-\u097F]{5,}/.test(practiceConversationText) ||
         /hindi|हिंदी/i.test(practiceConversationText);
-
       const isMathPractice =
         !isHindiPractice && (
           /math/i.test(bodySubject) ||
           /\b(mathematics|maths?|algebra|calculus|geometry|trigonometry|statistics|probability|polynomials?|coordinate|quadrilateral|heron|surface area|volume|number system|linear equation)\b/i.test(practiceConversationText)
         );
-
       const practiceOverride = isHindiPractice ? "hindi" : isMathPractice ? "mathematics" : undefined;
-
-      const reply = await callAI(
-        systemPrompt("practice", practiceOverride),
-        conversation
-      );
+      const reply = await callAI(systemPrompt("practice", practiceOverride), conversation);
       return NextResponse.json({ reply });
     }
 
@@ -2489,19 +2129,13 @@ QUALITY RULES:
         bodyLang === "hi-IN" ||
         /[\u0900-\u097F]{5,}/.test(revisionConversationText) ||
         /hindi|हिंदी/i.test(revisionConversationText);
-
       const isMathRevision =
         !isHindiRevision && (
           /math/i.test(bodySubject) ||
           /\b(mathematics|maths?|algebra|calculus|geometry|trigonometry|statistics|probability|polynomials?|coordinate|quadrilateral|heron|surface area|volume|number system|linear equation)\b/i.test(revisionConversationText)
         );
-
       const revisionOverride = isHindiRevision ? "hindi" : isMathRevision ? "mathematics" : undefined;
-
-      const reply = await callAI(
-        systemPrompt("revision", revisionOverride),
-        conversation
-      );
+      const reply = await callAI(systemPrompt("revision", revisionOverride), conversation);
       return NextResponse.json({ reply });
     }
 
@@ -2511,7 +2145,6 @@ QUALITY RULES:
     if (mode === "progress") {
       const subjectStats = body?.subjectStats || null;
       const attempts     = body?.attempts     || [];
-
       const trimmedAttempts = Array.isArray(attempts)
         ? Object.values(
             attempts.reduce((acc: Record<string, any[]>, a: any) => {
@@ -2522,34 +2155,23 @@ QUALITY RULES:
             }, {})
           ).flatMap((group: any[]) => (group as any[]).slice(-10))
         : [];
-
-      const dataPayload = subjectStats
-        ? JSON.stringify(subjectStats,    null, 2)
-        : JSON.stringify(trimmedAttempts, null, 2);
-
+      const dataPayload = subjectStats ? JSON.stringify(subjectStats, null, 2) : JSON.stringify(trimmedAttempts, null, 2);
       const progressPrompt = `
 You are a sharp CBSE academic advisor. Analyse the student's performance data below.
-
 Student: ${name || "the student"}, Class ${cls}
-
 OUTPUT RULES — follow exactly, no exceptions:
 - Output EXACTLY 4 lines, each starting with its emoji prefix
 - No preamble, no sign-off, no extra lines whatsoever
 - Every line must name a specific subject — never say "a subject"
 - Be precise and blunt — no filler phrases
-
 LINE FORMAT (output all 4, in this exact order):
 💪 Strongest:  [subject] — [score]% ([grade]) — one specific reason why
 ⚠️  Weakest:   [subject] — [score]% — [one specific thing to fix]
 📈 Trend:      [subject showing biggest positive delta, or "No improvement data yet"]
 🎯 Next target: [subject closest to next grade] — [X] more marks → [next grade label]
       `.trim();
-
       const reply = await callAI(progressPrompt, [
-        {
-          role: "user",
-          content: `Performance data for ${name || "the student"}:\n${dataPayload}`,
-        },
+        { role: "user", content: `Performance data for ${name || "the student"}:\n${dataPayload}` },
       ]);
       return NextResponse.json({ reply });
     }
