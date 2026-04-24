@@ -592,13 +592,13 @@ export default function ModeSelector() {
 
   if (!student) return null;
 
-  const TABS: { key: Tab; label: string; icon: string; beta: boolean }[] = [
-    { key: "about",          label: "About Shauri",  icon: "ℹ️",  beta: false },
-    { key: "lastYears",      label: "Last Years",    icon: "📄",  beta: true },
-    { key: "checkResult",    label: "Check Result",  icon: "🏆",  beta: true },
-    { key: "career",         label: "Career Guide",  icon: "🎯",  beta: true },
-    { key: "timetable",      label: "Study Planner", icon: "📅",  beta: true },
-    { key: "importantDates", label: "Upcoming Dates",icon: "🔔",  beta: true },
+  const TABS: { key: Tab; label: string; icon: string }[] = [
+    { key: "about",          label: "About Shauri",   icon: "ℹ️"  },
+    { key: "lastYears",      label: "Last Years",     icon: "📄"  },
+    { key: "checkResult",    label: "Check Result",   icon: "🏆"  },
+    { key: "career",         label: "Career Guide",   icon: "🎯"  },
+    { key: "timetable",      label: "Study Planner",  icon: "📅"  },
+    { key: "importantDates", label: "Upcoming Dates", icon: "🔔"  },
   ];
 
   return (
@@ -617,7 +617,6 @@ export default function ModeSelector() {
         .tab-btn { padding: 10px 15px; border: none; border-bottom: 3px solid transparent; background: none; cursor: pointer; font-weight: 700; font-size: clamp(10px,1.6vw,13px); color: #5c6f82; font-family: inherit; white-space: nowrap; transition: all 0.15s; letter-spacing: 0.04em; display: flex; align-items: center; gap: 5px; }
         .tab-btn:hover { color: #0a2540; background: rgba(212,175,55,0.1); }
         .tab-btn.active { color: #92400e; border-bottom-color: #D4AF37; background: rgba(212,175,55,0.15); }
-        .beta-badge { font-size: 8px; padding: 1px 5px; border-radius: 10px; background: rgba(212,175,55,0.3); color: #92400e; font-weight: 800; letter-spacing: 0.05em; }
         .tab-panel { background: rgba(255,255,255,0.5); backdrop-filter: blur(10px); border: 1px solid rgba(212,175,55,0.25); border-top: none; border-radius: 0 0 16px 16px; padding: clamp(14px,3vw,24px); margin-bottom: clamp(16px,3vw,28px); animation: fadeSlide 0.2s ease; }
         @keyframes fadeSlide { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
         .choose-h2 { text-align: center; font-size: clamp(13px,3.5vw,30px); letter-spacing: clamp(0.06em,2vw,0.28em); color: #0a2540; margin-bottom: 8px; }
@@ -641,16 +640,13 @@ export default function ModeSelector() {
       <Header onLogout={() => (window.location.href = "/")} />
 
       <main className="modes-main">
-        <h1 className="welcome-name">WELCOME, {student.name.toUpperCase()}</h1>
-        <p className="welcome-class">CLASS {student.class} · {student.board}</p>
 
-        {/* ── TABS ── */}
-        <div className="top-nav">
+        {/* ── TABS — above welcome, just below header ── */}
+        <div className="top-nav" style={{ marginBottom: 0 }}>
           {TABS.map(tab => (
             <button key={tab.key} className={`tab-btn${activeTab === tab.key ? " active" : ""}`}
               onClick={() => setActiveTab(activeTab === tab.key ? null : tab.key)}>
               {tab.icon} {tab.label}
-              {tab.beta && <span className="beta-badge">BETA</span>}
             </button>
           ))}
         </div>
@@ -665,6 +661,10 @@ export default function ModeSelector() {
             {activeTab === "importantDates" && <ImportantDatesTab />}
           </div>
         )}
+
+        {/* ── WELCOME — now below tabs ── */}
+        <h1 className="welcome-name" style={{ marginTop: "clamp(16px,3vw,28px)" }}>WELCOME, {student.name.toUpperCase()}</h1>
+        <p className="welcome-class">CLASS {student.class} · {student.board}</p>
 
         <h2 className="choose-h2">CHOOSE YOUR LEARNING MODE</h2>
         <p className="choose-sub">SELECT YOUR PATH TO BEGIN THE ASCENT</p>
