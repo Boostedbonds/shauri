@@ -7,173 +7,313 @@ import { Orbitron } from "next/font/google";
 const orbitron = Orbitron({ subsets: ["latin"], weight: ["400", "600", "700"] });
 
 type StudentContext = { name: string; class: string; board: string };
-type Tab = "lastYears" | "checkResult" | "career" | "timetable" | "importantDates";
+type Tab = "about" | "lastYears" | "checkResult" | "career" | "timetable" | "importantDates";
 
-// ─── DATA ────────────────────────────────────────────────────
-const LAST_YEARS = [
-  { year: "2024", subjects: ["Science", "Mathematics", "English", "Hindi", "Social Science"] },
-  { year: "2023", subjects: ["Science", "Mathematics", "English", "Hindi", "Social Science"] },
-  { year: "2022", subjects: ["Science", "Mathematics", "English", "Hindi", "Social Science"] },
-  { year: "2020", subjects: ["Science", "Mathematics", "English", "Hindi", "Social Science"] },
-  { year: "2019", subjects: ["Science", "Mathematics", "English", "Hindi", "Social Science"] },
+// ─── PAPER LINKS — update these when you find exact PDFs ─────
+const PAPERS: Record<string, Record<string, string>> = {
+  "2025": {
+    Science:         "https://cbseacademic.nic.in/SQP_CLASSX_2024-25.html",
+    Mathematics:     "https://cbseacademic.nic.in/SQP_CLASSX_2024-25.html",
+    English:         "https://cbseacademic.nic.in/SQP_CLASSX_2024-25.html",
+    Hindi:           "https://cbseacademic.nic.in/SQP_CLASSX_2024-25.html",
+    "Social Science":"https://cbseacademic.nic.in/SQP_CLASSX_2024-25.html",
+  },
+  "2024": {
+    Science:         "https://cbseacademic.nic.in/web_material/Qpapers/2024/classX/Science.pdf",
+    Mathematics:     "https://cbseacademic.nic.in/web_material/Qpapers/2024/classX/Mathematics_Standard.pdf",
+    English:         "https://cbseacademic.nic.in/web_material/Qpapers/2024/classX/English_LA.pdf",
+    Hindi:           "https://cbseacademic.nic.in/web_material/Qpapers/2024/classX/Hindi_A.pdf",
+    "Social Science":"https://cbseacademic.nic.in/web_material/Qpapers/2024/classX/Social_Science.pdf",
+  },
+  "2023": {
+    Science:         "https://cbseacademic.nic.in/web_material/Qpapers/2023/classX/Science.pdf",
+    Mathematics:     "https://cbseacademic.nic.in/web_material/Qpapers/2023/classX/Maths_Standard.pdf",
+    English:         "https://cbseacademic.nic.in/web_material/Qpapers/2023/classX/English_LA.pdf",
+    Hindi:           "https://cbseacademic.nic.in/web_material/Qpapers/2023/classX/Hindi_Course_A.pdf",
+    "Social Science":"https://cbseacademic.nic.in/web_material/Qpapers/2023/classX/Social_Science.pdf",
+  },
+  "2020": {
+    Science:         "https://cbseacademic.nic.in/web_material/Qpapers/2020/classX/Science.pdf",
+    Mathematics:     "https://cbseacademic.nic.in/web_material/Qpapers/2020/classX/Mathematics_Standard.pdf",
+    English:         "https://cbseacademic.nic.in/web_material/Qpapers/2020/classX/English_LA.pdf",
+    Hindi:           "https://cbseacademic.nic.in/web_material/Qpapers/2020/classX/Hindi_Course_A.pdf",
+    "Social Science":"https://cbseacademic.nic.in/web_material/Qpapers/2020/classX/Social_Science.pdf",
+  },
+  "2019": {
+    Science:         "https://cbseacademic.nic.in/web_material/Qpapers/2019/classX/Science.pdf",
+    Mathematics:     "https://cbseacademic.nic.in/web_material/Qpapers/2019/classX/Mathematics.pdf",
+    English:         "https://cbseacademic.nic.in/web_material/Qpapers/2019/classX/English_LA.pdf",
+    Hindi:           "https://cbseacademic.nic.in/web_material/Qpapers/2019/classX/Hindi_Course_A.pdf",
+    "Social Science":"https://cbseacademic.nic.in/web_material/Qpapers/2019/classX/Social_Science.pdf",
+  },
+};
+const LAST_YEARS = Object.keys(PAPERS).sort((a, b) => parseInt(b) - parseInt(a));
+const SUBJECTS   = ["Science", "Mathematics", "English", "Hindi", "Social Science"];
+
+// ─── FUTURE DATES ONLY ────────────────────────────────────────
+const FUTURE_DATES = [
+  { event: "CBSE Result Declaration (Expected)", date: "May 2026",       icon: "🏆", link: "https://results.cbse.nic.in" },
+  { event: "Compartment Exams",                  date: "July 2026",      icon: "📝", link: "https://www.cbse.gov.in" },
+  { event: "Class 11 Admission",                 date: "May–June 2026",  icon: "🎓", link: "https://www.cbse.gov.in" },
+  { event: "NTSE Stage 2",                       date: "June 2026",      icon: "🧠", link: "https://ncert.nic.in/ntse.php" },
+  { event: "Board Exam Registration 2026–27",    date: "Aug–Oct 2026",   icon: "📋", link: "https://www.cbse.gov.in" },
+  { event: "JEE Main Session 1",                 date: "Jan–Feb 2027",   icon: "🔭", link: "https://jeemain.nta.ac.in" },
+  { event: "NEET UG",                            date: "May 2027",       icon: "🧬", link: "https://neet.nta.nic.in" },
+  { event: "CUET UG",                            date: "May–June 2027",  icon: "📚", link: "https://cuet.samarth.ac.in" },
+  { event: "UPSC CSE Prelims",                   date: "June 2027",      icon: "🇮🇳", link: "https://upsc.gov.in" },
+  { event: "CA Foundation",                      date: "June & Dec 2026",icon: "📒", link: "https://icai.org" },
 ];
 
-const TIMETABLE_2025 = [
-  { date: "15 Feb 2025", day: "Saturday",  subject: "Hindi Course A & B",           code: "002/085" },
-  { date: "17 Feb 2025", day: "Monday",    subject: "Mathematics Basic & Standard",  code: "241/041" },
-  { date: "19 Feb 2025", day: "Wednesday", subject: "Science",                       code: "086" },
-  { date: "21 Feb 2025", day: "Friday",    subject: "Social Science",                code: "087" },
-  { date: "24 Feb 2025", day: "Monday",    subject: "English Language & Literature", code: "184" },
-  { date: "26 Feb 2025", day: "Wednesday", subject: "Sanskrit",                      code: "122" },
-  { date: "28 Feb 2025", day: "Friday",    subject: "Computer Applications",         code: "165" },
-  { date: "03 Mar 2025", day: "Monday",    subject: "Home Science",                  code: "064" },
-  { date: "05 Mar 2025", day: "Wednesday", subject: "Elements of Business",          code: "054" },
-  { date: "07 Mar 2025", day: "Friday",    subject: "Painting",                      code: "049" },
-  { date: "12 Mar 2025", day: "Wednesday", subject: "National Cadet Corps",          code: "076" },
-  { date: "15 Mar 2025", day: "Saturday",  subject: "Urdu Course A & B",             code: "003/303" },
-  { date: "17 Mar 2025", day: "Monday",    subject: "Elements of Book Keeping",      code: "254" },
-  { date: "19 Mar 2025", day: "Wednesday", subject: "Music (Hindustani)",            code: "031/032/033" },
-  { date: "22 Mar 2025", day: "Saturday",  subject: "Retail / Security / IT / Auto", code: "401-411" },
-];
-
-const IMPORTANT_DATES = [
-  { event: "Board Exam Registration",       date: "Aug – Oct 2024",  status: "done",     icon: "📋" },
-  { event: "Admit Card Download",           date: "Jan 2025",        status: "done",     icon: "🪪" },
-  { event: "Class 10 Board Exams Begin",    date: "15 Feb 2025",     status: "done",     icon: "✍️" },
-  { event: "Class 10 Board Exams End",      date: "22 Mar 2025",     status: "done",     icon: "🏁" },
-  { event: "Practical / Internal Exams",    date: "Jan – Feb 2025",  status: "done",     icon: "🔬" },
-  { event: "Result Declaration (Expected)", date: "May 2025",        status: "upcoming", icon: "🏆" },
-  { event: "Compartment Exams",             date: "July 2025",       status: "upcoming", icon: "📝" },
-  { event: "Class 11 Admission",            date: "May – June 2025", status: "upcoming", icon: "🎓" },
-  { event: "NTSE Stage 1",                  date: "Nov 2024",        status: "done",     icon: "🧠" },
-  { event: "NTSE Stage 2",                  date: "June 2025",       status: "upcoming", icon: "🧠" },
-];
-
+// ─── CAREER DATA ──────────────────────────────────────────────
 const CAREER_STREAMS = [
   {
     stream: "Science (PCM)", color: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE", icon: "🔭",
     subjects: ["Physics", "Chemistry", "Mathematics"],
-    careers: ["Engineering (JEE)", "Architecture (NATA)", "Defence (NDA)", "Merchant Navy", "BCA / B.Sc IT", "Data Science", "Pilot / Aviation"],
-    exams: ["JEE Main", "JEE Advanced", "BITSAT", "NDA", "VITEEE"],
+    careers: ["Engineering", "Architecture", "Defence", "Data Science", "Aviation", "Merchant Navy"],
+    exams: [
+      { name: "JEE Main",    icon: "⚙️", desc: "Gateway to NITs, IIITs & GFTIs",                        dates: "Jan & Apr every year", link: "https://jeemain.nta.ac.in",        books: ["HC Verma — Concepts of Physics", "RD Sharma — Mathematics", "NCERT Chemistry XI & XII", "Arihant 41 Years JEE Papers"] },
+      { name: "JEE Advanced",icon: "🏆", desc: "Gateway to IITs — top 2.5L JEE Main qualifiers only",   dates: "May–June every year",  link: "https://jeeadv.ac.in",             books: ["Irodov — Problems in Physics", "Morrison Boyd — Organic Chemistry", "SL Loney — Trigonometry", "Hall & Knight — Algebra"] },
+      { name: "BITSAT",      icon: "💡", desc: "BITS Pilani, Goa, Hyderabad — top private engineering",  dates: "May–June every year",  link: "https://bitsadmission.com",        books: ["NCERT all three subjects", "Previous BITSAT papers (Arihant)", "BITSAT Online Tests"] },
+      { name: "NDA",         icon: "🪖", desc: "National Defence Academy — Army, Navy, Air Force",       dates: "Apr & Sep every year", link: "https://upsc.gov.in",              books: ["Pathfinder NDA/NA — Arihant", "NCERT Maths Class 11–12", "English Grammar — Wren & Martin"] },
+      { name: "VITEEE",      icon: "🎓", desc: "VIT University — top private engineering college",       dates: "Apr–May every year",   link: "https://vit.ac.in/viteee",         books: ["NCERT Physics, Chemistry, Maths", "VIT Previous Year Papers"] },
+    ],
   },
   {
     stream: "Science (PCB)", color: "#16A34A", bg: "#F0FDF4", border: "#BBF7D0", icon: "🧬",
     subjects: ["Physics", "Chemistry", "Biology"],
-    careers: ["Medical (MBBS)", "Dentistry (BDS)", "Pharmacy", "Nursing", "Biotechnology", "Veterinary", "Physiotherapy"],
-    exams: ["NEET UG", "AIIMS", "JIPMER", "NIPER"],
+    careers: ["Medicine (MBBS)", "Dentistry", "Pharmacy", "Nursing", "Biotechnology", "Veterinary"],
+    exams: [
+      { name: "NEET UG", icon: "🏥", desc: "Only gateway to MBBS, BDS, BAMS, BHMS in India", dates: "May every year",     link: "https://neet.nta.nic.in",  books: ["NCERT Biology XI & XII (most important)", "DC Pandey — Physics for NEET", "OP Tandon — Chemistry", "Trueman's Biology"] },
+      { name: "AIIMS",   icon: "🔬", desc: "Top medical college — now via NEET only",         dates: "Via NEET score",     link: "https://www.aiims.edu",    books: ["NCERT Biology (read 5+ times)", "MTG NEET Champion series"] },
+      { name: "JIPMER",  icon: "💊", desc: "Premier government medical institute",            dates: "Via NEET score",     link: "https://jipmer.edu.in",    books: ["NEET prep books + JIPMER past papers"] },
+      { name: "CUET UG", icon: "📚", desc: "Central Universities for B.Sc programs",          dates: "May–June every year",link: "https://cuet.samarth.ac.in",books: ["NCERT XII + CUET previous papers"] },
+    ],
   },
   {
     stream: "Commerce", color: "#D97706", bg: "#FFFBEB", border: "#FDE68A", icon: "📊",
     subjects: ["Accountancy", "Business Studies", "Economics", "Mathematics (optional)"],
-    careers: ["CA (Chartered Accountant)", "CS (Company Secretary)", "Banking / Finance", "MBA", "Economics / Statistics", "Stock Market / Trading"],
-    exams: ["CA Foundation", "CS Foundation", "CLAT", "BBA Entrances", "IPM IIM"],
+    careers: ["CA", "Company Secretary", "Banking", "MBA", "Stock Market", "Economics"],
+    exams: [
+      { name: "CA Foundation", icon: "📒", desc: "Chartered Accountancy — most respected finance career in India", dates: "June & Dec every year", link: "https://icai.org",                    books: ["ICAI Official Study Material (free PDF)", "ICAI Practice Manual", "PM by ICAI"] },
+      { name: "CS Foundation", icon: "⚖️", desc: "Company Secretary — corporate law & governance",               dates: "June & Dec every year", link: "https://icsi.edu",                   books: ["ICSI Official Study Material (free PDF)"] },
+      { name: "CUET UG",       icon: "🎓", desc: "Central Universities — B.Com, BA Economics etc",               dates: "May–June every year",   link: "https://cuet.samarth.ac.in",         books: ["NCERT XII + CUET previous papers"] },
+      { name: "IPM IIM",       icon: "💼", desc: "5-year Integrated Management Programme at IIMs",               dates: "May every year",        link: "https://iimidr.ac.in/ipm",           books: ["Quantitative Aptitude — Arun Sharma", "Verbal Ability — Arun Sharma"] },
+      { name: "CLAT",          icon: "🏛️", desc: "Law entrance for National Law Universities",                   dates: "Dec every year",        link: "https://consortiumofnlus.ac.in",     books: ["Legal Reasoning — Universal Law Publishing", "GK & Current Affairs (daily habit)"] },
+    ],
   },
   {
     stream: "Arts / Humanities", color: "#7C3AED", bg: "#F5F3FF", border: "#DDD6FE", icon: "🏛️",
     subjects: ["History", "Political Science", "Geography", "Psychology", "Sociology"],
-    careers: ["IAS / IPS (UPSC)", "Law (LLB)", "Journalism", "Psychology", "Social Work", "Teaching / Education", "Mass Communication"],
-    exams: ["UPSC CSE", "CLAT", "CUET", "NLU Entrances", "Mass Comm Entrances"],
+    careers: ["IAS / IPS (UPSC)", "Law", "Journalism", "Psychology", "Teaching", "Social Work"],
+    exams: [
+      { name: "UPSC CSE",          icon: "🇮🇳", desc: "Civil Services — IAS, IPS, IFS and 20+ services",             dates: "Prelims: June | Mains: Sep", link: "https://upsc.gov.in",              books: ["NCERT 6–12 all subjects", "Lakshmikant — Indian Polity", "Spectrum — Modern History", "GC Leong — Geography"] },
+      { name: "CLAT",              icon: "⚖️", desc: "Law entrance for top NLUs across India",                        dates: "Dec every year",             link: "https://consortiumofnlus.ac.in",  books: ["Legal Reasoning", "Current Affairs (daily)", "English Comprehension"] },
+      { name: "CUET UG",           icon: "📚", desc: "Central Universities — BA History, Pol Sci, Psychology etc",   dates: "May–June every year",        link: "https://cuet.samarth.ac.in",     books: ["NCERT XII + CUET previous papers"] },
+      { name: "SSC CGL",           icon: "👮", desc: "Staff Selection Commission — multiple government jobs",         dates: "Year-round",                 link: "https://ssc.nic.in",              books: ["Lucent GK", "RS Aggarwal — Reasoning & Quant", "Wren & Martin — English"] },
+    ],
   },
 ];
 
-const SCHOLARSHIPS = [
-  { name: "NTSE",                     amount: "₹1,250/month",          eligibility: "Class 10 board + NTSE Stage 1 & 2",         deadline: "Oct–Nov each year" },
-  { name: "PM Yashasvi Scholarship",  amount: "₹75,000–1,25,000/year", eligibility: "OBC/EBC/DNT, income < ₹2.5L",               deadline: "Aug–Sep each year" },
-  { name: "INSPIRE (DST)",            amount: "₹80,000/year",          eligibility: "Top 1% in Class 10, taking Science in 11",   deadline: "Dec each year" },
-  { name: "Central Sector Scholarship",amount: "₹10,000–20,000/year", eligibility: "Top 80th percentile, income < ₹4.5L",        deadline: "After Class 12" },
-  { name: "Vidyalakshmi Loan Portal", amount: "Up to ₹6.5L (no collateral)", eligibility: "Any student, bank-linked portal",    deadline: "Year-round" },
+// ─── UPSC RESOURCES ───────────────────────────────────────────
+const UPSC_RESOURCES = [
+  { stage: "Free NCERT & Basics", icon: "📖", color: "#2563EB", items: [
+    { label: "NCERT Free PDFs (Official)", link: "https://ncert.nic.in/textbook.php",                                              desc: "Free download — Class 6 to 12 all subjects. Backbone of UPSC." },
+    { label: "Drishti IAS — Free Portal",  link: "https://www.drishtiias.com",                                                     desc: "Best free UPSC portal in India — notes, current affairs, videos." },
+    { label: "Vision IAS Free Material",   link: "https://visionias.in/resources/",                                               desc: "Free current affairs, monthly magazines, test series." },
+    { label: "Unacademy Free Classes",     link: "https://unacademy.com/goal/upsc-civil-services-examination-ias/KSCGY",           desc: "Free live UPSC classes by top educators." },
+  ]},
+  { stage: "Current Affairs", icon: "📰", color: "#16A34A", items: [
+    { label: "The Hindu (Newspaper)",      link: "https://www.thehindu.com",    desc: "Most recommended newspaper for UPSC. Read daily." },
+    { label: "PIB — Press Info Bureau",    link: "https://pib.gov.in",          desc: "Official government news — directly asked in UPSC Prelims & Mains." },
+    { label: "Yojana Magazine (Free PDF)", link: "https://yojana.gov.in",       desc: "Government magazine — must read for GS Paper II & III." },
+    { label: "Kurukshetra Magazine",       link: "https://kurukshetra.gov.in",  desc: "Rural development & economy. Key UPSC topic." },
+  ]},
+  { stage: "Key Books", icon: "📚", color: "#D97706", items: [
+    { label: "Indian Polity — M Lakshmikant",    link: "https://www.amazon.in/s?k=lakshmikant+polity",        desc: "Bible of UPSC Polity. Read cover to cover." },
+    { label: "Modern India — Spectrum",          link: "https://www.amazon.in/s?k=spectrum+modern+history",   desc: "Most used Modern History book for UPSC." },
+    { label: "Indian Economy — Ramesh Singh",    link: "https://www.amazon.in/s?k=ramesh+singh+economy",      desc: "Standard Economy reference for UPSC Mains." },
+    { label: "Certificate Physical Geo — Leong", link: "https://www.amazon.in/s?k=gc+leong+geography",        desc: "Geography standard reference book." },
+  ]},
+  { stage: "Practice & Mock Tests", icon: "✍️", color: "#7C3AED", items: [
+    { label: "UPSC Previous Year Papers (Free)",  link: "https://upsc.gov.in/examinations/previous-question-papers", desc: "Official previous papers — start solving from Class 10 itself." },
+    { label: "Insights IAS — Free Tests",         link: "https://www.insightsonindia.com",                           desc: "Free UPSC tests & answer writing practice. Very popular." },
+    { label: "ForumIAS Community",                link: "https://forumias.com",                                      desc: "UPSC community, test series, answer writing — huge free resources." },
+    { label: "BYJU's Free IAS Prep",              link: "https://byjus.com/free-ias-prep/",                          desc: "Topic-wise free study material & videos." },
+  ]},
 ];
 
-const UPSC_STEPS = [
-  { stage: "Class 11–12", action: "Any stream works. Start reading NCERT carefully.",                  tip: "NCERT books are UPSC gold." },
-  { stage: "Graduation",  action: "Any degree works. Start optional subject prep.",                    tip: "History, Pol Sci, Geography are popular optionals." },
-  { stage: "Age 21–32",   action: "Apply for UPSC CSE (Prelims → Mains → Interview).",                tip: "Average age of selection: 26–27 years." },
-  { stage: "Services",    action: "IAS, IPS, IFS, IRS, IAAS and 20+ other All India Services.",       tip: "Rank determines which service you get." },
-];
+// ─── AI TIMETABLE ─────────────────────────────────────────────
+type TimetableEntry = { day: string; subject: string; topic: string; hours: number; notes: string };
+
+async function generateTimetable(exam: string, weeks: number, hoursPerDay: number, name: string): Promise<TimetableEntry[]> {
+  try {
+    const key = process.env.NEXT_PUBLIC_GROQ_API_KEY;
+    if (!key) throw new Error("No key");
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+        max_tokens: 1000,
+        messages: [
+          { role: "system", content: `You are a CBSE expert study planner. Return ONLY a valid JSON array of 7 objects. No markdown, no explanation. Each object: { "day": "Monday", "subject": "Physics", "topic": "Laws of Motion", "hours": 2, "notes": "Focus on numericals" }. Sunday must be rest day with hours: 1.` },
+          { role: "user",   content: `Weekly study plan for ${name} preparing for ${exam}. ${weeks} weeks left, ${hoursPerDay} hours/day available. Make it balanced and CBSE-realistic. Return only the JSON array.` },
+        ],
+      }),
+    });
+    const data = await res.json();
+    const text = data?.choices?.[0]?.message?.content || "[]";
+    return JSON.parse(text.replace(/```json|```/g, "").trim());
+  } catch {
+    return [
+      { day: "Monday",    subject: exam,  topic: "Chapters 1–3 Review",   hours: hoursPerDay, notes: "Concepts + examples" },
+      { day: "Tuesday",   subject: exam,  topic: "Chapters 4–6 Review",   hours: hoursPerDay, notes: "MCQ practice" },
+      { day: "Wednesday", subject: exam,  topic: "Chapters 7–9 Review",   hours: hoursPerDay, notes: "Previous year Qs" },
+      { day: "Thursday",  subject: exam,  topic: "Chapters 10–12 Review", hours: hoursPerDay, notes: "Short answers" },
+      { day: "Friday",    subject: exam,  topic: "Full Revision",          hours: hoursPerDay, notes: "Mind maps & notes" },
+      { day: "Saturday",  subject: exam,  topic: "Mock Test + Analysis",   hours: hoursPerDay, notes: "Timed paper" },
+      { day: "Sunday",    subject: "Rest",topic: "Light reading only",     hours: 1,           notes: "Relax & recharge 🌟" },
+    ];
+  }
+}
 
 // ─── TAB PANELS ──────────────────────────────────────────────
 
-function LastYearsTab() {
-  const [expanded, setExpanded] = useState<string | null>("2024");
+function AboutTab() {
   return (
     <div>
-      <p style={{ color: "#5c6f82", fontSize: 13, marginBottom: 16 }}>
-        Access official CBSE Class 10 previous year question papers. Click any subject to open.
+      <h3 style={{ fontSize: 17, fontWeight: 700, color: "#0a2540", marginBottom: 12 }}>What is SHAURI?</h3>
+      <p style={{ fontSize: 13, color: "#425466", lineHeight: 1.8, marginBottom: 14 }}>
+        <strong>SHAURI</strong> is a CBSE-aligned adaptive learning platform for Class 6–12 students. It uses AI to help you learn smarter — not harder.
       </p>
-      {LAST_YEARS.map(({ year, subjects }) => (
-        <div key={year} style={{ marginBottom: 10, border: "1px solid rgba(212,175,55,0.3)", borderRadius: 12, overflow: "hidden" }}>
-          <button
-            onClick={() => setExpanded(expanded === year ? null : year)}
-            style={{
-              width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
-              padding: "12px 18px", background: expanded === year ? "rgba(212,175,55,0.15)" : "rgba(255,255,255,0.5)",
-              border: "none", cursor: "pointer", fontSize: 14, fontWeight: 700, color: "#0a2540",
-              fontFamily: "inherit",
-            }}
-          >
-            <span>📄 CBSE Class 10 — {year}</span>
-            <span style={{ color: "#D4AF37" }}>{expanded === year ? "▲" : "▼"}</span>
-          </button>
-          {expanded === year && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "12px 18px", background: "rgba(255,255,255,0.7)" }}>
-              {subjects.map(sub => (
-                <a key={sub} href="https://cbseacademic.nic.in" target="_blank" rel="noopener noreferrer"
-                  style={{
-                    padding: "6px 14px", borderRadius: 8, background: "rgba(212,175,55,0.1)",
-                    border: "1px solid rgba(212,175,55,0.4)", color: "#0a2540", fontSize: 13,
-                    fontWeight: 600, textDecoration: "none",
-                  }}>
-                  {sub} →
-                </a>
-              ))}
-            </div>
-          )}
-        </div>
-      ))}
-      <p style={{ fontSize: 12, color: "#5c6f82", marginTop: 12 }}>
-        💡 For all papers & marking schemes:{" "}
-        <a href="https://cbseacademic.nic.in" target="_blank" rel="noopener noreferrer" style={{ color: "#2563EB" }}>cbseacademic.nic.in ↗</a>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+        {[
+          { icon: "🧠", title: "Learn Mode",          desc: "AI-powered CBSE concept explanations" },
+          { icon: "🧪", title: "Examiner Mode",        desc: "Full mock papers with AI evaluation" },
+          { icon: "🗣️", title: "Oral Mode",            desc: "Spoken practice & fluency building" },
+          { icon: "📊", title: "Progress Dashboard",   desc: "Track growth across subjects over time" },
+        ].map(f => (
+          <div key={f.title} style={{ background: "rgba(255,255,255,0.6)", borderRadius: 10, padding: "12px 14px", border: "1px solid rgba(212,175,55,0.25)" }}>
+            <p style={{ fontSize: 18, marginBottom: 5 }}>{f.icon}</p>
+            <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 3 }}>{f.title}</p>
+            <p style={{ fontSize: 12, color: "#5c6f82" }}>{f.desc}</p>
+          </div>
+        ))}
+      </div>
+      <p style={{ fontSize: 12, color: "#5c6f82", lineHeight: 1.7 }}>
+        🔒 <strong>Privacy first:</strong> Your learning data stays on your device. No ads. No tracking.
       </p>
     </div>
   );
 }
 
-function CheckResultTab() {
+function LastYearsTab() {
+  const [expanded, setExpanded] = useState<string | null>(LAST_YEARS[0]);
   return (
     <div>
-      <p style={{ color: "#5c6f82", fontSize: 13, marginBottom: 16 }}>
-        Check your CBSE Class 10 result directly on the official portal. Results expected <strong>May 2025</strong>.
+      <p style={{ color: "#5c6f82", fontSize: 13, marginBottom: 14 }}>
+        Click any subject to open the official CBSE question paper PDF directly — no need to search CBSE website.
       </p>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
+      {LAST_YEARS.map(year => (
+        <div key={year} style={{ marginBottom: 8, border: "1px solid rgba(212,175,55,0.3)", borderRadius: 12, overflow: "hidden" }}>
+          <button onClick={() => setExpanded(expanded === year ? null : year)}
+            style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", background: expanded === year ? "rgba(212,175,55,0.15)" : "rgba(255,255,255,0.5)", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 700, color: "#0a2540", fontFamily: "inherit" }}>
+            <span>📄 CBSE Class 10 — {year} {year === LAST_YEARS[0] ? <span style={{ fontSize: 10, background: "#22c55e", color: "#fff", padding: "1px 6px", borderRadius: 10, marginLeft: 6 }}>LATEST</span> : ""}</span>
+            <span style={{ color: "#D4AF37" }}>{expanded === year ? "▲" : "▼"}</span>
+          </button>
+          {expanded === year && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "12px 18px", background: "rgba(255,255,255,0.7)" }}>
+              {SUBJECTS.map(sub => (
+                <a key={sub} href={PAPERS[year]?.[sub] || "https://cbseacademic.nic.in"} target="_blank" rel="noopener noreferrer"
+                  style={{ padding: "7px 14px", borderRadius: 8, background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.4)", color: "#0a2540", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
+                  📥 {sub}
+                </a>
+              ))}
+              <a href="https://cbseacademic.nic.in" target="_blank" rel="noopener noreferrer"
+                style={{ padding: "7px 14px", borderRadius: 8, background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.35)", color: "#15803d", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
+                📋 Marking Scheme
+              </a>
+            </div>
+          )}
+        </div>
+      ))}
+      <p style={{ fontSize: 12, color: "#5c6f82", marginTop: 10 }}>
+        💡 If a PDF doesn't open, visit <a href="https://cbseacademic.nic.in" target="_blank" rel="noopener noreferrer" style={{ color: "#2563EB" }}>cbseacademic.nic.in ↗</a>
+      </p>
+    </div>
+  );
+}
+
+function CheckResultTab({ student }: { student: StudentContext }) {
+  const [rollNo, setRollNo]     = useState("");
+  const [dob, setDob]           = useState("");
+  const [school, setSchool]     = useState("");
+  const [submitted, setSubmit]  = useState(false);
+
+  function handleCheck() {
+    if (!rollNo || !dob) { alert("Please enter Roll Number and Date of Birth"); return; }
+    setSubmit(true);
+    const form = document.createElement("form");
+    form.method = "GET";
+    form.action = "https://results.cbse.nic.in/cbse2025/index.php";
+    form.target = "_blank";
+    [["regno", rollNo], ["dob", dob], ["school", school]].forEach(([n, v]) => {
+      const inp = document.createElement("input");
+      inp.name = n; inp.value = v; form.appendChild(inp);
+    });
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
+  }
+
+  return (
+    <div>
+      <p style={{ color: "#5c6f82", fontSize: 13, marginBottom: 14 }}>
+        Enter your details once — we'll take you directly to your CBSE result. No need to fill in data twice on CBSE portal.
+      </p>
+      <div style={{ background: "rgba(255,255,255,0.7)", borderRadius: 14, padding: "18px", border: "1px solid rgba(212,175,55,0.3)", marginBottom: 14 }}>
+        <p style={{ fontWeight: 700, fontSize: 14, color: "#0a2540", marginBottom: 14 }}>🎓 {student.name}'s Result Lookup</p>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#5c6f82", display: "block", marginBottom: 5 }}>Roll Number *</label>
+            <input value={rollNo} onChange={e => setRollNo(e.target.value)} placeholder="From your Admit Card"
+              style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1.5px solid rgba(212,175,55,0.4)", background: "rgba(255,255,255,0.9)", fontSize: 13, fontFamily: "inherit", outline: "none" }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#5c6f82", display: "block", marginBottom: 5 }}>Date of Birth *</label>
+            <input type="date" value={dob} onChange={e => setDob(e.target.value)}
+              style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1.5px solid rgba(212,175,55,0.4)", background: "rgba(255,255,255,0.9)", fontSize: 13, fontFamily: "inherit", outline: "none" }} />
+          </div>
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 12, fontWeight: 700, color: "#5c6f82", display: "block", marginBottom: 5 }}>School Number (optional)</label>
+          <input value={school} onChange={e => setSchool(e.target.value)} placeholder="5-digit school code"
+            style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1.5px solid rgba(212,175,55,0.4)", background: "rgba(255,255,255,0.9)", fontSize: 13, fontFamily: "inherit", outline: "none" }} />
+        </div>
+        <button onClick={handleCheck}
+          style={{ width: "100%", padding: "12px", borderRadius: 10, border: "none", background: "linear-gradient(135deg, #D4AF37, #92400e)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>
+          🔍 Check My Result
+        </button>
+      </div>
+      {submitted && (
+        <div style={{ background: "rgba(34,197,94,0.1)", borderRadius: 10, padding: "10px 14px", border: "1px solid rgba(34,197,94,0.3)", marginBottom: 12 }}>
+          <p style={{ fontSize: 13, color: "#15803d", fontWeight: 600 }}>✅ Opening CBSE result page with your details pre-filled. If blocked, use direct links below.</p>
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {[
-          { label: "Official CBSE Result", url: "https://results.cbse.nic.in", color: "#D4AF37" },
-          { label: "DigiLocker",           url: "https://www.digilocker.gov.in", color: "#16A34A" },
-          { label: "UMANG App",            url: "https://web.umang.gov.in",      color: "#7C3AED" },
-        ].map(({ label, url, color }) => (
+          { label: "CBSE Results Portal", url: "https://results.cbse.nic.in" },
+          { label: "DigiLocker",          url: "https://www.digilocker.gov.in" },
+          { label: "UMANG App",           url: "https://web.umang.gov.in" },
+        ].map(({ label, url }) => (
           <a key={label} href={url} target="_blank" rel="noopener noreferrer"
-            style={{
-              padding: "10px 20px", borderRadius: 10,
-              border: `2px solid ${color}`, color: color,
-              fontSize: 14, fontWeight: 700, textDecoration: "none",
-              background: "rgba(255,255,255,0.6)",
-            }}>
+            style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(212,175,55,0.4)", color: "#0a2540", fontSize: 12, fontWeight: 600, textDecoration: "none", background: "rgba(255,255,255,0.6)" }}>
             {label} ↗
           </a>
         ))}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        {[
-          { label: "What you need", items: ["Roll Number (from Admit Card)", "School Number", "Date of Birth", "Centre Number"] },
-          { label: "After result",  items: ["Download Marksheet from DigiLocker", "Apply for Re-evaluation if needed", "Start Class 11 admission process", "Keep original marksheet safe"] },
-        ].map(({ label, items }) => (
-          <div key={label} style={{ background: "rgba(255,255,255,0.6)", borderRadius: 10, padding: "14px 16px", border: "1px solid rgba(212,175,55,0.25)" }}>
-            <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 8 }}>{label}</p>
-            {items.map(item => <p key={item} style={{ fontSize: 12, color: "#5c6f82", marginBottom: 5 }}>• {item}</p>)}
-          </div>
-        ))}
-      </div>
       <p style={{ fontSize: 12, color: "#92400e", marginTop: 12, background: "rgba(254,243,199,0.8)", padding: "10px 14px", borderRadius: 8 }}>
-        ⚠️ Result links only activate after CBSE officially declares results. Bookmark and check back in May 2025.
+        ⚠️ Result only available after CBSE officially declares it (expected May 2026). Save your Roll Number from your Admit Card now.
       </p>
     </div>
   );
@@ -181,43 +321,30 @@ function CheckResultTab() {
 
 function CareerTab({ studentName }: { studentName: string }) {
   const [activeStream, setActiveStream] = useState(0);
-  const [section, setSection] = useState<"streams" | "scholarships" | "upsc">("streams");
+  const [section, setSection]           = useState<"streams" | "upsc">("streams");
+  const [selectedExam, setSelectedExam] = useState<null | typeof CAREER_STREAMS[0]["exams"][0]>(null);
+  const [upscSection, setUpscSection]   = useState(0);
+
   return (
     <div>
       <p style={{ color: "#5c6f82", fontSize: 13, marginBottom: 14 }}>
-        Hey {studentName}! Here's your complete career roadmap after Class 10 boards.
+        Hey {studentName}! Explore every career path, entrance exam, and study resource — click any exam to see full details.
       </p>
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        {[
-          { key: "streams", label: "🎯 Stream Guide" },
-          { key: "scholarships", label: "💰 Scholarships" },
-          { key: "upsc", label: "🏛️ UPSC Path" },
-        ].map(({ key, label }) => (
-          <button key={key} onClick={() => setSection(key as any)}
-            style={{
-              padding: "7px 16px", borderRadius: 20,
-              border: `2px solid ${section === key ? "#D4AF37" : "rgba(212,175,55,0.3)"}`,
-              background: section === key ? "rgba(212,175,55,0.15)" : "rgba(255,255,255,0.5)",
-              color: section === key ? "#0a2540" : "#5c6f82",
-              fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit",
-            }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        {[{ key: "streams", label: "🎯 Streams & Exams" }, { key: "upsc", label: "🏛️ UPSC / Civil Services" }].map(({ key, label }) => (
+          <button key={key} onClick={() => { setSection(key as any); setSelectedExam(null); }}
+            style={{ padding: "7px 16px", borderRadius: 20, border: `2px solid ${section === key ? "#D4AF37" : "rgba(212,175,55,0.3)"}`, background: section === key ? "rgba(212,175,55,0.15)" : "rgba(255,255,255,0.5)", color: section === key ? "#0a2540" : "#5c6f82", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
             {label}
           </button>
         ))}
       </div>
 
-      {section === "streams" && (
+      {section === "streams" && !selectedExam && (
         <div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
             {CAREER_STREAMS.map((s, i) => (
               <button key={i} onClick={() => setActiveStream(i)}
-                style={{
-                  padding: "6px 14px", borderRadius: 8,
-                  border: `2px solid ${activeStream === i ? s.color : "rgba(212,175,55,0.25)"}`,
-                  background: activeStream === i ? s.bg : "rgba(255,255,255,0.5)",
-                  color: activeStream === i ? s.color : "#5c6f82",
-                  fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit",
-                }}>
+                style={{ padding: "6px 14px", borderRadius: 8, border: `2px solid ${activeStream === i ? s.color : "rgba(212,175,55,0.25)"}`, background: activeStream === i ? s.bg : "rgba(255,255,255,0.5)", color: activeStream === i ? s.color : "#5c6f82", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
                 {s.icon} {s.stream}
               </button>
             ))}
@@ -226,26 +353,22 @@ function CareerTab({ studentName }: { studentName: string }) {
             const s = CAREER_STREAMS[activeStream];
             return (
               <div style={{ border: `2px solid ${s.border}`, borderRadius: 14, padding: 18, background: s.bg }}>
-                <p style={{ fontWeight: 800, fontSize: 15, color: s.color, marginBottom: 14 }}>{s.icon} {s.stream}</p>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
-                  <div>
-                    <p style={{ fontWeight: 700, fontSize: 12, color: "#0a2540", marginBottom: 8 }}>📚 Subjects</p>
-                    {s.subjects.map(sub => <p key={sub} style={{ fontSize: 12, color: "#425466", marginBottom: 4 }}>• {sub}</p>)}
-                  </div>
-                  <div>
-                    <p style={{ fontWeight: 700, fontSize: 12, color: "#0a2540", marginBottom: 8 }}>🚀 Careers</p>
-                    {s.careers.map(c => <p key={c} style={{ fontSize: 12, color: "#425466", marginBottom: 4 }}>• {c}</p>)}
-                  </div>
-                  <div>
-                    <p style={{ fontWeight: 700, fontSize: 12, color: "#0a2540", marginBottom: 8 }}>📝 Entrance Exams</p>
-                    {s.exams.map(e => (
-                      <span key={e} style={{
-                        display: "inline-block", margin: "0 4px 6px 0", padding: "3px 9px",
-                        borderRadius: 20, background: "#fff", border: `1px solid ${s.border}`,
-                        fontSize: 11, color: s.color, fontWeight: 600,
-                      }}>{e}</span>
-                    ))}
-                  </div>
+                <p style={{ fontWeight: 800, fontSize: 15, color: s.color, marginBottom: 8 }}>{s.icon} {s.stream}</p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+                  {s.careers.map(c => <span key={c} style={{ padding: "3px 10px", borderRadius: 20, background: "#fff", border: `1px solid ${s.border}`, fontSize: 12, color: s.color, fontWeight: 600 }}>{c}</span>)}
+                </div>
+                <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 10 }}>📝 Click any exam to explore fully — dates, books, how to apply:</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {s.exams.map(exam => (
+                    <button key={exam.name} onClick={() => setSelectedExam(exam)}
+                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderRadius: 10, border: `1px solid ${s.border}`, background: "#fff", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+                      <div>
+                        <p style={{ fontWeight: 700, fontSize: 14, color: "#0a2540" }}>{exam.icon} {exam.name}</p>
+                        <p style={{ fontSize: 12, color: "#5c6f82", marginTop: 2 }}>{exam.desc}</p>
+                      </div>
+                      <span style={{ color: s.color, fontSize: 20, marginLeft: 12 }}>→</span>
+                    </button>
+                  ))}
                 </div>
               </div>
             );
@@ -253,36 +376,69 @@ function CareerTab({ studentName }: { studentName: string }) {
         </div>
       )}
 
-      {section === "scholarships" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {SCHOLARSHIPS.map(s => (
-            <div key={s.name} style={{ background: "rgba(255,255,255,0.6)", borderRadius: 10, padding: "14px 18px", border: "1px solid rgba(212,175,55,0.25)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 6 }}>
-                <p style={{ fontWeight: 700, fontSize: 14, color: "#0a2540" }}>{s.name}</p>
-                <span style={{ padding: "3px 10px", borderRadius: 20, background: "#d1fae5", color: "#065f46", fontSize: 12, fontWeight: 700 }}>{s.amount}</span>
+      {section === "streams" && selectedExam && (
+        <div>
+          <button onClick={() => setSelectedExam(null)}
+            style={{ marginBottom: 14, padding: "7px 14px", borderRadius: 8, border: "1px solid rgba(212,175,55,0.3)", background: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: 13, fontFamily: "inherit", color: "#0a2540" }}>
+            ← Back to Exams
+          </button>
+          <div style={{ background: "rgba(255,255,255,0.7)", borderRadius: 14, padding: "20px", border: "1px solid rgba(212,175,55,0.3)" }}>
+            <p style={{ fontWeight: 800, fontSize: 18, color: "#0a2540", marginBottom: 4 }}>{selectedExam.icon} {selectedExam.name}</p>
+            <p style={{ fontSize: 14, color: "#5c6f82", marginBottom: 16 }}>{selectedExam.desc}</p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+              <div style={{ background: "rgba(212,175,55,0.1)", borderRadius: 10, padding: "14px" }}>
+                <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 6 }}>📅 When to Appear</p>
+                <p style={{ fontSize: 13, color: "#425466" }}>{selectedExam.dates}</p>
               </div>
-              <p style={{ fontSize: 12, color: "#5c6f82", marginTop: 5 }}>✅ <strong>Eligibility:</strong> {s.eligibility}</p>
-              <p style={{ fontSize: 12, color: "#5c6f82", marginTop: 3 }}>📅 <strong>Deadline:</strong> {s.deadline}</p>
+              <div style={{ background: "rgba(212,175,55,0.1)", borderRadius: 10, padding: "14px" }}>
+                <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 6 }}>🔗 Apply / Register</p>
+                <a href={selectedExam.link} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: "#2563EB", fontWeight: 700 }}>Official Portal ↗</a>
+              </div>
             </div>
-          ))}
+            <div style={{ marginBottom: 16 }}>
+              <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 10 }}>📚 Best Books to Study</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {selectedExam.books.map(b => (
+                  <div key={b} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "rgba(255,255,255,0.8)", borderRadius: 8, border: "1px solid rgba(212,175,55,0.2)" }}>
+                    <span style={{ fontSize: 16 }}>📖</span>
+                    <span style={{ fontSize: 13, color: "#0a2540" }}>{b}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <a href={selectedExam.link} target="_blank" rel="noopener noreferrer"
+              style={{ display: "block", textAlign: "center", padding: "12px", borderRadius: 10, background: "linear-gradient(135deg, #D4AF37, #92400e)", color: "#fff", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
+              🚀 Go to Official {selectedExam.name} Portal
+            </a>
+          </div>
         </div>
       )}
 
       {section === "upsc" && (
         <div>
-          <p style={{ fontSize: 13, color: "#5c6f82", marginBottom: 14, lineHeight: 1.6 }}>
-            UPSC is India's most prestigious exam. <strong>Any stream</strong> from Class 11 works — what matters is dedication and the right strategy.
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {UPSC_STEPS.map((u, i) => (
-              <div key={i} style={{ display: "flex", gap: 14, alignItems: "flex-start", background: "rgba(255,255,255,0.6)", borderRadius: 10, padding: "12px 16px", border: "1px solid rgba(212,175,55,0.25)" }}>
-                <span style={{ minWidth: 28, height: 28, borderRadius: "50%", background: "#0a2540", color: "#D4AF37", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13 }}>{i + 1}</span>
-                <div>
-                  <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540" }}>{u.stage}</p>
-                  <p style={{ fontSize: 12, color: "#425466", marginTop: 3 }}>{u.action}</p>
-                  <p style={{ fontSize: 11, color: "#D97706", marginTop: 3 }}>💡 {u.tip}</p>
+          <div style={{ background: "linear-gradient(135deg, #0a2540, #1e3a5f)", borderRadius: 14, padding: "16px 20px", color: "#fff", marginBottom: 14 }}>
+            <p style={{ fontWeight: 800, fontSize: 16, marginBottom: 6 }}>🇮🇳 UPSC Civil Services — Complete Free Guide</p>
+            <p style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.7 }}>Any stream from Class 11 works. Many toppers start preparing in Class 10–11. All resources below are <strong style={{ color: "#fbbf24" }}>free</strong>.</p>
+          </div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+            {UPSC_RESOURCES.map((r, i) => (
+              <button key={i} onClick={() => setUpscSection(i)}
+                style={{ padding: "6px 14px", borderRadius: 8, border: `2px solid ${upscSection === i ? r.color : "rgba(212,175,55,0.25)"}`, background: upscSection === i ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.4)", color: upscSection === i ? r.color : "#5c6f82", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
+                {r.icon} {r.stage}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {UPSC_RESOURCES[upscSection].items.map(item => (
+              <a key={item.label} href={item.link} target="_blank" rel="noopener noreferrer"
+                style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 16px", background: "rgba(255,255,255,0.6)", borderRadius: 10, border: "1px solid rgba(212,175,55,0.25)", textDecoration: "none" }}>
+                <span style={{ fontSize: 20 }}>🔗</span>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontWeight: 700, fontSize: 14, color: "#0a2540" }}>{item.label}</p>
+                  <p style={{ fontSize: 12, color: "#5c6f82", marginTop: 3 }}>{item.desc}</p>
                 </div>
-              </div>
+                <span style={{ color: "#D4AF37", fontSize: 16, flexShrink: 0 }}>↗</span>
+              </a>
             ))}
           </div>
         </div>
@@ -291,43 +447,104 @@ function CareerTab({ studentName }: { studentName: string }) {
   );
 }
 
-function TimetableTab() {
-  const today = new Date();
+function TimetableTab({ student }: { student: StudentContext }) {
+  const [exam, setExam]           = useState("Science");
+  const [weeks, setWeeks]         = useState(4);
+  const [hours, setHours]         = useState(3);
+  const [timetable, setTimetable] = useState<TimetableEntry[]>([]);
+  const [loading, setLoading]     = useState(false);
+  const [editing, setEditing]     = useState<number | null>(null);
+  const [editVal, setEditVal]     = useState<TimetableEntry | null>(null);
+
+  const EXAMS = ["Science", "Mathematics", "Social Science", "English", "Hindi", "JEE Main", "NEET UG", "UPSC CSE", "CA Foundation", "CUET UG", "CLAT", "NDA"];
+
+  async function handleGenerate() {
+    setLoading(true);
+    const t = await generateTimetable(exam, weeks, hours, student.name);
+    setTimetable(t);
+    setLoading(false);
+  }
+
+  function saveEdit(i: number) {
+    if (!editVal) return;
+    const updated = [...timetable];
+    updated[i] = editVal;
+    setTimetable(updated);
+    setEditing(null);
+    setEditVal(null);
+  }
+
   return (
     <div>
       <p style={{ color: "#5c6f82", fontSize: 13, marginBottom: 14 }}>
-        Official CBSE Class 10 Board Exam Timetable 2025. All exams start at <strong>10:30 AM</strong>.
+        Generate a personalised AI study plan for any exam — then edit each day to match your schedule.
       </p>
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-          <thead>
-            <tr style={{ background: "#0a2540" }}>
-              {["Date", "Day", "Subject", "Code"].map(h => (
-                <th key={h} style={{ padding: "10px 14px", textAlign: "left", color: "#D4AF37", fontWeight: 700, fontSize: 12 }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {TIMETABLE_2025.map((row, i) => {
-              const isPast = new Date(row.date + " 2025") < today;
-              return (
-                <tr key={i} style={{ background: isPast ? "rgba(255,255,255,0.3)" : i % 2 === 0 ? "rgba(255,255,255,0.6)" : "rgba(255,243,217,0.5)", borderBottom: "1px solid rgba(212,175,55,0.15)" }}>
-                  <td style={{ padding: "10px 14px", fontWeight: 700, color: isPast ? "#94a3b8" : "#0a2540", whiteSpace: "nowrap" }}>{row.date}</td>
-                  <td style={{ padding: "10px 14px", color: isPast ? "#94a3b8" : "#425466" }}>{row.day}</td>
-                  <td style={{ padding: "10px 14px", color: isPast ? "#94a3b8" : "#0a2540", fontWeight: isPast ? 400 : 600 }}>{isPast ? "✓ " : "📌 "}{row.subject}</td>
-                  <td style={{ padding: "10px 14px" }}>
-                    <span style={{ padding: "2px 9px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: isPast ? "rgba(148,163,184,0.15)" : "rgba(212,175,55,0.15)", color: isPast ? "#94a3b8" : "#92400e" }}>{row.code}</span>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div style={{ background: "rgba(255,255,255,0.6)", borderRadius: 14, padding: "16px", border: "1px solid rgba(212,175,55,0.3)", marginBottom: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#5c6f82", display: "block", marginBottom: 5 }}>Exam / Subject</label>
+            <select value={exam} onChange={e => setExam(e.target.value)}
+              style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid rgba(212,175,55,0.4)", background: "rgba(255,255,255,0.9)", fontSize: 13, fontFamily: "inherit", outline: "none" }}>
+              {EXAMS.map(e => <option key={e}>{e}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#5c6f82", display: "block", marginBottom: 5 }}>Weeks Until Exam</label>
+            <select value={weeks} onChange={e => setWeeks(parseInt(e.target.value))}
+              style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid rgba(212,175,55,0.4)", background: "rgba(255,255,255,0.9)", fontSize: 13, fontFamily: "inherit", outline: "none" }}>
+              {[2, 4, 6, 8, 12, 16, 24, 48].map(w => <option key={w} value={w}>{w} weeks</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#5c6f82", display: "block", marginBottom: 5 }}>Hours Per Day</label>
+            <select value={hours} onChange={e => setHours(parseInt(e.target.value))}
+              style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid rgba(212,175,55,0.4)", background: "rgba(255,255,255,0.9)", fontSize: 13, fontFamily: "inherit", outline: "none" }}>
+              {[1, 2, 3, 4, 5, 6, 8].map(h => <option key={h} value={h}>{h}h/day</option>)}
+            </select>
+          </div>
+        </div>
+        <button onClick={handleGenerate} disabled={loading}
+          style={{ width: "100%", padding: "11px", borderRadius: 10, border: "none", background: loading ? "#a0aec0" : "linear-gradient(135deg, #D4AF37, #92400e)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: loading ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+          {loading ? "⏳ Generating AI Timetable..." : "✨ Generate My Personalised Study Plan"}
+        </button>
       </div>
-      <p style={{ fontSize: 12, color: "#5c6f82", marginTop: 12 }}>
-        📥 Download official timetable:{" "}
-        <a href="https://www.cbse.gov.in" target="_blank" rel="noopener noreferrer" style={{ color: "#2563EB" }}>cbse.gov.in ↗</a>
-      </p>
+
+      {timetable.length > 0 && (
+        <div>
+          <p style={{ fontSize: 13, fontWeight: 700, color: "#0a2540", marginBottom: 10 }}>
+            📅 {student.name}'s Weekly Plan — {exam}
+            <span style={{ fontSize: 11, fontWeight: 400, color: "#5c6f82", marginLeft: 8 }}>✏️ Click any row to edit</span>
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            {timetable.map((entry, i) => (
+              <div key={i}>
+                {editing === i && editVal ? (
+                  <div style={{ background: "rgba(212,175,55,0.12)", borderRadius: 10, padding: "10px 12px", border: "2px solid #D4AF37", display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 8, alignItems: "center" }}>
+                    <input value={editVal.subject} onChange={e => setEditVal({ ...editVal, subject: e.target.value })} placeholder="Subject"
+                      style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #D4AF37", fontSize: 13, fontFamily: "inherit" }} />
+                    <input value={editVal.topic} onChange={e => setEditVal({ ...editVal, topic: e.target.value })} placeholder="Topic"
+                      style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #D4AF37", fontSize: 13, fontFamily: "inherit" }} />
+                    <input value={editVal.notes} onChange={e => setEditVal({ ...editVal, notes: e.target.value })} placeholder="Notes"
+                      style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #D4AF37", fontSize: 13, fontFamily: "inherit" }} />
+                    <button onClick={() => saveEdit(i)}
+                      style={{ padding: "6px 12px", borderRadius: 6, border: "none", background: "#D4AF37", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>✓</button>
+                  </div>
+                ) : (
+                  <div onClick={() => { setEditing(i); setEditVal({ ...entry }); }}
+                    style={{ display: "grid", gridTemplateColumns: "80px 110px 1fr 50px 1fr", gap: 10, alignItems: "center", padding: "10px 14px", background: entry.subject === "Rest" ? "rgba(148,163,184,0.1)" : "rgba(255,255,255,0.6)", borderRadius: 10, border: "1px solid rgba(212,175,55,0.2)", cursor: "pointer" }}>
+                    <span style={{ fontWeight: 700, fontSize: 13, color: "#D4AF37" }}>{entry.day}</span>
+                    <span style={{ fontWeight: 600, fontSize: 13, color: "#0a2540" }}>{entry.subject}</span>
+                    <span style={{ fontSize: 12, color: "#425466" }}>{entry.topic}</span>
+                    <span style={{ fontSize: 12, color: "#5c6f82" }}>{entry.hours}h</span>
+                    <span style={{ fontSize: 12, color: "#5c6f82", fontStyle: "italic" }}>{entry.notes}</span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <p style={{ fontSize: 12, color: "#5c6f82", marginTop: 8 }}>✏️ Click any row to edit subject, topic, or notes to match your schedule.</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -336,43 +553,31 @@ function ImportantDatesTab() {
   return (
     <div>
       <p style={{ color: "#5c6f82", fontSize: 13, marginBottom: 14 }}>
-        Key CBSE dates for Class 10 students — 2024-25 academic year.
+        Upcoming CBSE & entrance exam dates — only future events shown. Click any to visit the official site.
       </p>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {IMPORTANT_DATES.map((item, i) => (
-          <div key={i} style={{
-            display: "flex", alignItems: "center", gap: 14,
-            background: item.status === "upcoming" ? "rgba(254,243,199,0.8)" : "rgba(255,255,255,0.5)",
-            borderRadius: 10, padding: "12px 16px",
-            border: `1px solid ${item.status === "upcoming" ? "rgba(212,175,55,0.4)" : "rgba(212,175,55,0.2)"}`,
-          }}>
-            <span style={{ fontSize: 20 }}>{item.icon}</span>
+        {FUTURE_DATES.map((item, i) => (
+          <a key={i} href={item.link} target="_blank" rel="noopener noreferrer"
+            style={{ display: "flex", alignItems: "center", gap: 14, background: "rgba(255,255,255,0.6)", borderRadius: 10, padding: "12px 16px", border: "1px solid rgba(212,175,55,0.25)", textDecoration: "none", transition: "background 0.15s" }}>
+            <span style={{ fontSize: 22 }}>{item.icon}</span>
             <div style={{ flex: 1 }}>
               <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540" }}>{item.event}</p>
               <p style={{ fontSize: 12, color: "#5c6f82", marginTop: 2 }}>📅 {item.date}</p>
             </div>
-            <span style={{
-              padding: "3px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700,
-              background: item.status === "upcoming" ? "rgba(212,175,55,0.2)" : "#d1fae5",
-              color: item.status === "upcoming" ? "#92400e" : "#065f46",
-            }}>
-              {item.status === "upcoming" ? "⏳ Upcoming" : "✅ Done"}
-            </span>
-          </div>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 12px", borderRadius: 20, background: "rgba(212,175,55,0.15)", color: "#92400e", whiteSpace: "nowrap" }}>⏳ Upcoming ↗</span>
+          </a>
         ))}
       </div>
       <p style={{ fontSize: 12, color: "#5c6f82", marginTop: 12 }}>
-        🔔 Follow{" "}
-        <a href="https://www.cbse.gov.in" target="_blank" rel="noopener noreferrer" style={{ color: "#2563EB" }}>cbse.gov.in ↗</a>
-        {" "}for real-time updates.
+        🔔 Follow <a href="https://www.cbse.gov.in" target="_blank" rel="noopener noreferrer" style={{ color: "#2563EB" }}>cbse.gov.in ↗</a> for real-time updates.
       </p>
     </div>
   );
 }
 
-// ─── MAIN COMPONENT ──────────────────────────────────────────
+// ─── MAIN ─────────────────────────────────────────────────────
 export default function ModeSelector() {
-  const [student, setStudent] = useState<StudentContext | null>(null);
+  const [student, setStudent]     = useState<StudentContext | null>(null);
   const [activeTab, setActiveTab] = useState<Tab | null>(null);
 
   useEffect(() => {
@@ -387,12 +592,13 @@ export default function ModeSelector() {
 
   if (!student) return null;
 
-  const TABS: { key: Tab; label: string; icon: string }[] = [
-    { key: "lastYears",      label: "Last Years",      icon: "📄" },
-    { key: "checkResult",    label: "Check Result",    icon: "🏆" },
-    { key: "career",         label: "Career Guide",    icon: "🎯" },
-    { key: "timetable",      label: "Timetable",       icon: "📅" },
-    { key: "importantDates", label: "Important Dates", icon: "🔔" },
+  const TABS: { key: Tab; label: string; icon: string; beta: boolean }[] = [
+    { key: "about",          label: "About Shauri",  icon: "ℹ️",  beta: false },
+    { key: "lastYears",      label: "Last Years",    icon: "📄",  beta: true },
+    { key: "checkResult",    label: "Check Result",  icon: "🏆",  beta: true },
+    { key: "career",         label: "Career Guide",  icon: "🎯",  beta: true },
+    { key: "timetable",      label: "Study Planner", icon: "📅",  beta: true },
+    { key: "importantDates", label: "Upcoming Dates",icon: "🔔",  beta: true },
   ];
 
   return (
@@ -403,185 +609,59 @@ export default function ModeSelector() {
     }}>
       <style>{`
         * { box-sizing: border-box; }
-        .modes-main {
-          flex: 1; width: 100%; max-width: 1400px;
-          margin: 0 auto;
-          padding: clamp(16px, 4vw, 40px) clamp(16px, 4vw, 32px) 48px;
-          display: flex; flex-direction: column;
-        }
-        .about-link {
-          font-size: clamp(10px, 2vw, 13px);
-          letter-spacing: 0.18em; color: #5c6f82;
-          text-decoration: none; display: block;
-          margin-bottom: clamp(16px, 3vw, 28px);
-        }
-        .welcome-name {
-          font-size: clamp(18px, 5.5vw, 42px);
-          letter-spacing: clamp(0.06em, 2vw, 0.22em);
-          color: #0a2540; font-weight: 600;
-          margin-bottom: 8px; text-align: center;
-          word-break: break-word;
-        }
-        .welcome-class {
-          font-size: clamp(10px, 2.2vw, 14px);
-          letter-spacing: 0.18em; color: #5c6f82;
-          text-align: center;
-          margin-bottom: clamp(20px, 4vw, 28px);
-        }
-
-        /* ── TABS ── */
-        .tabs-bar {
-          width: 100%;
-          border-bottom: 1.5px solid rgba(212,175,55,0.35);
-          margin-bottom: 0;
-          overflow-x: auto;
-          display: flex;
-          gap: 0;
-          scrollbar-width: none;
-        }
-        .tabs-bar::-webkit-scrollbar { display: none; }
-        .tab-btn {
-          padding: 12px 18px;
-          border: none;
-          border-bottom: 3px solid transparent;
-          background: none;
-          cursor: pointer;
-          font-weight: 700;
-          font-size: clamp(11px, 2vw, 14px);
-          color: #5c6f82;
-          font-family: inherit;
-          white-space: nowrap;
-          transition: all 0.15s;
-          letter-spacing: 0.05em;
-        }
-        .tab-btn.active {
-          color: #D4AF37;
-          border-bottom-color: #D4AF37;
-        }
-        .tab-panel {
-          background: rgba(255,255,255,0.45);
-          backdrop-filter: blur(10px);
-          border: 1px solid rgba(212,175,55,0.25);
-          border-top: none;
-          border-radius: 0 0 16px 16px;
-          padding: clamp(16px, 3vw, 24px);
-          margin-bottom: clamp(20px, 4vw, 34px);
-          animation: fadeSlide 0.2s ease;
-        }
-        @keyframes fadeSlide {
-          from { opacity: 0; transform: translateY(6px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-
-        .choose-h2 {
-          text-align: center;
-          font-size: clamp(13px, 3.5vw, 30px);
-          letter-spacing: clamp(0.06em, 2vw, 0.28em);
-          color: #0a2540;
-          margin-bottom: 8px;
-        }
-        .choose-sub {
-          text-align: center;
-          font-size: clamp(9px, 2vw, 14px);
-          letter-spacing: clamp(0.05em, 1vw, 0.18em);
-          color: #5c6f82;
-          margin-bottom: clamp(20px, 4vw, 44px);
-        }
-        .cards-grid {
-          display: grid;
-          gap: clamp(12px, 3vw, 28px);
-          grid-template-columns: 1fr;
-        }
-        @media (min-width: 560px) {
-          .cards-grid { grid-template-columns: repeat(2, 1fr); }
-        }
-        @media (min-width: 1100px) {
-          .cards-grid { grid-template-columns: repeat(4, 1fr); }
-        }
-        .mode-card {
-          background: rgba(255,255,255,0.55);
-          backdrop-filter: blur(10px);
-          border-radius: 18px;
-          border: 1px solid rgba(212,175,55,0.35);
-          text-decoration: none;
-          display: flex;
-          flex-direction: row;
-          align-items: center;
-          gap: 16px;
-          padding: clamp(16px, 3vw, 22px) clamp(14px, 3vw, 20px);
-          transition: transform 0.15s, box-shadow 0.15s;
-          -webkit-tap-highlight-color: transparent;
-        }
+        .modes-main { flex: 1; width: 100%; max-width: 1400px; margin: 0 auto; padding: clamp(16px,4vw,40px) clamp(16px,4vw,32px) 48px; display: flex; flex-direction: column; }
+        .welcome-name { font-size: clamp(18px,5.5vw,42px); letter-spacing: clamp(0.06em,2vw,0.22em); color: #0a2540; font-weight: 600; margin-bottom: 8px; text-align: center; word-break: break-word; }
+        .welcome-class { font-size: clamp(10px,2.2vw,14px); letter-spacing: 0.18em; color: #5c6f82; text-align: center; margin-bottom: clamp(12px,2vw,20px); }
+        .top-nav { display: flex; align-items: stretch; gap: 0; border-bottom: 2px solid rgba(212,175,55,0.5); overflow-x: auto; scrollbar-width: none; background: rgba(10,37,64,0.06); backdrop-filter: blur(6px); border-radius: 12px 12px 0 0; padding: 0 4px; }
+        .top-nav::-webkit-scrollbar { display: none; }
+        .tab-btn { padding: 10px 15px; border: none; border-bottom: 3px solid transparent; background: none; cursor: pointer; font-weight: 700; font-size: clamp(10px,1.6vw,13px); color: #5c6f82; font-family: inherit; white-space: nowrap; transition: all 0.15s; letter-spacing: 0.04em; display: flex; align-items: center; gap: 5px; }
+        .tab-btn:hover { color: #0a2540; background: rgba(212,175,55,0.1); }
+        .tab-btn.active { color: #92400e; border-bottom-color: #D4AF37; background: rgba(212,175,55,0.15); }
+        .beta-badge { font-size: 8px; padding: 1px 5px; border-radius: 10px; background: rgba(212,175,55,0.3); color: #92400e; font-weight: 800; letter-spacing: 0.05em; }
+        .tab-panel { background: rgba(255,255,255,0.5); backdrop-filter: blur(10px); border: 1px solid rgba(212,175,55,0.25); border-top: none; border-radius: 0 0 16px 16px; padding: clamp(14px,3vw,24px); margin-bottom: clamp(16px,3vw,28px); animation: fadeSlide 0.2s ease; }
+        @keyframes fadeSlide { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+        .choose-h2 { text-align: center; font-size: clamp(13px,3.5vw,30px); letter-spacing: clamp(0.06em,2vw,0.28em); color: #0a2540; margin-bottom: 8px; }
+        .choose-sub { text-align: center; font-size: clamp(9px,2vw,14px); letter-spacing: clamp(0.05em,1vw,0.18em); color: #5c6f82; margin-bottom: clamp(20px,4vw,44px); }
+        .cards-grid { display: grid; gap: clamp(12px,3vw,28px); grid-template-columns: 1fr; }
+        @media (min-width:560px) { .cards-grid { grid-template-columns: repeat(2,1fr); } }
+        @media (min-width:1100px) { .cards-grid { grid-template-columns: repeat(4,1fr); } }
+        .mode-card { background: rgba(255,255,255,0.55); backdrop-filter: blur(10px); border-radius: 18px; border: 1px solid rgba(212,175,55,0.35); text-decoration: none; display: flex; flex-direction: row; align-items: center; gap: 16px; padding: clamp(16px,3vw,22px) clamp(14px,3vw,20px); transition: transform 0.15s, box-shadow 0.15s; -webkit-tap-highlight-color: transparent; }
+        .mode-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.1); }
         .mode-card:active { transform: scale(0.97); }
-        @media (min-width: 1100px) {
-          .mode-card {
-            flex-direction: column; align-items: flex-start;
-            justify-content: space-between;
-            min-height: 280px;
-            padding: 28px 24px;
-          }
-        }
-        .card-icon {
-          font-size: clamp(32px, 7vw, 44px);
-          flex-shrink: 0; line-height: 1;
-        }
+        @media (min-width:1100px) { .mode-card { flex-direction: column; align-items: flex-start; justify-content: space-between; min-height: 280px; padding: 28px 24px; } }
+        .card-icon { font-size: clamp(32px,7vw,44px); flex-shrink: 0; line-height: 1; }
         .card-body { flex: 1; min-width: 0; }
-        .card-title {
-          font-size: clamp(10px, 2.5vw, 16px);
-          letter-spacing: 0.12em; color: #D4AF37;
-          margin-bottom: 6px; font-weight: 700;
-        }
-        .card-desc {
-          font-size: clamp(11px, 2vw, 14px);
-          color: #425466; line-height: 1.55;
-          letter-spacing: 0;
-        }
+        .card-title { font-size: clamp(10px,2.5vw,16px); letter-spacing: 0.12em; color: #D4AF37; margin-bottom: 6px; font-weight: 700; }
+        .card-desc { font-size: clamp(11px,2vw,14px); color: #425466; line-height: 1.55; letter-spacing: 0; }
         .card-cta { display: none; }
-        @media (min-width: 1100px) {
-          .card-cta {
-            display: block; margin-top: 22px; width: 100%;
-            padding: 12px; border-radius: 999px;
-            border: 1px solid #D4AF37; color: #0a2540;
-            text-align: center; font-size: 13px;
-            letter-spacing: 0.16em; font-family: inherit;
-            text-decoration: none;
-          }
-        }
-        .privacy {
-          margin-top: clamp(28px, 5vw, 54px);
-          text-align: center; font-size: clamp(9px, 1.8vw, 12px);
-          letter-spacing: 0.04em; color: #6b7c8f; line-height: 1.6;
-        }
+        @media (min-width:1100px) { .card-cta { display: block; margin-top: 22px; width: 100%; padding: 12px; border-radius: 999px; border: 1px solid #D4AF37; color: #0a2540; text-align: center; font-size: 13px; letter-spacing: 0.16em; font-family: inherit; text-decoration: none; } }
+        .privacy { margin-top: clamp(28px,5vw,54px); text-align: center; font-size: clamp(9px,1.8vw,12px); letter-spacing: 0.04em; color: #6b7c8f; line-height: 1.6; }
       `}</style>
 
       <Header onLogout={() => (window.location.href = "/")} />
 
       <main className="modes-main">
-        <a href="/about" className="about-link">ABOUT SHAURI</a>
-
         <h1 className="welcome-name">WELCOME, {student.name.toUpperCase()}</h1>
         <p className="welcome-class">CLASS {student.class} · {student.board}</p>
 
-        {/* ── TABS BAR ── */}
-        <div className="tabs-bar">
+        {/* ── TABS ── */}
+        <div className="top-nav">
           {TABS.map(tab => (
-            <button
-              key={tab.key}
-              className={`tab-btn${activeTab === tab.key ? " active" : ""}`}
-              onClick={() => setActiveTab(activeTab === tab.key ? null : tab.key)}
-            >
+            <button key={tab.key} className={`tab-btn${activeTab === tab.key ? " active" : ""}`}
+              onClick={() => setActiveTab(activeTab === tab.key ? null : tab.key)}>
               {tab.icon} {tab.label}
+              {tab.beta && <span className="beta-badge">BETA</span>}
             </button>
           ))}
         </div>
 
-        {/* ── TAB PANEL ── */}
         {activeTab && (
           <div className="tab-panel">
+            {activeTab === "about"          && <AboutTab />}
             {activeTab === "lastYears"      && <LastYearsTab />}
-            {activeTab === "checkResult"    && <CheckResultTab />}
+            {activeTab === "checkResult"    && <CheckResultTab student={student} />}
             {activeTab === "career"         && <CareerTab studentName={student.name} />}
-            {activeTab === "timetable"      && <TimetableTab />}
+            {activeTab === "timetable"      && <TimetableTab student={student} />}
             {activeTab === "importantDates" && <ImportantDatesTab />}
           </div>
         )}
@@ -590,31 +670,19 @@ export default function ModeSelector() {
         <p className="choose-sub">SELECT YOUR PATH TO BEGIN THE ASCENT</p>
 
         <div className="cards-grid">
-          <ModeCard icon="🧠" title="LEARN MODE"
-            desc="Learn concepts with clear CBSE-aligned explanations and examples."
-            href="/learn" cta="BEGIN LEARNING" />
-          <ModeCard icon="🧪" title="EXAMINER MODE"
-            desc="Practice full-length question papers in real exam conditions."
-            href="/examiner" cta="BEGIN TEST" />
-          <ModeCard icon="🗣️" title="ORAL MODE"
-            desc="Strengthen recall, fluency, and spoken confidence."
-            href="/oral" cta="BEGIN SPEAKING" />
-          <ModeCard icon="📊" title="PROGRESS DASHBOARD"
-            desc="Review strengths, identify gaps, and track your growth."
-            href="/progress" cta="VIEW PROGRESS" />
+          <ModeCard icon="🧠" title="LEARN MODE"         desc="Learn concepts with clear CBSE-aligned explanations and examples."  href="/learn"    cta="BEGIN LEARNING" />
+          <ModeCard icon="🧪" title="EXAMINER MODE"      desc="Practice full-length question papers in real exam conditions."       href="/examiner" cta="BEGIN TEST" />
+          <ModeCard icon="🗣️" title="ORAL MODE"          desc="Strengthen recall, fluency, and spoken confidence."                  href="/oral"     cta="BEGIN SPEAKING" />
+          <ModeCard icon="📊" title="PROGRESS DASHBOARD" desc="Review strengths, identify gaps, and track your growth."             href="/progress" cta="VIEW PROGRESS" />
         </div>
 
-        <p className="privacy">
-          Your learning data remains private and stays on this device unless you explicitly export or share it.
-        </p>
+        <p className="privacy">Your learning data remains private and stays on this device unless you explicitly export or share it.</p>
       </main>
     </div>
   );
 }
 
-function ModeCard({ icon, title, desc, href, cta }: {
-  icon: string; title: string; desc: string; href: string; cta: string;
-}) {
+function ModeCard({ icon, title, desc, href, cta }: { icon: string; title: string; desc: string; href: string; cta: string }) {
   return (
     <a href={href} className="mode-card">
       <div className="card-icon">{icon}</div>
