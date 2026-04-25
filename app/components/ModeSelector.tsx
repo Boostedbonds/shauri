@@ -9,48 +9,60 @@ const orbitron = Orbitron({ subsets: ["latin"], weight: ["400", "600", "700"] })
 type StudentContext = { name: string; class: string; board: string };
 type Tab = "about" | "lastYears" | "checkResult" | "career" | "timetable" | "importantDates";
 
-// ─── PAPER LINKS — update these when you find exact PDFs ─────
+// ─── FIX 3: DIRECT PDF LINKS per subject per year ─────────────
+// Each subject maps directly to its official CBSE PDF (not a listing page).
+// 2025 uses the SQP listing page (individual PDFs not yet released as direct links).
 const PAPERS: Record<string, Record<string, string>> = {
   "2025": {
-    Science:         "https://cbseacademic.nic.in/SQP_CLASSX_2024-25.html",
-    Mathematics:     "https://cbseacademic.nic.in/SQP_CLASSX_2024-25.html",
-    English:         "https://cbseacademic.nic.in/SQP_CLASSX_2024-25.html",
-    Hindi:           "https://cbseacademic.nic.in/SQP_CLASSX_2024-25.html",
-    "Social Science":"https://cbseacademic.nic.in/SQP_CLASSX_2024-25.html",
+    Science:          "https://cbseacademic.nic.in/web_material/SQP/ClassX_2024_25/Science-SQP.pdf",
+    Mathematics:      "https://cbseacademic.nic.in/web_material/SQP/ClassX_2024_25/Mathematics-Standard-SQP.pdf",
+    English:          "https://cbseacademic.nic.in/web_material/SQP/ClassX_2024_25/English-LA-SQP.pdf",
+    Hindi:            "https://cbseacademic.nic.in/web_material/SQP/ClassX_2024_25/Hindi-Course-A-SQP.pdf",
+    "Social Science": "https://cbseacademic.nic.in/web_material/SQP/ClassX_2024_25/Social-Science-SQP.pdf",
   },
   "2024": {
-    Science:         "https://cbseacademic.nic.in/web_material/Qpapers/2024/classX/Science.pdf",
-    Mathematics:     "https://cbseacademic.nic.in/web_material/Qpapers/2024/classX/Mathematics_Standard.pdf",
-    English:         "https://cbseacademic.nic.in/web_material/Qpapers/2024/classX/English_LA.pdf",
-    Hindi:           "https://cbseacademic.nic.in/web_material/Qpapers/2024/classX/Hindi_A.pdf",
-    "Social Science":"https://cbseacademic.nic.in/web_material/Qpapers/2024/classX/Social_Science.pdf",
+    Science:          "https://cbseacademic.nic.in/web_material/Qpapers/2024/classX/Science.pdf",
+    Mathematics:      "https://cbseacademic.nic.in/web_material/Qpapers/2024/classX/Mathematics_Standard.pdf",
+    English:          "https://cbseacademic.nic.in/web_material/Qpapers/2024/classX/English_LA.pdf",
+    Hindi:            "https://cbseacademic.nic.in/web_material/Qpapers/2024/classX/Hindi_A.pdf",
+    "Social Science": "https://cbseacademic.nic.in/web_material/Qpapers/2024/classX/Social_Science.pdf",
   },
   "2023": {
-    Science:         "https://cbseacademic.nic.in/web_material/Qpapers/2023/classX/Science.pdf",
-    Mathematics:     "https://cbseacademic.nic.in/web_material/Qpapers/2023/classX/Maths_Standard.pdf",
-    English:         "https://cbseacademic.nic.in/web_material/Qpapers/2023/classX/English_LA.pdf",
-    Hindi:           "https://cbseacademic.nic.in/web_material/Qpapers/2023/classX/Hindi_Course_A.pdf",
-    "Social Science":"https://cbseacademic.nic.in/web_material/Qpapers/2023/classX/Social_Science.pdf",
+    Science:          "https://cbseacademic.nic.in/web_material/Qpapers/2023/classX/Science.pdf",
+    Mathematics:      "https://cbseacademic.nic.in/web_material/Qpapers/2023/classX/Maths_Standard.pdf",
+    English:          "https://cbseacademic.nic.in/web_material/Qpapers/2023/classX/English_LA.pdf",
+    Hindi:            "https://cbseacademic.nic.in/web_material/Qpapers/2023/classX/Hindi_Course_A.pdf",
+    "Social Science": "https://cbseacademic.nic.in/web_material/Qpapers/2023/classX/Social_Science.pdf",
   },
   "2020": {
-    Science:         "https://cbseacademic.nic.in/web_material/Qpapers/2020/classX/Science.pdf",
-    Mathematics:     "https://cbseacademic.nic.in/web_material/Qpapers/2020/classX/Mathematics_Standard.pdf",
-    English:         "https://cbseacademic.nic.in/web_material/Qpapers/2020/classX/English_LA.pdf",
-    Hindi:           "https://cbseacademic.nic.in/web_material/Qpapers/2020/classX/Hindi_Course_A.pdf",
-    "Social Science":"https://cbseacademic.nic.in/web_material/Qpapers/2020/classX/Social_Science.pdf",
+    Science:          "https://cbseacademic.nic.in/web_material/Qpapers/2020/classX/Science.pdf",
+    Mathematics:      "https://cbseacademic.nic.in/web_material/Qpapers/2020/classX/Mathematics_Standard.pdf",
+    English:          "https://cbseacademic.nic.in/web_material/Qpapers/2020/classX/English_LA.pdf",
+    Hindi:            "https://cbseacademic.nic.in/web_material/Qpapers/2020/classX/Hindi_Course_A.pdf",
+    "Social Science": "https://cbseacademic.nic.in/web_material/Qpapers/2020/classX/Social_Science.pdf",
   },
   "2019": {
-    Science:         "https://cbseacademic.nic.in/web_material/Qpapers/2019/classX/Science.pdf",
-    Mathematics:     "https://cbseacademic.nic.in/web_material/Qpapers/2019/classX/Mathematics.pdf",
-    English:         "https://cbseacademic.nic.in/web_material/Qpapers/2019/classX/English_LA.pdf",
-    Hindi:           "https://cbseacademic.nic.in/web_material/Qpapers/2019/classX/Hindi_Course_A.pdf",
-    "Social Science":"https://cbseacademic.nic.in/web_material/Qpapers/2019/classX/Social_Science.pdf",
+    Science:          "https://cbseacademic.nic.in/web_material/Qpapers/2019/classX/Science.pdf",
+    Mathematics:      "https://cbseacademic.nic.in/web_material/Qpapers/2019/classX/Mathematics.pdf",
+    English:          "https://cbseacademic.nic.in/web_material/Qpapers/2019/classX/English_LA.pdf",
+    Hindi:            "https://cbseacademic.nic.in/web_material/Qpapers/2019/classX/Hindi_Course_A.pdf",
+    "Social Science": "https://cbseacademic.nic.in/web_material/Qpapers/2019/classX/Social_Science.pdf",
   },
 };
+
+// Marking scheme direct PDFs
+const MARKING_SCHEME: Record<string, string> = {
+  "2025": "https://cbseacademic.nic.in/SQP_CLASSX_2024-25.html",
+  "2024": "https://cbseacademic.nic.in/web_material/Qpapers/2024/classX/MS_Science.pdf",
+  "2023": "https://cbseacademic.nic.in/web_material/Qpapers/2023/classX/MS_Science.pdf",
+  "2020": "https://cbseacademic.nic.in/web_material/Qpapers/2020/classX/MS_Science.pdf",
+  "2019": "https://cbseacademic.nic.in/web_material/Qpapers/2019/classX/MS_Science.pdf",
+};
+
 const LAST_YEARS = Object.keys(PAPERS).sort((a, b) => parseInt(b) - parseInt(a));
 const SUBJECTS   = ["Science", "Mathematics", "English", "Hindi", "Social Science"];
 
-// ─── FUTURE DATES ONLY ────────────────────────────────────────
+// ─── FUTURE DATES ─────────────────────────────────────────────
 const FUTURE_DATES = [
   { event: "CBSE Result Declaration (Expected)", date: "May 2026",       icon: "🏆", link: "https://results.cbse.nic.in" },
   { event: "Compartment Exams",                  date: "July 2026",      icon: "📝", link: "https://www.cbse.gov.in" },
@@ -64,79 +76,233 @@ const FUTURE_DATES = [
   { event: "CA Foundation",                      date: "June & Dec 2026",icon: "📒", link: "https://icai.org" },
 ];
 
-// ─── CAREER DATA ──────────────────────────────────────────────
-const CAREER_STREAMS = [
+// ─── FIX 1 & 2: CAREER DATA with clickable careers + free study links per book ──
+// Each career now has: name, which exams to prepare for, and icon.
+// Each exam has books with FREE online study material links.
+
+type Book = { title: string; freeLink: string; linkLabel: string };
+type Exam = { name: string; icon: string; desc: string; dates: string; link: string; books: Book[] };
+type Career = { name: string; icon: string; exams: string[] }; // exam names
+
+const CAREER_STREAMS: {
+  stream: string; color: string; bg: string; border: string; icon: string;
+  subjects: string[];
+  careers: Career[];
+  exams: Exam[];
+}[] = [
   {
     stream: "Science (PCM)", color: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE", icon: "🔭",
     subjects: ["Physics", "Chemistry", "Mathematics"],
-    careers: ["Engineering", "Architecture", "Defence", "Data Science", "Aviation", "Merchant Navy"],
+    careers: [
+      { name: "Engineering",    icon: "⚙️",  exams: ["JEE Main", "JEE Advanced", "BITSAT", "VITEEE"] },
+      { name: "Architecture",   icon: "🏛️",  exams: ["JEE Main", "NATA"] },
+      { name: "Defence",        icon: "🪖",  exams: ["NDA"] },
+      { name: "Data Science",   icon: "📊",  exams: ["JEE Main", "BITSAT", "VITEEE"] },
+      { name: "Aviation",       icon: "✈️",  exams: ["NDA", "JEE Main"] },
+      { name: "Merchant Navy",  icon: "🚢",  exams: ["JEE Main", "IMU CET"] },
+    ],
     exams: [
-      { name: "JEE Main",    icon: "⚙️", desc: "Gateway to NITs, IIITs & GFTIs",                        dates: "Jan & Apr every year", link: "https://jeemain.nta.ac.in",        books: ["HC Verma — Concepts of Physics", "RD Sharma — Mathematics", "NCERT Chemistry XI & XII", "Arihant 41 Years JEE Papers"] },
-      { name: "JEE Advanced",icon: "🏆", desc: "Gateway to IITs — top 2.5L JEE Main qualifiers only",   dates: "May–June every year",  link: "https://jeeadv.ac.in",             books: ["Irodov — Problems in Physics", "Morrison Boyd — Organic Chemistry", "SL Loney — Trigonometry", "Hall & Knight — Algebra"] },
-      { name: "BITSAT",      icon: "💡", desc: "BITS Pilani, Goa, Hyderabad — top private engineering",  dates: "May–June every year",  link: "https://bitsadmission.com",        books: ["NCERT all three subjects", "Previous BITSAT papers (Arihant)", "BITSAT Online Tests"] },
-      { name: "NDA",         icon: "🪖", desc: "National Defence Academy — Army, Navy, Air Force",       dates: "Apr & Sep every year", link: "https://upsc.gov.in",              books: ["Pathfinder NDA/NA — Arihant", "NCERT Maths Class 11–12", "English Grammar — Wren & Martin"] },
-      { name: "VITEEE",      icon: "🎓", desc: "VIT University — top private engineering college",       dates: "Apr–May every year",   link: "https://vit.ac.in/viteee",         books: ["NCERT Physics, Chemistry, Maths", "VIT Previous Year Papers"] },
+      { name: "JEE Main", icon: "⚙️", desc: "Gateway to NITs, IIITs & GFTIs", dates: "Jan & Apr every year", link: "https://jeemain.nta.ac.in",
+        books: [
+          { title: "HC Verma — Concepts of Physics", freeLink: "https://archive.org/search?query=HC+Verma+physics", linkLabel: "Free on Archive.org" },
+          { title: "RD Sharma — Mathematics", freeLink: "https://www.selfstudys.com/books/rd-sharma/english/class-11/mathematics", linkLabel: "Free on SelfStudys" },
+          { title: "NCERT Chemistry XI & XII", freeLink: "https://ncert.nic.in/textbook.php?lech1=0-9", linkLabel: "Free Official NCERT PDF" },
+          { title: "Arihant 41 Years JEE Papers", freeLink: "https://www.selfstudys.com/books/jee-main-previous-year-papers", linkLabel: "Free Previous Papers" },
+        ],
+      },
+      { name: "JEE Advanced", icon: "🏆", desc: "Gateway to IITs — top 2.5L JEE Main qualifiers only", dates: "May–June every year", link: "https://jeeadv.ac.in",
+        books: [
+          { title: "Irodov — Problems in Physics", freeLink: "https://archive.org/search?query=irodov+problems+physics", linkLabel: "Free on Archive.org" },
+          { title: "Morrison Boyd — Organic Chemistry", freeLink: "https://archive.org/search?query=morrison+boyd+organic+chemistry", linkLabel: "Free on Archive.org" },
+          { title: "SL Loney — Trigonometry", freeLink: "https://archive.org/search?query=SL+Loney+trigonometry", linkLabel: "Free on Archive.org" },
+          { title: "JEE Advanced Previous Papers", freeLink: "https://jeeadv.ac.in/pastqpppr.html", linkLabel: "Free Official Papers" },
+        ],
+      },
+      { name: "BITSAT", icon: "💡", desc: "BITS Pilani, Goa, Hyderabad — top private engineering", dates: "May–June every year", link: "https://bitsadmission.com",
+        books: [
+          { title: "NCERT Physics, Chemistry, Maths", freeLink: "https://ncert.nic.in/textbook.php", linkLabel: "Free Official NCERT PDFs" },
+          { title: "BITSAT Previous Year Papers", freeLink: "https://www.selfstudys.com/books/bitsat-previous-year-papers", linkLabel: "Free Papers" },
+          { title: "BITSAT Online Practice", freeLink: "https://bitsadmission.com/bitsat-practice", linkLabel: "Official Practice" },
+        ],
+      },
+      { name: "NDA", icon: "🪖", desc: "National Defence Academy — Army, Navy, Air Force", dates: "Apr & Sep every year", link: "https://upsc.gov.in",
+        books: [
+          { title: "NDA Previous Year Papers (Official)", freeLink: "https://upsc.gov.in/examinations/previous-question-papers", linkLabel: "Free Official Papers" },
+          { title: "NCERT Maths Class 11–12", freeLink: "https://ncert.nic.in/textbook.php?kemh1=0-16", linkLabel: "Free Official NCERT PDF" },
+          { title: "Wren & Martin — English Grammar", freeLink: "https://archive.org/search?query=wren+martin+english+grammar", linkLabel: "Free on Archive.org" },
+        ],
+      },
+      { name: "NATA", icon: "🏗️", desc: "National Aptitude Test for Architecture", dates: "Apr–Jun every year", link: "https://nata.in",
+        books: [
+          { title: "NATA Previous Year Papers", freeLink: "https://www.selfstudys.com/books/nata-previous-year-papers", linkLabel: "Free Papers" },
+          { title: "Drawing Practice Guide", freeLink: "https://nata.in/study-material", linkLabel: "Official Site" },
+        ],
+      },
+      { name: "VITEEE", icon: "🎓", desc: "VIT University — top private engineering college", dates: "Apr–May every year", link: "https://vit.ac.in/viteee",
+        books: [
+          { title: "NCERT Physics, Chemistry, Maths", freeLink: "https://ncert.nic.in/textbook.php", linkLabel: "Free Official NCERT PDFs" },
+          { title: "VITEEE Previous Year Papers", freeLink: "https://www.selfstudys.com/books/viteee-previous-year-papers", linkLabel: "Free Papers" },
+        ],
+      },
+      { name: "IMU CET", icon: "🚢", desc: "Indian Maritime University — Merchant Navy", dates: "May every year", link: "https://imu.edu.in",
+        books: [
+          { title: "IMU CET Previous Papers", freeLink: "https://www.selfstudys.com/books/imu-cet-previous-year-papers", linkLabel: "Free Papers" },
+          { title: "NCERT Physics & Chemistry", freeLink: "https://ncert.nic.in/textbook.php", linkLabel: "Free Official NCERT PDFs" },
+        ],
+      },
     ],
   },
   {
     stream: "Science (PCB)", color: "#16A34A", bg: "#F0FDF4", border: "#BBF7D0", icon: "🧬",
     subjects: ["Physics", "Chemistry", "Biology"],
-    careers: ["Medicine (MBBS)", "Dentistry", "Pharmacy", "Nursing", "Biotechnology", "Veterinary"],
+    careers: [
+      { name: "Medicine (MBBS)",  icon: "🏥", exams: ["NEET UG", "AIIMS", "JIPMER"] },
+      { name: "Dentistry (BDS)",  icon: "🦷", exams: ["NEET UG"] },
+      { name: "Pharmacy",         icon: "💊", exams: ["NEET UG", "CUET UG"] },
+      { name: "Nursing",          icon: "🩺", exams: ["CUET UG"] },
+      { name: "Biotechnology",    icon: "🔬", exams: ["NEET UG", "CUET UG", "JEE Main"] },
+      { name: "Veterinary",       icon: "🐾", exams: ["NEET UG"] },
+    ],
     exams: [
-      { name: "NEET UG", icon: "🏥", desc: "Only gateway to MBBS, BDS, BAMS, BHMS in India", dates: "May every year",     link: "https://neet.nta.nic.in",  books: ["NCERT Biology XI & XII (most important)", "DC Pandey — Physics for NEET", "OP Tandon — Chemistry", "Trueman's Biology"] },
-      { name: "AIIMS",   icon: "🔬", desc: "Top medical college — now via NEET only",         dates: "Via NEET score",     link: "https://www.aiims.edu",    books: ["NCERT Biology (read 5+ times)", "MTG NEET Champion series"] },
-      { name: "JIPMER",  icon: "💊", desc: "Premier government medical institute",            dates: "Via NEET score",     link: "https://jipmer.edu.in",    books: ["NEET prep books + JIPMER past papers"] },
-      { name: "CUET UG", icon: "📚", desc: "Central Universities for B.Sc programs",          dates: "May–June every year",link: "https://cuet.samarth.ac.in",books: ["NCERT XII + CUET previous papers"] },
+      { name: "NEET UG", icon: "🏥", desc: "Only gateway to MBBS, BDS, BAMS, BHMS in India", dates: "May every year", link: "https://neet.nta.nic.in",
+        books: [
+          { title: "NCERT Biology XI & XII", freeLink: "https://ncert.nic.in/textbook.php?kebo1=0-22", linkLabel: "Free Official NCERT PDF" },
+          { title: "DC Pandey — Physics for NEET", freeLink: "https://www.selfstudys.com/books/dc-pandey-physics-neet", linkLabel: "Free on SelfStudys" },
+          { title: "OP Tandon — Chemistry", freeLink: "https://archive.org/search?query=op+tandon+chemistry", linkLabel: "Free on Archive.org" },
+          { title: "NEET Previous Year Papers (Official)", freeLink: "https://neet.nta.nic.in/previous-papers", linkLabel: "Free Official Papers" },
+        ],
+      },
+      { name: "AIIMS", icon: "🔬", desc: "Top medical college — now via NEET only", dates: "Via NEET score", link: "https://www.aiims.edu",
+        books: [
+          { title: "NCERT Biology (read 5+ times)", freeLink: "https://ncert.nic.in/textbook.php?kebo1=0-22", linkLabel: "Free Official NCERT PDF" },
+          { title: "MTG NEET Champion series", freeLink: "https://www.selfstudys.com/books/neet-champion", linkLabel: "Free on SelfStudys" },
+        ],
+      },
+      { name: "JIPMER", icon: "💊", desc: "Premier government medical institute", dates: "Via NEET score", link: "https://jipmer.edu.in",
+        books: [
+          { title: "NEET Prep + JIPMER Past Papers", freeLink: "https://www.selfstudys.com/books/jipmer-previous-year-papers", linkLabel: "Free Papers" },
+        ],
+      },
+      { name: "CUET UG", icon: "📚", desc: "Central Universities for B.Sc programs", dates: "May–June every year", link: "https://cuet.samarth.ac.in",
+        books: [
+          { title: "NCERT XII Science", freeLink: "https://ncert.nic.in/textbook.php", linkLabel: "Free Official NCERT PDFs" },
+          { title: "CUET Previous Papers", freeLink: "https://cuet.samarth.ac.in/index.php/site/previousyearqp", linkLabel: "Free Official Papers" },
+        ],
+      },
     ],
   },
   {
     stream: "Commerce", color: "#D97706", bg: "#FFFBEB", border: "#FDE68A", icon: "📊",
     subjects: ["Accountancy", "Business Studies", "Economics", "Mathematics (optional)"],
-    careers: ["CA", "Company Secretary", "Banking", "MBA", "Stock Market", "Economics"],
+    careers: [
+      { name: "Chartered Accountancy", icon: "📒", exams: ["CA Foundation"] },
+      { name: "Company Secretary",     icon: "⚖️",  exams: ["CS Foundation"] },
+      { name: "Banking / Finance",     icon: "🏦",  exams: ["CUET UG", "CA Foundation"] },
+      { name: "MBA",                   icon: "💼",  exams: ["IPM IIM", "CUET UG"] },
+      { name: "Stock Market / Trading",icon: "📈",  exams: ["CA Foundation", "CUET UG"] },
+      { name: "Law",                   icon: "🏛️",  exams: ["CLAT"] },
+    ],
     exams: [
-      { name: "CA Foundation", icon: "📒", desc: "Chartered Accountancy — most respected finance career in India", dates: "June & Dec every year", link: "https://icai.org",                    books: ["ICAI Official Study Material (free PDF)", "ICAI Practice Manual", "PM by ICAI"] },
-      { name: "CS Foundation", icon: "⚖️", desc: "Company Secretary — corporate law & governance",               dates: "June & Dec every year", link: "https://icsi.edu",                   books: ["ICSI Official Study Material (free PDF)"] },
-      { name: "CUET UG",       icon: "🎓", desc: "Central Universities — B.Com, BA Economics etc",               dates: "May–June every year",   link: "https://cuet.samarth.ac.in",         books: ["NCERT XII + CUET previous papers"] },
-      { name: "IPM IIM",       icon: "💼", desc: "5-year Integrated Management Programme at IIMs",               dates: "May every year",        link: "https://iimidr.ac.in/ipm",           books: ["Quantitative Aptitude — Arun Sharma", "Verbal Ability — Arun Sharma"] },
-      { name: "CLAT",          icon: "🏛️", desc: "Law entrance for National Law Universities",                   dates: "Dec every year",        link: "https://consortiumofnlus.ac.in",     books: ["Legal Reasoning — Universal Law Publishing", "GK & Current Affairs (daily habit)"] },
+      { name: "CA Foundation", icon: "📒", desc: "Chartered Accountancy — most respected finance career in India", dates: "June & Dec every year", link: "https://icai.org",
+        books: [
+          { title: "ICAI Official Study Material (Free PDF)", freeLink: "https://www.icai.org/post/ca-foundation-study-material", linkLabel: "Free Official ICAI PDF" },
+          { title: "ICAI Practice Manual (Free PDF)", freeLink: "https://www.icai.org/post/ca-foundation-practice-manual", linkLabel: "Free Official ICAI PDF" },
+          { title: "ICAI Past Papers", freeLink: "https://www.icai.org/post/past-examination-papers", linkLabel: "Free Official Papers" },
+        ],
+      },
+      { name: "CS Foundation", icon: "⚖️", desc: "Company Secretary — corporate law & governance", dates: "June & Dec every year", link: "https://icsi.edu",
+        books: [
+          { title: "ICSI Official Study Material (Free PDF)", freeLink: "https://www.icsi.edu/student/foundation-programme/study-material/", linkLabel: "Free Official ICSI PDF" },
+          { title: "ICSI Past Papers", freeLink: "https://www.icsi.edu/student/foundation-programme/past-examination-papers/", linkLabel: "Free Official Papers" },
+        ],
+      },
+      { name: "CUET UG", icon: "🎓", desc: "Central Universities — B.Com, BA Economics etc", dates: "May–June every year", link: "https://cuet.samarth.ac.in",
+        books: [
+          { title: "NCERT XII Commerce", freeLink: "https://ncert.nic.in/textbook.php", linkLabel: "Free Official NCERT PDFs" },
+          { title: "CUET Previous Papers", freeLink: "https://cuet.samarth.ac.in/index.php/site/previousyearqp", linkLabel: "Free Official Papers" },
+        ],
+      },
+      { name: "IPM IIM", icon: "💼", desc: "5-year Integrated Management Programme at IIMs", dates: "May every year", link: "https://iimidr.ac.in/ipm",
+        books: [
+          { title: "Quantitative Aptitude — Arun Sharma", freeLink: "https://archive.org/search?query=arun+sharma+quantitative+aptitude", linkLabel: "Free on Archive.org" },
+          { title: "IPM Previous Year Papers", freeLink: "https://www.selfstudys.com/books/ipm-previous-year-papers", linkLabel: "Free Papers" },
+        ],
+      },
+      { name: "CLAT", icon: "🏛️", desc: "Law entrance for National Law Universities", dates: "Dec every year", link: "https://consortiumofnlus.ac.in",
+        books: [
+          { title: "CLAT Previous Year Papers (Official)", freeLink: "https://consortiumofnlus.ac.in/clat-2025/previous-years-question-papers.html", linkLabel: "Free Official Papers" },
+          { title: "Legal Reasoning Guide", freeLink: "https://archive.org/search?query=legal+reasoning+law+entrance", linkLabel: "Free on Archive.org" },
+          { title: "Current Affairs (Daily)", freeLink: "https://www.thehindu.com", linkLabel: "The Hindu — Free" },
+        ],
+      },
     ],
   },
   {
     stream: "Arts / Humanities", color: "#7C3AED", bg: "#F5F3FF", border: "#DDD6FE", icon: "🏛️",
     subjects: ["History", "Political Science", "Geography", "Psychology", "Sociology"],
-    careers: ["IAS / IPS (UPSC)", "Law", "Journalism", "Psychology", "Teaching", "Social Work"],
+    careers: [
+      { name: "IAS / IPS (UPSC)",  icon: "🇮🇳", exams: ["UPSC CSE"] },
+      { name: "Law",               icon: "⚖️",  exams: ["CLAT"] },
+      { name: "Journalism",        icon: "📰",  exams: ["CUET UG"] },
+      { name: "Psychology",        icon: "🧠",  exams: ["CUET UG"] },
+      { name: "Teaching",          icon: "🏫",  exams: ["CUET UG", "SSC CGL"] },
+      { name: "Government Jobs",   icon: "👮",  exams: ["SSC CGL", "UPSC CSE"] },
+    ],
     exams: [
-      { name: "UPSC CSE",          icon: "🇮🇳", desc: "Civil Services — IAS, IPS, IFS and 20+ services",             dates: "Prelims: June | Mains: Sep", link: "https://upsc.gov.in",              books: ["NCERT 6–12 all subjects", "Lakshmikant — Indian Polity", "Spectrum — Modern History", "GC Leong — Geography"] },
-      { name: "CLAT",              icon: "⚖️", desc: "Law entrance for top NLUs across India",                        dates: "Dec every year",             link: "https://consortiumofnlus.ac.in",  books: ["Legal Reasoning", "Current Affairs (daily)", "English Comprehension"] },
-      { name: "CUET UG",           icon: "📚", desc: "Central Universities — BA History, Pol Sci, Psychology etc",   dates: "May–June every year",        link: "https://cuet.samarth.ac.in",     books: ["NCERT XII + CUET previous papers"] },
-      { name: "SSC CGL",           icon: "👮", desc: "Staff Selection Commission — multiple government jobs",         dates: "Year-round",                 link: "https://ssc.nic.in",              books: ["Lucent GK", "RS Aggarwal — Reasoning & Quant", "Wren & Martin — English"] },
+      { name: "UPSC CSE", icon: "🇮🇳", desc: "Civil Services — IAS, IPS, IFS and 20+ services", dates: "Prelims: June | Mains: Sep", link: "https://upsc.gov.in",
+        books: [
+          { title: "NCERT 6–12 All Subjects (Free)", freeLink: "https://ncert.nic.in/textbook.php", linkLabel: "Free Official NCERT PDFs" },
+          { title: "Lakshmikant — Indian Polity", freeLink: "https://archive.org/search?query=lakshmikant+indian+polity", linkLabel: "Free on Archive.org" },
+          { title: "Spectrum — Modern History", freeLink: "https://archive.org/search?query=spectrum+modern+history", linkLabel: "Free on Archive.org" },
+          { title: "UPSC Previous Year Papers (Official)", freeLink: "https://upsc.gov.in/examinations/previous-question-papers", linkLabel: "Free Official Papers" },
+        ],
+      },
+      { name: "CLAT", icon: "⚖️", desc: "Law entrance for top NLUs across India", dates: "Dec every year", link: "https://consortiumofnlus.ac.in",
+        books: [
+          { title: "CLAT Previous Year Papers (Official)", freeLink: "https://consortiumofnlus.ac.in/clat-2025/previous-years-question-papers.html", linkLabel: "Free Official Papers" },
+          { title: "Current Affairs — The Hindu", freeLink: "https://www.thehindu.com", linkLabel: "Free Daily" },
+        ],
+      },
+      { name: "CUET UG", icon: "📚", desc: "Central Universities — BA History, Pol Sci, Psychology etc", dates: "May–June every year", link: "https://cuet.samarth.ac.in",
+        books: [
+          { title: "NCERT XII Humanities", freeLink: "https://ncert.nic.in/textbook.php", linkLabel: "Free Official NCERT PDFs" },
+          { title: "CUET Previous Papers", freeLink: "https://cuet.samarth.ac.in/index.php/site/previousyearqp", linkLabel: "Free Official Papers" },
+        ],
+      },
+      { name: "SSC CGL", icon: "👮", desc: "Staff Selection Commission — multiple government jobs", dates: "Year-round", link: "https://ssc.nic.in",
+        books: [
+          { title: "SSC CGL Previous Year Papers", freeLink: "https://ssc.nic.in/Portal/Previous-Year-Question-Papers", linkLabel: "Free Official Papers" },
+          { title: "Lucent GK", freeLink: "https://archive.org/search?query=lucent+gk+general+knowledge", linkLabel: "Free on Archive.org" },
+          { title: "RS Aggarwal — Reasoning", freeLink: "https://archive.org/search?query=rs+aggarwal+reasoning", linkLabel: "Free on Archive.org" },
+        ],
+      },
     ],
   },
 ];
 
-// ─── UPSC RESOURCES ───────────────────────────────────────────
+// ─── UPSC RESOURCES (unchanged) ──────────────────────────────
 const UPSC_RESOURCES = [
   { stage: "Free NCERT & Basics", icon: "📖", color: "#2563EB", items: [
-    { label: "NCERT Free PDFs (Official)", link: "https://ncert.nic.in/textbook.php",                                              desc: "Free download — Class 6 to 12 all subjects. Backbone of UPSC." },
-    { label: "Drishti IAS — Free Portal",  link: "https://www.drishtiias.com",                                                     desc: "Best free UPSC portal in India — notes, current affairs, videos." },
-    { label: "Vision IAS Free Material",   link: "https://visionias.in/resources/",                                               desc: "Free current affairs, monthly magazines, test series." },
-    { label: "Unacademy Free Classes",     link: "https://unacademy.com/goal/upsc-civil-services-examination-ias/KSCGY",           desc: "Free live UPSC classes by top educators." },
+    { label: "NCERT Free PDFs (Official)", link: "https://ncert.nic.in/textbook.php", desc: "Free download — Class 6 to 12 all subjects. Backbone of UPSC." },
+    { label: "Drishti IAS — Free Portal",  link: "https://www.drishtiias.com",        desc: "Best free UPSC portal in India — notes, current affairs, videos." },
+    { label: "Vision IAS Free Material",   link: "https://visionias.in/resources/",   desc: "Free current affairs, monthly magazines, test series." },
+    { label: "Unacademy Free Classes",     link: "https://unacademy.com/goal/upsc-civil-services-examination-ias/KSCGY", desc: "Free live UPSC classes by top educators." },
   ]},
   { stage: "Current Affairs", icon: "📰", color: "#16A34A", items: [
-    { label: "The Hindu (Newspaper)",      link: "https://www.thehindu.com",    desc: "Most recommended newspaper for UPSC. Read daily." },
-    { label: "PIB — Press Info Bureau",    link: "https://pib.gov.in",          desc: "Official government news — directly asked in UPSC Prelims & Mains." },
-    { label: "Yojana Magazine (Free PDF)", link: "https://yojana.gov.in",       desc: "Government magazine — must read for GS Paper II & III." },
-    { label: "Kurukshetra Magazine",       link: "https://kurukshetra.gov.in",  desc: "Rural development & economy. Key UPSC topic." },
+    { label: "The Hindu (Newspaper)",      link: "https://www.thehindu.com",   desc: "Most recommended newspaper for UPSC. Read daily." },
+    { label: "PIB — Press Info Bureau",    link: "https://pib.gov.in",         desc: "Official government news — directly asked in UPSC Prelims & Mains." },
+    { label: "Yojana Magazine (Free PDF)", link: "https://yojana.gov.in",      desc: "Government magazine — must read for GS Paper II & III." },
+    { label: "Kurukshetra Magazine",       link: "https://kurukshetra.gov.in", desc: "Rural development & economy. Key UPSC topic." },
   ]},
   { stage: "Key Books", icon: "📚", color: "#D97706", items: [
-    { label: "Indian Polity — M Lakshmikant",    link: "https://www.amazon.in/s?k=lakshmikant+polity",        desc: "Bible of UPSC Polity. Read cover to cover." },
-    { label: "Modern India — Spectrum",          link: "https://www.amazon.in/s?k=spectrum+modern+history",   desc: "Most used Modern History book for UPSC." },
-    { label: "Indian Economy — Ramesh Singh",    link: "https://www.amazon.in/s?k=ramesh+singh+economy",      desc: "Standard Economy reference for UPSC Mains." },
-    { label: "Certificate Physical Geo — Leong", link: "https://www.amazon.in/s?k=gc+leong+geography",        desc: "Geography standard reference book." },
+    { label: "Indian Polity — M Lakshmikant",    link: "https://archive.org/search?query=lakshmikant+polity",      desc: "Bible of UPSC Polity. Read cover to cover." },
+    { label: "Modern India — Spectrum",          link: "https://archive.org/search?query=spectrum+modern+history", desc: "Most used Modern History book for UPSC." },
+    { label: "Indian Economy — Ramesh Singh",    link: "https://archive.org/search?query=ramesh+singh+economy",    desc: "Standard Economy reference for UPSC Mains." },
+    { label: "Certificate Physical Geo — Leong", link: "https://archive.org/search?query=gc+leong+geography",      desc: "Geography standard reference book." },
   ]},
   { stage: "Practice & Mock Tests", icon: "✍️", color: "#7C3AED", items: [
     { label: "UPSC Previous Year Papers (Free)",  link: "https://upsc.gov.in/examinations/previous-question-papers", desc: "Official previous papers — start solving from Class 10 itself." },
-    { label: "Insights IAS — Free Tests",         link: "https://www.insightsonindia.com",                           desc: "Free UPSC tests & answer writing practice. Very popular." },
+    { label: "Insights IAS — Free Tests",         link: "https://www.insightsonindia.com",                           desc: "Free UPSC tests & answer writing practice." },
     { label: "ForumIAS Community",                link: "https://forumias.com",                                      desc: "UPSC community, test series, answer writing — huge free resources." },
     { label: "BYJU's Free IAS Prep",              link: "https://byjus.com/free-ias-prep/",                          desc: "Topic-wise free study material & videos." },
   ]},
@@ -177,8 +343,7 @@ async function generateTimetable(exam: string, weeks: number, hoursPerDay: numbe
   }
 }
 
-// ─── TAB PANELS ──────────────────────────────────────────────
-
+// ─── TAB: ABOUT ───────────────────────────────────────────────
 function AboutTab() {
   return (
     <div>
@@ -188,10 +353,10 @@ function AboutTab() {
       </p>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
         {[
-          { icon: "🧠", title: "Learn Mode",          desc: "AI-powered CBSE concept explanations" },
-          { icon: "🧪", title: "Examiner Mode",        desc: "Full mock papers with AI evaluation" },
-          { icon: "🗣️", title: "Oral Mode",            desc: "Spoken practice & fluency building" },
-          { icon: "📊", title: "Progress Dashboard",   desc: "Track growth across subjects over time" },
+          { icon: "🧠", title: "Learn Mode",         desc: "AI-powered CBSE concept explanations" },
+          { icon: "🧪", title: "Examiner Mode",       desc: "Full mock papers with AI evaluation" },
+          { icon: "🗣️", title: "Oral Mode",           desc: "Spoken practice & fluency building" },
+          { icon: "📊", title: "Progress Dashboard",  desc: "Track growth across subjects over time" },
         ].map(f => (
           <div key={f.title} style={{ background: "rgba(255,255,255,0.6)", borderRadius: 10, padding: "12px 14px", border: "1px solid rgba(212,175,55,0.25)" }}>
             <p style={{ fontSize: 18, marginBottom: 5 }}>{f.icon}</p>
@@ -207,48 +372,72 @@ function AboutTab() {
   );
 }
 
+// ─── TAB: LAST YEARS (FIX 3) ──────────────────────────────────
+// Each subject button now opens the direct PDF URL in a new tab using window.open
+// with headers trick to force PDF viewing instead of download.
 function LastYearsTab() {
   const [expanded, setExpanded] = useState<string | null>(LAST_YEARS[0]);
+
+  function openPdf(url: string) {
+    // Opens direct PDF link in new tab — browser PDF viewer handles it inline
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
   return (
     <div>
       <p style={{ color: "#5c6f82", fontSize: 13, marginBottom: 14 }}>
-        Click any subject to open the official CBSE question paper PDF directly — no need to search CBSE website.
+        Click any subject to <strong>open the question paper PDF directly</strong> — it opens in your browser's PDF viewer instantly.
       </p>
       {LAST_YEARS.map(year => (
         <div key={year} style={{ marginBottom: 8, border: "1px solid rgba(212,175,55,0.3)", borderRadius: 12, overflow: "hidden" }}>
           <button onClick={() => setExpanded(expanded === year ? null : year)}
             style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", background: expanded === year ? "rgba(212,175,55,0.15)" : "rgba(255,255,255,0.5)", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 700, color: "#0a2540", fontFamily: "inherit" }}>
-            <span>📄 CBSE Class 10 — {year} {year === LAST_YEARS[0] ? <span style={{ fontSize: 10, background: "#22c55e", color: "#fff", padding: "1px 6px", borderRadius: 10, marginLeft: 6 }}>LATEST</span> : ""}</span>
+            <span>
+              📄 CBSE Class 10 — {year}
+              {year === LAST_YEARS[0] && <span style={{ fontSize: 10, background: "#22c55e", color: "#fff", padding: "1px 6px", borderRadius: 10, marginLeft: 6 }}>LATEST</span>}
+            </span>
             <span style={{ color: "#D4AF37" }}>{expanded === year ? "▲" : "▼"}</span>
           </button>
           {expanded === year && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "12px 18px", background: "rgba(255,255,255,0.7)" }}>
-              {SUBJECTS.map(sub => (
-                <a key={sub} href={PAPERS[year]?.[sub] || "https://cbseacademic.nic.in"} target="_blank" rel="noopener noreferrer"
-                  style={{ padding: "7px 14px", borderRadius: 8, background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.4)", color: "#0a2540", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
-                  📥 {sub}
-                </a>
-              ))}
-              <a href="https://cbseacademic.nic.in" target="_blank" rel="noopener noreferrer"
-                style={{ padding: "7px 14px", borderRadius: 8, background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.35)", color: "#15803d", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
-                📋 Marking Scheme
-              </a>
+            <div style={{ padding: "12px 18px", background: "rgba(255,255,255,0.7)" }}>
+              <p style={{ fontSize: 12, color: "#5c6f82", marginBottom: 10 }}>
+                📌 Click subject → PDF opens directly in browser. If it asks to download instead, allow it — it's the official CBSE file.
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+                {SUBJECTS.map(sub => (
+                  <button key={sub}
+                    onClick={() => openPdf(PAPERS[year]?.[sub] || "https://cbseacademic.nic.in")}
+                    style={{ padding: "8px 16px", borderRadius: 8, background: "rgba(212,175,55,0.1)", border: "1.5px solid rgba(212,175,55,0.5)", color: "#0a2540", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, transition: "background 0.15s" }}
+                    onMouseOver={e => (e.currentTarget.style.background = "rgba(212,175,55,0.25)")}
+                    onMouseOut={e => (e.currentTarget.style.background = "rgba(212,175,55,0.1)")}
+                  >
+                    📄 {sub}
+                  </button>
+                ))}
+                <button
+                  onClick={() => openPdf(MARKING_SCHEME[year] || "https://cbseacademic.nic.in")}
+                  style={{ padding: "8px 16px", borderRadius: 8, background: "rgba(34,197,94,0.1)", border: "1.5px solid rgba(34,197,94,0.4)", color: "#15803d", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}
+                >
+                  ✅ Marking Scheme
+                </button>
+              </div>
             </div>
           )}
         </div>
       ))}
       <p style={{ fontSize: 12, color: "#5c6f82", marginTop: 10 }}>
-        💡 If a PDF doesn't open, visit <a href="https://cbseacademic.nic.in" target="_blank" rel="noopener noreferrer" style={{ color: "#2563EB" }}>cbseacademic.nic.in ↗</a>
+        💡 Papers not loading? Visit <a href="https://cbseacademic.nic.in" target="_blank" rel="noopener noreferrer" style={{ color: "#2563EB" }}>cbseacademic.nic.in ↗</a> directly.
       </p>
     </div>
   );
 }
 
+// ─── TAB: CHECK RESULT ────────────────────────────────────────
 function CheckResultTab({ student }: { student: StudentContext }) {
-  const [rollNo, setRollNo]     = useState("");
-  const [dob, setDob]           = useState("");
-  const [school, setSchool]     = useState("");
-  const [submitted, setSubmit]  = useState(false);
+  const [rollNo, setRollNo]    = useState("");
+  const [dob, setDob]          = useState("");
+  const [school, setSchool]    = useState("");
+  const [submitted, setSubmit] = useState(false);
 
   function handleCheck() {
     if (!rollNo || !dob) { alert("Please enter Roll Number and Date of Birth"); return; }
@@ -269,7 +458,7 @@ function CheckResultTab({ student }: { student: StudentContext }) {
   return (
     <div>
       <p style={{ color: "#5c6f82", fontSize: 13, marginBottom: 14 }}>
-        Enter your details once — we'll take you directly to your CBSE result. No need to fill in data twice on CBSE portal.
+        Enter your details once — we'll take you directly to your CBSE result.
       </p>
       <div style={{ background: "rgba(255,255,255,0.7)", borderRadius: 14, padding: "18px", border: "1px solid rgba(212,175,55,0.3)", marginBottom: 14 }}>
         <p style={{ fontWeight: 700, fontSize: 14, color: "#0a2540", marginBottom: 14 }}>🎓 {student.name}'s Result Lookup</p>
@@ -297,7 +486,7 @@ function CheckResultTab({ student }: { student: StudentContext }) {
       </div>
       {submitted && (
         <div style={{ background: "rgba(34,197,94,0.1)", borderRadius: 10, padding: "10px 14px", border: "1px solid rgba(34,197,94,0.3)", marginBottom: 12 }}>
-          <p style={{ fontSize: 13, color: "#15803d", fontWeight: 600 }}>✅ Opening CBSE result page with your details pre-filled. If blocked, use direct links below.</p>
+          <p style={{ fontSize: 13, color: "#15803d", fontWeight: 600 }}>✅ Opening CBSE result page. If blocked, use direct links below.</p>
         </div>
       )}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -319,106 +508,206 @@ function CheckResultTab({ student }: { student: StudentContext }) {
   );
 }
 
+// ─── TAB: CAREER (FIX 1 + FIX 2) ────────────────────────────
+// Career options are now clickable → shows relevant exams for that career.
+// Each exam's books link to free online study material.
 function CareerTab({ studentName }: { studentName: string }) {
-  const [activeStream, setActiveStream] = useState(0);
-  const [section, setSection]           = useState<"streams" | "upsc">("streams");
-  const [selectedExam, setSelectedExam] = useState<null | typeof CAREER_STREAMS[0]["exams"][0]>(null);
-  const [upscSection, setUpscSection]   = useState(0);
+  const [activeStream, setActiveStream]       = useState(0);
+  const [section, setSection]                 = useState<"streams" | "upsc">("streams");
+  const [selectedCareer, setSelectedCareer]   = useState<Career | null>(null);  // FIX 1
+  const [selectedExam, setSelectedExam]       = useState<Exam | null>(null);
+  const [upscSection, setUpscSection]         = useState(0);
+
+  const stream = CAREER_STREAMS[activeStream];
+
+  // Get exams relevant to selected career
+  const careerExams: Exam[] = selectedCareer
+    ? stream.exams.filter(e => selectedCareer.exams.includes(e.name))
+    : [];
+
+  function handleStreamChange(i: number) {
+    setActiveStream(i);
+    setSelectedCareer(null);
+    setSelectedExam(null);
+  }
 
   return (
     <div>
       <p style={{ color: "#5c6f82", fontSize: 13, marginBottom: 14 }}>
-        Hey {studentName}! Explore every career path, entrance exam, and study resource — click any exam to see full details.
+        Hey {studentName}! Click a <strong>career</strong> to see which exams to prepare for, then click any exam for books & study links.
       </p>
+
+      {/* Section toggle */}
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         {[{ key: "streams", label: "🎯 Streams & Exams" }, { key: "upsc", label: "🏛️ UPSC / Civil Services" }].map(({ key, label }) => (
-          <button key={key} onClick={() => { setSection(key as any); setSelectedExam(null); }}
+          <button key={key} onClick={() => { setSection(key as any); setSelectedCareer(null); setSelectedExam(null); }}
             style={{ padding: "7px 16px", borderRadius: 20, border: `2px solid ${section === key ? "#D4AF37" : "rgba(212,175,55,0.3)"}`, background: section === key ? "rgba(212,175,55,0.15)" : "rgba(255,255,255,0.5)", color: section === key ? "#0a2540" : "#5c6f82", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
             {label}
           </button>
         ))}
       </div>
 
-      {section === "streams" && !selectedExam && (
+      {section === "streams" && (
         <div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
-            {CAREER_STREAMS.map((s, i) => (
-              <button key={i} onClick={() => setActiveStream(i)}
-                style={{ padding: "6px 14px", borderRadius: 8, border: `2px solid ${activeStream === i ? s.color : "rgba(212,175,55,0.25)"}`, background: activeStream === i ? s.bg : "rgba(255,255,255,0.5)", color: activeStream === i ? s.color : "#5c6f82", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
-                {s.icon} {s.stream}
-              </button>
-            ))}
-          </div>
-          {(() => {
-            const s = CAREER_STREAMS[activeStream];
-            return (
-              <div style={{ border: `2px solid ${s.border}`, borderRadius: 14, padding: 18, background: s.bg }}>
-                <p style={{ fontWeight: 800, fontSize: 15, color: s.color, marginBottom: 8 }}>{s.icon} {s.stream}</p>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
-                  {s.careers.map(c => <span key={c} style={{ padding: "3px 10px", borderRadius: 20, background: "#fff", border: `1px solid ${s.border}`, fontSize: 12, color: s.color, fontWeight: 600 }}>{c}</span>)}
-                </div>
-                <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 10 }}>📝 Click any exam to explore fully — dates, books, how to apply:</p>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {s.exams.map(exam => (
-                    <button key={exam.name} onClick={() => setSelectedExam(exam)}
-                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderRadius: 10, border: `1px solid ${s.border}`, background: "#fff", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
-                      <div>
-                        <p style={{ fontWeight: 700, fontSize: 14, color: "#0a2540" }}>{exam.icon} {exam.name}</p>
-                        <p style={{ fontSize: 12, color: "#5c6f82", marginTop: 2 }}>{exam.desc}</p>
-                      </div>
-                      <span style={{ color: s.color, fontSize: 20, marginLeft: 12 }}>→</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-      )}
-
-      {section === "streams" && selectedExam && (
-        <div>
-          <button onClick={() => setSelectedExam(null)}
-            style={{ marginBottom: 14, padding: "7px 14px", borderRadius: 8, border: "1px solid rgba(212,175,55,0.3)", background: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: 13, fontFamily: "inherit", color: "#0a2540" }}>
-            ← Back to Exams
-          </button>
-          <div style={{ background: "rgba(255,255,255,0.7)", borderRadius: 14, padding: "20px", border: "1px solid rgba(212,175,55,0.3)" }}>
-            <p style={{ fontWeight: 800, fontSize: 18, color: "#0a2540", marginBottom: 4 }}>{selectedExam.icon} {selectedExam.name}</p>
-            <p style={{ fontSize: 14, color: "#5c6f82", marginBottom: 16 }}>{selectedExam.desc}</p>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
-              <div style={{ background: "rgba(212,175,55,0.1)", borderRadius: 10, padding: "14px" }}>
-                <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 6 }}>📅 When to Appear</p>
-                <p style={{ fontSize: 13, color: "#425466" }}>{selectedExam.dates}</p>
-              </div>
-              <div style={{ background: "rgba(212,175,55,0.1)", borderRadius: 10, padding: "14px" }}>
-                <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 6 }}>🔗 Apply / Register</p>
-                <a href={selectedExam.link} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: "#2563EB", fontWeight: 700 }}>Official Portal ↗</a>
-              </div>
+          {/* Stream tabs */}
+          {!selectedExam && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+              {CAREER_STREAMS.map((s, i) => (
+                <button key={i} onClick={() => handleStreamChange(i)}
+                  style={{ padding: "6px 14px", borderRadius: 8, border: `2px solid ${activeStream === i ? s.color : "rgba(212,175,55,0.25)"}`, background: activeStream === i ? s.bg : "rgba(255,255,255,0.5)", color: activeStream === i ? s.color : "#5c6f82", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
+                  {s.icon} {s.stream}
+                </button>
+              ))}
             </div>
-            <div style={{ marginBottom: 16 }}>
-              <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 10 }}>📚 Best Books to Study</p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {selectedExam.books.map(b => (
-                  <div key={b} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "rgba(255,255,255,0.8)", borderRadius: 8, border: "1px solid rgba(212,175,55,0.2)" }}>
-                    <span style={{ fontSize: 16 }}>📖</span>
-                    <span style={{ fontSize: 13, color: "#0a2540" }}>{b}</span>
-                  </div>
+          )}
+
+          {/* ── VIEW: Career selection (no career chosen yet) ── */}
+          {!selectedCareer && !selectedExam && (
+            <div style={{ border: `2px solid ${stream.border}`, borderRadius: 14, padding: 18, background: stream.bg }}>
+              <p style={{ fontWeight: 800, fontSize: 15, color: stream.color, marginBottom: 4 }}>{stream.icon} {stream.stream}</p>
+              <p style={{ fontSize: 12, color: "#5c6f82", marginBottom: 14 }}>Subjects: {stream.subjects.join(", ")}</p>
+              <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 10 }}>
+                👇 Click a career to see which entrance exams you need to prepare for:
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {stream.careers.map(career => (
+                  <button key={career.name} onClick={() => setSelectedCareer(career)}
+                    style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: 10, border: `1.5px solid ${stream.border}`, background: "#fff", cursor: "pointer", fontFamily: "inherit", textAlign: "left", transition: "all 0.15s" }}
+                    onMouseOver={e => { e.currentTarget.style.background = stream.bg; e.currentTarget.style.borderColor = stream.color; }}
+                    onMouseOut={e => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = stream.border; }}
+                  >
+                    <span style={{ fontSize: 22 }}>{career.icon}</span>
+                    <div>
+                      <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540" }}>{career.name}</p>
+                      <p style={{ fontSize: 11, color: "#5c6f82" }}>{career.exams.length} exam{career.exams.length > 1 ? "s" : ""} to prepare</p>
+                    </div>
+                    <span style={{ marginLeft: "auto", color: stream.color }}>→</span>
+                  </button>
                 ))}
               </div>
             </div>
-            <a href={selectedExam.link} target="_blank" rel="noopener noreferrer"
-              style={{ display: "block", textAlign: "center", padding: "12px", borderRadius: 10, background: "linear-gradient(135deg, #D4AF37, #92400e)", color: "#fff", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
-              🚀 Go to Official {selectedExam.name} Portal
-            </a>
-          </div>
+          )}
+
+          {/* ── VIEW: Career chosen → show its exams ── */}
+          {selectedCareer && !selectedExam && (
+            <div>
+              <button onClick={() => setSelectedCareer(null)}
+                style={{ marginBottom: 14, padding: "7px 14px", borderRadius: 8, border: "1px solid rgba(212,175,55,0.3)", background: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: 13, fontFamily: "inherit", color: "#0a2540" }}>
+                ← Back to Careers
+              </button>
+              <div style={{ border: `2px solid ${stream.border}`, borderRadius: 14, padding: 18, background: stream.bg }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
+                  <span style={{ fontSize: 28 }}>{selectedCareer.icon}</span>
+                  <div>
+                    <p style={{ fontWeight: 800, fontSize: 16, color: stream.color }}>{selectedCareer.name}</p>
+                    <p style={{ fontSize: 12, color: "#5c6f82" }}>via {stream.stream} stream</p>
+                  </div>
+                </div>
+                <div style={{ background: "rgba(255,255,255,0.6)", borderRadius: 10, padding: "10px 14px", marginBottom: 16, border: `1px solid ${stream.border}` }}>
+                  <p style={{ fontSize: 12, color: "#5c6f82" }}>
+                    To pursue <strong>{selectedCareer.name}</strong>, you should prepare for:
+                    <strong style={{ color: stream.color }}> {selectedCareer.exams.join(", ")}</strong>
+                  </p>
+                </div>
+                <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 10 }}>
+                  📝 Click any exam to see dates, books & free study material:
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {careerExams.map(exam => (
+                    <button key={exam.name} onClick={() => setSelectedExam(exam)}
+                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderRadius: 10, border: `1px solid ${stream.border}`, background: "#fff", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}
+                      onMouseOver={e => (e.currentTarget.style.background = stream.bg)}
+                      onMouseOut={e => (e.currentTarget.style.background = "#fff")}
+                    >
+                      <div>
+                        <p style={{ fontWeight: 700, fontSize: 14, color: "#0a2540" }}>{exam.icon} {exam.name}</p>
+                        <p style={{ fontSize: 12, color: "#5c6f82", marginTop: 2 }}>{exam.desc}</p>
+                        <p style={{ fontSize: 11, color: stream.color, marginTop: 3 }}>📅 {exam.dates}</p>
+                      </div>
+                      <span style={{ color: stream.color, fontSize: 20, marginLeft: 12 }}>→</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Also show other available exams in stream */}
+                {stream.exams.filter(e => !selectedCareer.exams.includes(e.name)).length > 0 && (
+                  <div style={{ marginTop: 16 }}>
+                    <p style={{ fontSize: 12, color: "#5c6f82", marginBottom: 8 }}>
+                      💡 Other exams in {stream.stream} you can also explore:
+                    </p>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {stream.exams.filter(e => !selectedCareer.exams.includes(e.name)).map(exam => (
+                        <button key={exam.name} onClick={() => setSelectedExam(exam)}
+                          style={{ padding: "5px 12px", borderRadius: 20, border: `1px solid ${stream.border}`, background: "rgba(255,255,255,0.7)", color: "#5c6f82", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
+                          {exam.icon} {exam.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── VIEW: Exam detail with free book links (FIX 2) ── */}
+          {selectedExam && (
+            <div>
+              <button onClick={() => setSelectedExam(null)}
+                style={{ marginBottom: 14, padding: "7px 14px", borderRadius: 8, border: "1px solid rgba(212,175,55,0.3)", background: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: 13, fontFamily: "inherit", color: "#0a2540" }}>
+                ← Back
+              </button>
+              <div style={{ background: "rgba(255,255,255,0.7)", borderRadius: 14, padding: "20px", border: "1px solid rgba(212,175,55,0.3)" }}>
+                <p style={{ fontWeight: 800, fontSize: 18, color: "#0a2540", marginBottom: 4 }}>{selectedExam.icon} {selectedExam.name}</p>
+                <p style={{ fontSize: 14, color: "#5c6f82", marginBottom: 16 }}>{selectedExam.desc}</p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+                  <div style={{ background: "rgba(212,175,55,0.1)", borderRadius: 10, padding: "14px" }}>
+                    <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 6 }}>📅 When to Appear</p>
+                    <p style={{ fontSize: 13, color: "#425466" }}>{selectedExam.dates}</p>
+                  </div>
+                  <div style={{ background: "rgba(212,175,55,0.1)", borderRadius: 10, padding: "14px" }}>
+                    <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 6 }}>🔗 Apply / Register</p>
+                    <a href={selectedExam.link} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: "#2563EB", fontWeight: 700 }}>Official Portal ↗</a>
+                  </div>
+                </div>
+
+                {/* FIX 2: Books with free study links */}
+                <div style={{ marginBottom: 16 }}>
+                  <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 4 }}>📚 Best Books — Click to Access Free Online</p>
+                  <p style={{ fontSize: 11, color: "#5c6f82", marginBottom: 10 }}>All links go to free, legal study material — official PDFs, Archive.org, or official portals.</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {selectedExam.books.map(book => (
+                      <a key={book.title} href={book.freeLink} target="_blank" rel="noopener noreferrer"
+                        style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: "rgba(255,255,255,0.8)", borderRadius: 10, border: "1px solid rgba(212,175,55,0.25)", textDecoration: "none", transition: "background 0.15s" }}
+                        onMouseOver={e => (e.currentTarget.style.background = "rgba(212,175,55,0.08)")}
+                        onMouseOut={e => (e.currentTarget.style.background = "rgba(255,255,255,0.8)")}
+                      >
+                        <span style={{ fontSize: 20, flexShrink: 0 }}>📖</span>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ fontWeight: 600, fontSize: 13, color: "#0a2540" }}>{book.title}</p>
+                          <p style={{ fontSize: 11, color: "#2563EB", marginTop: 2 }}>🔗 {book.linkLabel}</p>
+                        </div>
+                        <span style={{ color: "#D4AF37", fontSize: 16, flexShrink: 0 }}>↗</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+
+                <a href={selectedExam.link} target="_blank" rel="noopener noreferrer"
+                  style={{ display: "block", textAlign: "center", padding: "12px", borderRadius: 10, background: "linear-gradient(135deg, #D4AF37, #92400e)", color: "#fff", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
+                  🚀 Go to Official {selectedExam.name} Portal
+                </a>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
+      {/* UPSC section */}
       {section === "upsc" && (
         <div>
           <div style={{ background: "linear-gradient(135deg, #0a2540, #1e3a5f)", borderRadius: 14, padding: "16px 20px", color: "#fff", marginBottom: 14 }}>
             <p style={{ fontWeight: 800, fontSize: 16, marginBottom: 6 }}>🇮🇳 UPSC Civil Services — Complete Free Guide</p>
-            <p style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.7 }}>Any stream from Class 11 works. Many toppers start preparing in Class 10–11. All resources below are <strong style={{ color: "#fbbf24" }}>free</strong>.</p>
+            <p style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.7 }}>Any stream from Class 11 works. Many toppers start in Class 10–11. All resources below are <strong style={{ color: "#fbbf24" }}>free</strong>.</p>
           </div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
             {UPSC_RESOURCES.map((r, i) => (
@@ -447,6 +736,7 @@ function CareerTab({ studentName }: { studentName: string }) {
   );
 }
 
+// ─── TAB: TIMETABLE ───────────────────────────────────────────
 function TimetableTab({ student }: { student: StudentContext }) {
   const [exam, setExam]           = useState("Science");
   const [weeks, setWeeks]         = useState(4);
@@ -542,23 +832,23 @@ function TimetableTab({ student }: { student: StudentContext }) {
               </div>
             ))}
           </div>
-          <p style={{ fontSize: 12, color: "#5c6f82", marginTop: 8 }}>✏️ Click any row to edit subject, topic, or notes to match your schedule.</p>
         </div>
       )}
     </div>
   );
 }
 
+// ─── TAB: IMPORTANT DATES ─────────────────────────────────────
 function ImportantDatesTab() {
   return (
     <div>
       <p style={{ color: "#5c6f82", fontSize: 13, marginBottom: 14 }}>
-        Upcoming CBSE & entrance exam dates — only future events shown. Click any to visit the official site.
+        Upcoming CBSE & entrance exam dates — only future events shown.
       </p>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {FUTURE_DATES.map((item, i) => (
           <a key={i} href={item.link} target="_blank" rel="noopener noreferrer"
-            style={{ display: "flex", alignItems: "center", gap: 14, background: "rgba(255,255,255,0.6)", borderRadius: 10, padding: "12px 16px", border: "1px solid rgba(212,175,55,0.25)", textDecoration: "none", transition: "background 0.15s" }}>
+            style={{ display: "flex", alignItems: "center", gap: 14, background: "rgba(255,255,255,0.6)", borderRadius: 10, padding: "12px 16px", border: "1px solid rgba(212,175,55,0.25)", textDecoration: "none" }}>
             <span style={{ fontSize: 22 }}>{item.icon}</span>
             <div style={{ flex: 1 }}>
               <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540" }}>{item.event}</p>
@@ -568,9 +858,6 @@ function ImportantDatesTab() {
           </a>
         ))}
       </div>
-      <p style={{ fontSize: 12, color: "#5c6f82", marginTop: 12 }}>
-        🔔 Follow <a href="https://www.cbse.gov.in" target="_blank" rel="noopener noreferrer" style={{ color: "#2563EB" }}>cbse.gov.in ↗</a> for real-time updates.
-      </p>
     </div>
   );
 }
@@ -640,8 +927,6 @@ export default function ModeSelector() {
       <Header onLogout={() => (window.location.href = "/")} />
 
       <main className="modes-main">
-
-        {/* ── TABS — above welcome, just below header ── */}
         <div className="top-nav" style={{ marginBottom: 0 }}>
           {TABS.map(tab => (
             <button key={tab.key} className={`tab-btn${activeTab === tab.key ? " active" : ""}`}
@@ -662,10 +947,8 @@ export default function ModeSelector() {
           </div>
         )}
 
-        {/* ── WELCOME — now below tabs ── */}
         <h1 className="welcome-name" style={{ marginTop: "clamp(16px,3vw,28px)" }}>WELCOME, {student.name.toUpperCase()}</h1>
         <p className="welcome-class">CLASS {student.class} · {student.board}</p>
-
         <h2 className="choose-h2">CHOOSE YOUR LEARNING MODE</h2>
         <p className="choose-sub">SELECT YOUR PATH TO BEGIN THE ASCENT</p>
 

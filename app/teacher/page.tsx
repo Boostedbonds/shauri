@@ -1,468 +1,420 @@
 "use client";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { logActivity } from "@/lib/logActivity";
 
-import { useEffect, useState, useMemo } from "react";
+// ─── Types ────────────────────────────────────────────────────
+type Message  = { role: "user" | "assistant"; content: string };
+type QuizState = "none" | "pending" | "done";
 
-// ── Types ─────────────────────────────────────────────────────
-type StudentRow = {
-  student_name: string;
-  class: string;
-  subject: string;
-  percentage: number | null;
-  marks_obtained: number | null;
-  total_marks: number | null;
-  time_taken: string | null;
-  created_at: string;
-  evaluation_text: string | null;
-  chapters: string[] | null;
-};
-
-type StudentSummary = {
-  name: string;
-  cls: string;
-  sessions: StudentRow[];
-  lastActive: string;
-  subjects: Record<string, number[]>;
-  avgScore: number | null;
-  totalTime: number;
-  strongest: string | null;
-  weakest: string | null;
-  trend: "up" | "down" | "flat" | "new";
-};
-
-// ── Helpers ───────────────────────────────────────────────────
-const GRADES = [
-  { min: 90, label: "A1", color: "#059669" },
-  { min: 75, label: "A2", color: "#0d9488" },
-  { min: 60, label: "B1", color: "#2563eb" },
-  { min: 45, label: "B2", color: "#7c3aed" },
-  { min: 33, label: "C",  color: "#d97706" },
-  { min: 0,  label: "F",  color: "#dc2626" },
-];
-function getGrade(s: number) { return GRADES.find(g => s >= g.min) || GRADES[GRADES.length-1]; }
-
-function parseTime(raw: string | null): number {
-  if (!raw) return 0;
-  let s = 0;
-  const h = raw.match(/(\d+)\s*h/i); const m = raw.match(/(\d+)\s*m/i); const sec = raw.match(/(\d+)\s*s/i);
-  if (h) s += parseInt(h[1]) * 3600; if (m) s += parseInt(m[1]) * 60; if (sec) s += parseInt(sec[1]);
-  return s;
-}
-
-function fmtTime(secs: number): string {
-  if (secs < 60) return `${secs}s`;
-  if (secs < 3600) return `${Math.floor(secs/60)}m`;
-  return `${Math.floor(secs/3600)}h ${Math.floor((secs%3600)/60)}m`;
-}
-
-function fmtDate(iso: string): string {
-  const d = new Date(iso);
-  const now = new Date();
-  const diff = Math.floor((now.getTime() - d.getTime()) / 60000);
-  if (diff < 60) return `${diff}m ago`;
-  if (diff < 1440) return `${Math.floor(diff/60)}h ago`;
-  if (diff < 2880) return "Yesterday";
-  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
-}
-
-function buildSummary(name: string, cls: string, rows: StudentRow[]): StudentSummary {
-  const subjects: Record<string, number[]> = {};
-  let totalTime = 0;
-  rows.forEach(r => {
-    totalTime += parseTime(r.time_taken);
-    if (r.subject && r.percentage != null) {
-      subjects[r.subject] = subjects[r.subject] || [];
-      subjects[r.subject].push(r.percentage);
-    }
+// ─── Helpers ──────────────────────────────────────────────────
+function renderText(text: string): React.ReactNode {
+  return text.split("\n").map((line, i, arr) => {
+    const parts = line.split(/(\*\*[^*]+\*\*)/g).map((p, j) =>
+      p.startsWith("**") && p.endsWith("**") ? <strong key={j}>{p.slice(2, -2)}</strong> : p
+    );
+    return <span key={i}>{parts}{i < arr.length - 1 && <br />}</span>;
   });
-
-  const subjectAvgs = Object.entries(subjects).map(([s, scores]) => ({
-    subject: s, avg: scores.reduce((a,b) => a+b, 0) / scores.length
-  }));
-
-  const avgScore = subjectAvgs.length
-    ? Math.round(subjectAvgs.reduce((a,b) => a + b.avg, 0) / subjectAvgs.length)
-    : null;
-
-  const sorted = subjectAvgs.sort((a,b) => b.avg - a.avg);
-  const strongest = sorted[0]?.subject || null;
-  const weakest   = sorted[sorted.length-1]?.subject || null;
-
-  // Trend: compare last 2 sessions with scores
-  const scoredRows = rows.filter(r => r.percentage != null).sort((a,b) =>
-    new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-  );
-  let trend: StudentSummary["trend"] = "new";
-  if (scoredRows.length >= 2) {
-    const last = scoredRows[scoredRows.length-1].percentage!;
-    const prev = scoredRows[scoredRows.length-2].percentage!;
-    trend = last > prev ? "up" : last < prev ? "down" : "flat";
-  } else if (scoredRows.length === 1) {
-    trend = "new";
-  }
-
-  const lastActive = rows.reduce((latest, r) =>
-    new Date(r.created_at) > new Date(latest) ? r.created_at : latest,
-    rows[0].created_at
-  );
-
-  return { name, cls, sessions: rows, lastActive, subjects, avgScore, totalTime, strongest, weakest, trend };
 }
 
-// ── Student Detail Modal ───────────────────────────────────────
-function StudentModal({ student, onClose }: { student: StudentSummary; onClose: () => void }) {
-  const subjectEntries = Object.entries(student.subjects);
+// Extract topic name from first AI message
+function extractTopic(text: string): string {
+  const m = text.match(/(?:topic|chapter|concept)[:\s]+([^\n.!?]+)/i);
+  return m ? m[1].trim().slice(0, 60) : text.slice(0, 60);
+}
 
+// Extract subject from conversation
+function extractSubject(text: string): string {
+  const subjects = ["Science", "Mathematics", "English", "Hindi", "Social Science",
+    "Physics", "Chemistry", "Biology", "History", "Geography", "Economics"];
+  for (const s of subjects) {
+    if (new RegExp(s, "i").test(text)) return s;
+  }
+  return "General";
+}
+
+// Parse quiz score from AI reply like "3/5" or "Score: 4 out of 5"
+function parseQuizScore(text: string): { score: number; total: number } | null {
+  const m1 = text.match(/(\d+)\s*(?:out of|\/)\s*(\d+)/i);
+  if (m1) return { score: parseInt(m1[1]), total: parseInt(m1[2]) };
+  const m2 = text.match(/[Ss]core[:\s]+(\d+)\D+(\d+)/);
+  if (m2) return { score: parseInt(m2[1]), total: parseInt(m2[2]) };
+  return null;
+}
+
+// ─── Chat Bubble ──────────────────────────────────────────────
+function Bubble({ m }: { m: Message }) {
+  const isUser = m.role === "user";
   return (
-    <div style={{
-      position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 1000,
-      display: "flex", alignItems: "flex-end", justifyContent: "center",
-    }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <div style={{ display: "flex", justifyContent: isUser ? "flex-end" : "flex-start", marginBottom: 12 }}>
+      {!isUser && (
+        <div style={{
+          width: 30, height: 30, borderRadius: "50%", flexShrink: 0,
+          background: "linear-gradient(135deg, #16a34a, #0d9488)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 14, marginRight: 8, alignSelf: "flex-end",
+        }}>🧠</div>
+      )}
       <div style={{
-        background: "#fff", borderRadius: "20px 20px 0 0",
-        width: "100%", maxWidth: 680, maxHeight: "88vh", overflow: "auto",
-        padding: "28px 24px 40px", boxShadow: "0 -8px 40px rgba(0,0,0,0.18)",
+        maxWidth: "82%", padding: "11px 15px",
+        borderRadius: isUser ? "18px 18px 4px 18px" : "4px 18px 18px 18px",
+        background: isUser ? "#16a34a" : "#fff",
+        color: isUser ? "#fff" : "#0f172a",
+        fontSize: 15, lineHeight: 1.7, wordBreak: "break-word",
+        border: isUser ? "none" : "1px solid #e2e8f0",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
       }}>
-        <div style={{ width: 40, height: 4, background: "#e2e8f0", borderRadius: 2, margin: "0 auto 20px" }} />
-
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24 }}>
-          <div style={{
-            width: 52, height: 52, borderRadius: "50%",
-            background: "linear-gradient(135deg, #2563eb, #0d9488)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 22, fontWeight: 800, color: "#fff", flexShrink: 0,
-          }}>{student.name.charAt(0).toUpperCase()}</div>
-          <div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: "#0f172a" }}>{student.name}</div>
-            <div style={{ fontSize: 13, color: "#64748b" }}>Class {student.cls} · CBSE · {student.sessions.length} sessions</div>
-          </div>
-          <button onClick={onClose} style={{ marginLeft: "auto", background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#94a3b8" }}>✕</button>
-        </div>
-
-        {/* Stats row */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 24 }}>
-          {[
-            { label: "Avg Score", value: student.avgScore != null ? `${student.avgScore}%` : "—", color: student.avgScore != null ? getGrade(student.avgScore).color : "#94a3b8" },
-            { label: "Time Spent", value: fmtTime(student.totalTime), color: "#2563eb" },
-            { label: "Sessions", value: String(student.sessions.length), color: "#7c3aed" },
-          ].map(s => (
-            <div key={s.label} style={{ background: "#f8fafc", borderRadius: 12, padding: "14px 16px", textAlign: "center" }}>
-              <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>{s.label}</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Subject breakdown */}
-        {subjectEntries.length > 0 && (
-          <div style={{ marginBottom: 24 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>Subject Breakdown</div>
-            {subjectEntries.map(([subject, scores]) => {
-              const avg = Math.round(scores.reduce((a,b) => a+b,0) / scores.length);
-              const grade = getGrade(avg);
-              return (
-                <div key={subject} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#334155", width: 120, flexShrink: 0 }}>{subject}</div>
-                  <div style={{ flex: 1, height: 8, background: "#f1f5f9", borderRadius: 999, overflow: "hidden" }}>
-                    <div style={{ width: `${avg}%`, height: "100%", background: grade.color, borderRadius: 999, transition: "width 0.6s ease" }} />
-                  </div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: grade.color, width: 40, textAlign: "right" }}>{avg}%</div>
-                  <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", background: grade.color + "20", color: grade.color, borderRadius: 6 }}>{grade.label}</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Session history */}
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>Session History</div>
-          {[...student.sessions].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-            .slice(0, 10).map((s, i) => (
-            <div key={i} style={{
-              display: "flex", alignItems: "center", gap: 12, padding: "10px 14px",
-              background: i % 2 === 0 ? "#f8fafc" : "#fff",
-              borderRadius: 10, marginBottom: 4,
-            }}>
-              <span style={{ fontSize: 12, color: "#64748b", width: 80, flexShrink: 0 }}>{fmtDate(s.created_at)}</span>
-              <span style={{ fontSize: 13, fontWeight: 600, color: "#334155", flex: 1 }}>{s.subject || "—"}</span>
-              {s.percentage != null && (
-                <span style={{ fontSize: 13, fontWeight: 700, color: getGrade(s.percentage).color }}>{s.percentage}%</span>
-              )}
-              {s.time_taken && <span style={{ fontSize: 11, color: "#94a3b8" }}>{s.time_taken}</span>}
-            </div>
-          ))}
-        </div>
+        {renderText(m.content)}
       </div>
     </div>
   );
 }
 
-// ── Main Page ─────────────────────────────────────────────────
-export default function TeacherPage() {
-  const [rows, setRows]           = useState<StudentRow[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState("");
-  const [search, setSearch]       = useState("");
-  const [filterCls, setFilterCls] = useState("");
-  const [sortBy, setSortBy]       = useState<"name"|"score"|"time"|"sessions"|"lastActive">("lastActive");
-  const [selected, setSelected]   = useState<StudentSummary | null>(null);
-  const [lastSynced, setLastSynced] = useState<Date | null>(null);
-
-  async function fetchData() {
-    setLoading(true);
-    setError("");
-    try {
-      const res = await fetch("/api/progress?all=true");
-      if (!res.ok) throw new Error(`Server error ${res.status}`);
-      const data = await res.json();
-      const raw: StudentRow[] = data.attempts ?? data.data ?? data ?? [];
-      setRows(Array.isArray(raw) ? raw : []);
-      setLastSynced(new Date());
-    } catch (e: any) {
-      setError(e.message || "Could not load data");
-    }
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    // Auth guard — redirect to home if no teacher token
-    const token = localStorage.getItem("shauri_teacher_token");
-    const session = localStorage.getItem("shauri_teacher");
-    if (!token || !session) { window.location.href = "/"; return; }
-    fetchData();
-  }, []);
-
-  // Build per-student summaries
-  const students: StudentSummary[] = useMemo(() => {
-    const map: Record<string, StudentRow[]> = {};
-    rows
-      .filter(r => r.student_name && r.student_name !== "null" && r.class && r.class !== "null")
-      .forEach(r => {
-        const key = `${r.student_name}__${r.class}`;
-        map[key] = map[key] || [];
-        map[key].push(r);
-      });
-    return Object.entries(map).map(([key, rows]) => {
-      const [name, cls] = key.split("__");
-      return buildSummary(name, cls, rows);
-    });
-  }, [rows]);
-
-  const classes = useMemo(() => {
-    return [...new Set(students.map(s => s.cls))].sort((a,b) => parseInt(a) - parseInt(b));
-  }, [students]);
-
-  const filtered = useMemo(() => {
-    return students
-      .filter(s => {
-        const matchSearch = !search || s.name.toLowerCase().includes(search.toLowerCase());
-        const matchClass  = !filterCls || s.cls === filterCls;
-        return matchSearch && matchClass;
-      })
-      .sort((a, b) => {
-        if (sortBy === "name")       return a.name.localeCompare(b.name);
-        if (sortBy === "score")      return (b.avgScore ?? -1) - (a.avgScore ?? -1);
-        if (sortBy === "time")       return b.totalTime - a.totalTime;
-        if (sortBy === "sessions")   return b.sessions.length - a.sessions.length;
-        if (sortBy === "lastActive") return new Date(b.lastActive).getTime() - new Date(a.lastActive).getTime();
-        return 0;
-      });
-  }, [students, search, filterCls, sortBy]);
-
-  // Class stats
-  const classStats = useMemo(() => {
-    const scored = students.filter(s => s.avgScore != null);
-    const avgAll = scored.length ? Math.round(scored.reduce((a,b) => a + b.avgScore!, 0) / scored.length) : null;
-    const totalTime = students.reduce((a,b) => a + b.totalTime, 0);
-    const needsHelp = students.filter(s => s.avgScore != null && s.avgScore < 45);
-    return { avgAll, totalTime, needsHelp };
-  }, [students]);
-
-  const trendIcon = (t: StudentSummary["trend"]) =>
-    t === "up" ? "📈" : t === "down" ? "📉" : t === "flat" ? "➡️" : "🆕";
+// ─── Session Tracker Display ──────────────────────────────────
+function SessionBar({ elapsed, subject, topic, quizState, quizScore, onEndSession }: {
+  elapsed: number; subject: string; topic: string;
+  quizState: QuizState; quizScore: { score: number; total: number } | null;
+  onEndSession: () => void;
+}) {
+  const h = Math.floor(elapsed / 3600);
+  const m = Math.floor((elapsed % 3600) / 60);
+  const s = elapsed % 60;
+  const display = [h && `${h}h`, m && `${m}m`, `${s}s`].filter(Boolean).join(" ");
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f8fafc", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    <div style={{
+      display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+      padding: "8px 14px", background: "#f0fdf4", borderBottom: "1px solid #bbf7d0",
+      fontSize: 12, flexShrink: 0,
+    }}>
+      <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#15803d", background: "#dcfce7", padding: "3px 10px", borderRadius: 6 }}>
+        ⏱ {display}
+      </span>
+      {subject && <span style={{ color: "#166534", fontWeight: 600 }}>📚 {subject}</span>}
+      {topic   && <span style={{ color: "#64748b" }}>· {topic.slice(0, 40)}</span>}
+      {quizState === "done" && quizScore && (
+        <span style={{ color: "#0d9488", fontWeight: 700, marginLeft: 4 }}>
+          🎯 Quiz: {quizScore.score}/{quizScore.total} ({Math.round(quizScore.score / quizScore.total * 100)}%)
+        </span>
+      )}
+      <button onClick={onEndSession} style={{
+        marginLeft: "auto", padding: "4px 12px", background: "#15803d", color: "#fff",
+        border: "none", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer",
+      }}>
+        ✓ End & Save Session
+      </button>
+    </div>
+  );
+}
 
-      {/* ── Header ── */}
-      <div style={{ background: "#0f172a", padding: "0 24px" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 60 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ fontSize: 18, fontWeight: 900, letterSpacing: "0.3em", color: "#FFD700" }}>SHAURI</span>
-            <span style={{ fontSize: 11, color: "#475569", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em" }}>Teacher Portal</span>
-          </div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            {lastSynced && <span style={{ fontSize: 11, color: "#475569" }}>Synced {fmtDate(lastSynced.toISOString())}</span>}
-            <button onClick={fetchData} style={{ padding: "7px 14px", background: "#1e293b", color: "#94a3b8", border: "1px solid #334155", borderRadius: 8, fontSize: 12, cursor: "pointer" }}>
-              🔄 Refresh
-            </button>
-            <button onClick={() => window.location.href = "/"} style={{ padding: "7px 14px", background: "transparent", color: "#64748b", border: "1px solid #334155", borderRadius: 8, fontSize: 12, cursor: "pointer" }}>
-              ← Home
-            </button>
-            <button onClick={async () => {
-              const token = localStorage.getItem("shauri_teacher_token");
-              if (token) {
-                await fetch("/api/teacher-auth", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }, body: JSON.stringify({ action: "signout" }) });
-              }
-              localStorage.removeItem("shauri_teacher_token");
-              localStorage.removeItem("shauri_teacher");
-              window.location.href = "/";
-            }} style={{ padding: "7px 14px", background: "transparent", color: "#ef4444", border: "1px solid #ef4444", borderRadius: 8, fontSize: 12, cursor: "pointer" }}>
-              Sign Out
-            </button>
-          </div>
-        </div>
+// ─── Quiz Prompt Banner ───────────────────────────────────────
+function QuizBanner({ onRequestQuiz, onSkip }: { onRequestQuiz: () => void; onSkip: () => void }) {
+  return (
+    <div style={{
+      margin: "0 14px 12px", background: "#eff6ff", border: "1.5px solid #bfdbfe",
+      borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center",
+      gap: 12, flexWrap: "wrap", flexShrink: 0,
+    }}>
+      <span style={{ fontSize: 13, color: "#1d4ed8", fontWeight: 600 }}>
+        🎯 You've been learning for a while! Want a quick comprehension quiz to test yourself?
+      </span>
+      <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
+        <button onClick={onRequestQuiz} style={{
+          padding: "6px 14px", background: "#2563eb", color: "#fff",
+          border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer",
+        }}>Yes, quiz me!</button>
+        <button onClick={onSkip} style={{
+          padding: "6px 12px", background: "transparent", color: "#64748b",
+          border: "1px solid #cbd5e1", borderRadius: 8, fontSize: 12, cursor: "pointer",
+        }}>Skip</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Session Saved Banner ─────────────────────────────────────
+function SavedBanner({ subject, elapsed, quizScore }: {
+  subject: string; elapsed: string; quizScore: { score: number; total: number } | null;
+}) {
+  return (
+    <div style={{
+      margin: "12px 14px", background: "#f0fdf4", border: "1.5px solid #86efac",
+      borderRadius: 12, padding: "14px 16px",
+    }}>
+      <p style={{ fontSize: 14, fontWeight: 700, color: "#15803d", marginBottom: 4 }}>
+        ✅ Session saved to your Progress Dashboard!
+      </p>
+      <p style={{ fontSize: 13, color: "#166534" }}>
+        📚 {subject} · ⏱ {elapsed}
+        {quizScore ? ` · 🎯 Quiz score: ${quizScore.score}/${quizScore.total} (${Math.round(quizScore.score / quizScore.total * 100)}%)` : ""}
+      </p>
+      <p style={{ fontSize: 12, color: "#64748b", marginTop: 6 }}>
+        Your teacher and dashboard can now see this session. Keep going!
+      </p>
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────
+export default function LearnPage() {
+  const GREETING = "Hey! 🧠 I'm your CBSE Learn Mode tutor.\n\nTell me:\n• Which **subject** you're studying (Science, Maths, English, Hindi, SST…)\n• Which **chapter or topic** you want to understand\n\nI'll explain it clearly with examples, diagrams in text, and check your understanding with a quick quiz!";
+
+  const [messages,   setMessages]   = useState<Message[]>([{ role: "assistant", content: GREETING }]);
+  const [inputText,  setInputText]  = useState("");
+  const [loading,    setLoading]    = useState(false);
+  const [subject,    setSubject]    = useState("");
+  const [topic,      setTopic]      = useState("");
+  const [elapsed,    setElapsed]    = useState(0);
+  const [sessionOn,  setSessionOn]  = useState(false);
+  const [quizState,  setQuizState]  = useState<QuizState>("none");
+  const [quizScore,  setQuizScore]  = useState<{ score: number; total: number } | null>(null);
+  const [showQuizBanner, setShowQuizBanner] = useState(false);
+  const [sessionSaved,   setSessionSaved]   = useState(false);
+  const [savedElapsed,   setSavedElapsed]   = useState("");
+
+  const timerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startTsRef = useRef<number>(0);
+  const elapsedRef = useRef(0);
+  const sendingRef = useRef(false);
+  const bottomRef  = useRef<HTMLDivElement>(null);
+  const msgsRef    = useRef<Message[]>([]);
+  const topicsRef  = useRef<string[]>([]);
+  // Quiz banner shown once after 8 minutes of study
+  const quizShownRef = useRef(false);
+
+  useEffect(() => { msgsRef.current = messages; }, [messages]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
+  useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
+
+  function startSession() {
+    if (timerRef.current) return;
+    startTsRef.current = Date.now();
+    setSessionOn(true);
+    timerRef.current = setInterval(() => {
+      const s = Math.floor((Date.now() - startTsRef.current) / 1000);
+      elapsedRef.current = s;
+      setElapsed(s);
+      // Suggest quiz after 8 minutes of learning, once
+      if (s >= 480 && !quizShownRef.current && quizState === "none") {
+        quizShownRef.current = true;
+        setShowQuizBanner(true);
+      }
+    }, 1000);
+  }
+
+  function fmtElapsed(s: number) {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return [h && `${h}h`, m && `${m}m`, `${sec}s`].filter(Boolean).join(" ");
+  }
+
+  // ── Save session to Supabase + localStorage ───────────────
+  const saveSession = useCallback(async (finalScore?: { score: number; total: number }) => {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    const secs    = elapsedRef.current;
+    const elapsed = fmtElapsed(secs);
+    const qs      = finalScore || quizScore;
+    const pct     = qs ? Math.round((qs.score / qs.total) * 100) : undefined;
+
+    setSavedElapsed(elapsed);
+    setSessionOn(false);
+    setSessionSaved(true);
+
+    await logActivity({
+      mode:             "learn",
+      subject:          subject || "General",
+      chapters:         topicsRef.current.length ? [topicsRef.current[0]] : [],
+      topics:           topicsRef.current,
+      timeTakenSeconds: secs,
+      percentage:       pct,
+      marks_obtained:   qs?.score,
+      total_marks:      qs?.total,
+      evaluation_text:  `Learn session: ${topicsRef.current.join(", ")}`,
+    });
+  }, [subject, quizScore]);
+
+  // ── Request quiz from AI ──────────────────────────────────
+  async function requestQuiz() {
+    setShowQuizBanner(false);
+    setQuizState("pending");
+    const quizPrompt = `Please give me a short 5-question comprehension quiz on what we just covered in ${subject || "this topic"}. After I answer, score me out of 5 and say "Score: X out of 5".`;
+    await sendMessage(quizPrompt, true);
+  }
+
+  // ── Send message ──────────────────────────────────────────
+  async function sendMessage(text: string, isInternal = false) {
+    const trimmed = text.trim();
+    if (!trimmed || sendingRef.current) return;
+    sendingRef.current = true;
+
+    const userMsg: Message = { role: "user", content: trimmed };
+    const updated = isInternal
+      ? [...msgsRef.current, userMsg]
+      : [...messages, userMsg];
+
+    if (!isInternal) setMessages(updated);
+    else setMessages(updated);
+
+    setInputText("");
+    setLoading(true);
+
+    // Start session timer on first real user message
+    if (!sessionOn && !isInternal) startSession();
+
+    let student: any = null;
+    try { student = JSON.parse(localStorage.getItem("shauri_student") || "null"); } catch {}
+
+    try {
+      const res = await fetch("/api/chat", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode:    "learn",
+          message: trimmed,
+          history: updated.slice(1, -1).map(m => ({ role: m.role, content: m.content })),
+          student: { name: student?.name || "Student", class: student?.class || "", board: student?.board || "CBSE" },
+        }),
+      });
+      const data  = await res.json();
+      const reply = data?.reply || "Something went wrong.";
+
+      // Extract subject + topic from early messages
+      if (!subject) {
+        const detectedSubject = extractSubject(trimmed + " " + reply);
+        if (detectedSubject !== "General") setSubject(detectedSubject);
+      }
+      if (!topic && updated.length <= 4) {
+        const detectedTopic = extractTopic(reply);
+        setTopic(detectedTopic);
+        if (!topicsRef.current.includes(detectedTopic)) {
+          topicsRef.current = [...topicsRef.current, detectedTopic];
+        }
+      }
+      // Track new topics mentioned in conversation
+      if (updated.length > 4) {
+        const newTopic = extractTopic(reply);
+        if (newTopic && !topicsRef.current.includes(newTopic) && topicsRef.current.length < 10) {
+          topicsRef.current = [...topicsRef.current, newTopic];
+        }
+      }
+
+      // Check if reply contains quiz score
+      if (quizState === "pending") {
+        const parsed = parseQuizScore(reply);
+        if (parsed) {
+          setQuizScore(parsed);
+          setQuizState("done");
+          // Auto-save with quiz score
+          await saveSession(parsed);
+        }
+      }
+
+      setMessages([...updated, { role: "assistant", content: reply }]);
+    } catch {
+      setMessages([...updated, { role: "assistant", content: "⚠️ Network error. Please try again." }]);
+    } finally {
+      setLoading(false);
+      sendingRef.current = false;
+    }
+  }
+
+  function handleSend() {
+    const t = inputText.trim();
+    if (t) sendMessage(t);
+  }
+
+  return (
+    <div style={{ height: "100dvh", display: "flex", flexDirection: "column", background: "#f8fafc", fontFamily: "'Segoe UI', system-ui, sans-serif", overflow: "hidden" }}>
+      <style>{`
+        *{box-sizing:border-box;margin:0;padding:0}
+        @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+        .lrn-msg{animation:fadeUp 0.22s ease both}
+        textarea:focus{outline:none;box-shadow:0 0 0 2px #16a34a55}
+        ::-webkit-scrollbar{width:4px}
+        ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:99px}
+      `}</style>
+
+      {/* ── TOP BAR ── */}
+      <div style={{
+        height: 52, display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "0 14px", background: "#fff", borderBottom: "1px solid #e2e8f0", flexShrink: 0,
+      }}>
+        <button onClick={() => { saveSession(); setTimeout(() => window.location.href = "/modes", 300); }}
+          style={{ padding: "7px 14px", background: "#f1f5f9", color: "#374151", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>
+          ← Back
+        </button>
+        <span style={{ fontSize: 15, fontWeight: 700, color: "#0f172a" }}>🧠 Learn Mode</span>
+        <div style={{ width: 70 }} />
       </div>
 
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "28px 24px 64px" }}>
+      {/* ── SESSION BAR (shows when session is active) ── */}
+      {sessionOn && (
+        <SessionBar
+          elapsed={elapsed} subject={subject} topic={topic}
+          quizState={quizState} quizScore={quizScore}
+          onEndSession={() => saveSession()}
+        />
+      )}
 
-        {/* ── Title ── */}
-        <div style={{ marginBottom: 24 }}>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: "#0f172a", margin: 0 }}>Class Dashboard</h1>
-          <p style={{ fontSize: 14, color: "#64748b", margin: "4px 0 0" }}>
-            {students.length} student{students.length !== 1 ? "s" : ""} · {rows.length} sessions recorded
-          </p>
-        </div>
-
-        {/* ── Loading / Error ── */}
+      {/* ── MESSAGES ── */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "14px 14px 0", display: "flex", flexDirection: "column", gap: 2 }}>
+        {messages.map((m, i) => (
+          <div key={i} className="lrn-msg">
+            <Bubble m={m} />
+          </div>
+        ))}
         {loading && (
-          <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 10, padding: "12px 16px", marginBottom: 20, fontSize: 13, color: "#1d4ed8" }}>
-            <span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>🔄</span> Loading student data…
-          </div>
-        )}
-        {error && (
-          <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "12px 16px", marginBottom: 20, fontSize: 13, color: "#b91c1c" }}>
-            ⚠️ {error} — Make sure your /api/progress endpoint supports <code>?all=true</code>
-          </div>
-        )}
-
-        {/* ── Summary strip ── */}
-        {!loading && students.length > 0 && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 24 }}>
-            {[
-              { icon: "👥", label: "Total Students", value: String(students.length), sub: `${classes.length} class${classes.length !== 1?"es":""}`, color: "#2563eb" },
-              { icon: "📊", label: "Class Average", value: classStats.avgAll != null ? `${classStats.avgAll}%` : "—", sub: classStats.avgAll != null ? getGrade(classStats.avgAll).label : "", color: classStats.avgAll != null ? getGrade(classStats.avgAll).color : "#94a3b8" },
-              { icon: "⏱️", label: "Total Study Time", value: fmtTime(classStats.totalTime), sub: `${Math.round(classStats.totalTime/students.length/60)}m avg/student`, color: "#0d9488" },
-              { icon: "⚠️", label: "Need Attention", value: String(classStats.needsHelp.length), sub: classStats.needsHelp.length > 0 ? classStats.needsHelp.slice(0,2).map(s=>s.name).join(", ") + (classStats.needsHelp.length > 2 ? "…" : "") : "All passing", color: classStats.needsHelp.length > 0 ? "#dc2626" : "#059669" },
-            ].map(card => (
-              <div key={card.label} style={{ background: "#fff", borderRadius: 14, padding: "18px 18px 14px", border: "1px solid #e2e8f0", borderTop: `3px solid ${card.color}` }}>
-                <div style={{ fontSize: 20, marginBottom: 4 }}>{card.icon}</div>
-                <div style={{ fontSize: 10, color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>{card.label}</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: "#0f172a", lineHeight: 1.2, margin: "2px 0" }}>{card.value}</div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: card.color }}>{card.sub}</div>
-              </div>
+          <div style={{ display: "flex", gap: 5, paddingLeft: 46, paddingBottom: 6 }}>
+            {[0,1,2].map(i => (
+              <div key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: "#16a34a", animation: `bounce 0.9s ${i*0.15}s infinite ease-in-out` }} />
             ))}
           </div>
         )}
-
-        {/* ── Filters ── */}
-        {!loading && students.length > 0 && (
-          <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap", alignItems: "center" }}>
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="🔍 Search student…"
-              style={{ padding: "9px 14px", border: "1.5px solid #e2e8f0", borderRadius: 10, fontSize: 13, outline: "none", minWidth: 180, fontFamily: "inherit" }}
-            />
-            <select value={filterCls} onChange={e => setFilterCls(e.target.value)}
-              style={{ padding: "9px 14px", border: "1.5px solid #e2e8f0", borderRadius: 10, fontSize: 13, outline: "none", fontFamily: "inherit", background: "#fff" }}>
-              <option value="">All Classes</option>
-              {classes.map(c => <option key={c} value={c}>Class {c}</option>)}
-            </select>
-            <div style={{ display: "flex", gap: 6, marginLeft: "auto", flexWrap: "wrap" }}>
-              {(["lastActive","score","time","sessions","name"] as const).map(s => (
-                <button key={s} onClick={() => setSortBy(s)} style={{
-                  padding: "7px 12px", borderRadius: 8, border: "1.5px solid #e2e8f0",
-                  background: sortBy === s ? "#2563eb" : "#fff",
-                  color: sortBy === s ? "#fff" : "#64748b",
-                  fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-                  textTransform: "capitalize",
-                }}>
-                  {s === "lastActive" ? "Recent" : s === "score" ? "Score" : s === "time" ? "Time" : s === "sessions" ? "Sessions" : "A–Z"}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── Student table ── */}
-        {!loading && filtered.length > 0 && (
-          <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #e2e8f0", overflow: "hidden" }}>
-            {/* Table header */}
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 80px 90px 80px 120px 90px 70px", gap: 0, padding: "10px 20px", background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-              {["Student", "Class", "Avg Score", "Sessions", "Time Spent", "Last Active", "Trend"].map(h => (
-                <div key={h} style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.07em" }}>{h}</div>
-              ))}
-            </div>
-
-            {filtered.map((s, i) => {
-              const grade = s.avgScore != null ? getGrade(s.avgScore) : null;
-              return (
-                <div key={`${s.name}-${s.cls}`}
-                  onClick={() => setSelected(s)}
-                  style={{
-                    display: "grid", gridTemplateColumns: "2fr 80px 90px 80px 120px 90px 70px",
-                    gap: 0, padding: "14px 20px",
-                    background: i % 2 === 0 ? "#fff" : "#fafafa",
-                    borderBottom: "1px solid #f1f5f9",
-                    cursor: "pointer", transition: "background 0.15s",
-                    alignItems: "center",
-                  }}
-                  onMouseEnter={e => (e.currentTarget.style.background = "#eff6ff")}
-                  onMouseLeave={e => (e.currentTarget.style.background = i % 2 === 0 ? "#fff" : "#fafafa")}
-                >
-                  {/* Name */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{
-                      width: 34, height: 34, borderRadius: "50%",
-                      background: "linear-gradient(135deg, #2563eb, #0d9488)",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 13, fontWeight: 800, color: "#fff", flexShrink: 0,
-                    }}>{s.name.charAt(0).toUpperCase()}</div>
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>{s.name}</div>
-                      <div style={{ fontSize: 11, color: "#94a3b8" }}>{s.strongest ? `Strong: ${s.strongest}` : "No data"}</div>
-                    </div>
-                  </div>
-                  {/* Class */}
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#334155" }}>Class {s.cls}</div>
-                  {/* Score */}
-                  <div>
-                    {s.avgScore != null ? (
-                      <span style={{ fontSize: 14, fontWeight: 800, color: grade!.color }}>{s.avgScore}%
-                        <span style={{ fontSize: 10, fontWeight: 700, marginLeft: 5, padding: "2px 6px", background: grade!.color + "20", borderRadius: 4 }}>{grade!.label}</span>
-                      </span>
-                    ) : <span style={{ fontSize: 12, color: "#94a3b8" }}>No scores</span>}
-                  </div>
-                  {/* Sessions */}
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#334155" }}>{s.sessions.length}</div>
-                  {/* Time */}
-                  <div style={{ fontSize: 13, color: "#334155" }}>{fmtTime(s.totalTime)}</div>
-                  {/* Last active */}
-                  <div style={{ fontSize: 12, color: "#64748b" }}>{fmtDate(s.lastActive)}</div>
-                  {/* Trend */}
-                  <div style={{ fontSize: 16 }}>{trendIcon(s.trend)}</div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Empty state */}
-        {!loading && students.length === 0 && !error && (
-          <div style={{ textAlign: "center", padding: "64px 24px", background: "#fff", borderRadius: 20, border: "1.5px dashed #cbd5e1" }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>👩‍🏫</div>
-            <p style={{ fontSize: 17, fontWeight: 700, color: "#0f172a", marginBottom: 8 }}>No student data yet</p>
-            <p style={{ fontSize: 14, color: "#64748b" }}>Students need to complete at least one exam session to appear here.</p>
-          </div>
-        )}
-
+        <div ref={bottomRef} style={{ height: 8 }} />
       </div>
 
-      {/* Student detail modal */}
-      {selected && <StudentModal student={selected} onClose={() => setSelected(null)} />}
+      {/* ── QUIZ BANNER ── */}
+      {showQuizBanner && quizState === "none" && (
+        <QuizBanner onRequestQuiz={requestQuiz} onSkip={() => setShowQuizBanner(false)} />
+      )}
+
+      {/* ── SESSION SAVED BANNER ── */}
+      {sessionSaved && (
+        <SavedBanner subject={subject} elapsed={savedElapsed} quizScore={quizScore} />
+      )}
+
+      {/* ── INPUT BAR ── */}
+      <div style={{
+        padding: "10px 14px", paddingBottom: "calc(10px + env(safe-area-inset-bottom))",
+        background: "#fff", borderTop: "1px solid #e2e8f0", flexShrink: 0,
+        display: "flex", gap: 10, alignItems: "flex-end",
+      }}>
+        <textarea
+          value={inputText}
+          onChange={e => setInputText(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+          placeholder="Ask anything — topic, concept, doubt, chapter…"
+          rows={1}
+          disabled={loading}
+          style={{
+            flex: 1, resize: "none", border: "2px solid #16a34a55", borderRadius: 14,
+            padding: "13px 50px 13px 16px", fontSize: 15, lineHeight: 1.5,
+            background: loading ? "#f8fafc" : "#fff", color: "#0f172a",
+            fontFamily: "inherit", minHeight: 50, maxHeight: 110, overflowY: "auto",
+          }}
+        />
+        <button
+          onClick={handleSend}
+          disabled={loading || !inputText.trim()}
+          style={{
+            width: 44, height: 44, borderRadius: 12, border: "none",
+            background: (loading || !inputText.trim()) ? "#e2e8f0" : "#16a34a",
+            color: (loading || !inputText.trim()) ? "#94a3b8" : "#fff",
+            fontSize: 18, cursor: "pointer", flexShrink: 0, transition: "background 0.15s",
+          }}
+        >{loading ? "…" : "↑"}</button>
+      </div>
     </div>
   );
 }
