@@ -9,58 +9,140 @@ const orbitron = Orbitron({ subsets: ["latin"], weight: ["400", "600", "700"] })
 type StudentContext = { name: string; class: string; board: string };
 type Tab = "about" | "lastYears" | "checkResult" | "career" | "timetable" | "importantDates";
 
-// ─── FIX 3: DIRECT PDF LINKS per subject per year ─────────────
-// Each subject maps directly to its official CBSE PDF (not a listing page).
-// 2025 uses the SQP listing page (individual PDFs not yet released as direct links).
-const PAPERS: Record<string, Record<string, string>> = {
-  "2025": {
-    Science:          "https://cbseacademic.nic.in/web_material/SQP/ClassX_2024_25/Science-SQP.pdf",
-    Mathematics:      "https://cbseacademic.nic.in/web_material/SQP/ClassX_2024_25/Mathematics-Standard-SQP.pdf",
-    English:          "https://cbseacademic.nic.in/web_material/SQP/ClassX_2024_25/English-LA-SQP.pdf",
-    Hindi:            "https://cbseacademic.nic.in/web_material/SQP/ClassX_2024_25/Hindi-Course-A-SQP.pdf",
-    "Social Science": "https://cbseacademic.nic.in/web_material/SQP/ClassX_2024_25/Social-Science-SQP.pdf",
-  },
-  "2024": {
-    Science:          "https://cbseacademic.nic.in/web_material/Qpapers/2024/classX/Science.pdf",
-    Mathematics:      "https://cbseacademic.nic.in/web_material/Qpapers/2024/classX/Mathematics_Standard.pdf",
-    English:          "https://cbseacademic.nic.in/web_material/Qpapers/2024/classX/English_LA.pdf",
-    Hindi:            "https://cbseacademic.nic.in/web_material/Qpapers/2024/classX/Hindi_A.pdf",
-    "Social Science": "https://cbseacademic.nic.in/web_material/Qpapers/2024/classX/Social_Science.pdf",
-  },
-  "2023": {
-    Science:          "https://cbseacademic.nic.in/web_material/Qpapers/2023/classX/Science.pdf",
-    Mathematics:      "https://cbseacademic.nic.in/web_material/Qpapers/2023/classX/Maths_Standard.pdf",
-    English:          "https://cbseacademic.nic.in/web_material/Qpapers/2023/classX/English_LA.pdf",
-    Hindi:            "https://cbseacademic.nic.in/web_material/Qpapers/2023/classX/Hindi_Course_A.pdf",
-    "Social Science": "https://cbseacademic.nic.in/web_material/Qpapers/2023/classX/Social_Science.pdf",
-  },
-  "2020": {
-    Science:          "https://cbseacademic.nic.in/web_material/Qpapers/2020/classX/Science.pdf",
-    Mathematics:      "https://cbseacademic.nic.in/web_material/Qpapers/2020/classX/Mathematics_Standard.pdf",
-    English:          "https://cbseacademic.nic.in/web_material/Qpapers/2020/classX/English_LA.pdf",
-    Hindi:            "https://cbseacademic.nic.in/web_material/Qpapers/2020/classX/Hindi_Course_A.pdf",
-    "Social Science": "https://cbseacademic.nic.in/web_material/Qpapers/2020/classX/Social_Science.pdf",
-  },
-  "2019": {
-    Science:          "https://cbseacademic.nic.in/web_material/Qpapers/2019/classX/Science.pdf",
-    Mathematics:      "https://cbseacademic.nic.in/web_material/Qpapers/2019/classX/Mathematics.pdf",
-    English:          "https://cbseacademic.nic.in/web_material/Qpapers/2019/classX/English_LA.pdf",
-    Hindi:            "https://cbseacademic.nic.in/web_material/Qpapers/2019/classX/Hindi_Course_A.pdf",
-    "Social Science": "https://cbseacademic.nic.in/web_material/Qpapers/2019/classX/Social_Science.pdf",
-  },
+// ─── PAPER DATA ────────────────────────────────────────────────
+// Two types:
+//   "sqp"   = Sample Question Paper (pre-exam practice, released by CBSE Academics)
+//   "board" = Actual board exam paper (released after exam via Question Bank)
+//
+// URL patterns confirmed from cbseacademic.nic.in:
+//   SQP 2025-26 : /web_material/SQP/ClassX_2025_26/{Subject}-SQP.pdf
+//   SQP 2024-25 : /web_material/SQP/ClassX_2024_25/{Subject}-SQP.pdf
+//   SQP 2023-24 : /web_material/SQP/ClassX_2023_24/{Subject}-SQP.pdf
+//   Board QPs   : /web_material/Qpapers/{year}/classX/{Subject}.pdf
+
+type SubjectLinks = { sqp?: string; ms?: string; board?: string };
+type YearData = {
+  year: string;
+  label: string;
+  badge?: string;
+  type: "sqp" | "board" | "both";
+  listingUrl: string; // fallback listing page
+  subjects: Record<string, SubjectLinks>;
 };
 
-// Marking scheme direct PDFs
-const MARKING_SCHEME: Record<string, string> = {
-  "2025": "https://cbseacademic.nic.in/SQP_CLASSX_2024-25.html",
-  "2024": "https://cbseacademic.nic.in/web_material/Qpapers/2024/classX/MS_Science.pdf",
-  "2023": "https://cbseacademic.nic.in/web_material/Qpapers/2023/classX/MS_Science.pdf",
-  "2020": "https://cbseacademic.nic.in/web_material/Qpapers/2020/classX/MS_Science.pdf",
-  "2019": "https://cbseacademic.nic.in/web_material/Qpapers/2019/classX/MS_Science.pdf",
-};
+const BASE = "https://cbseacademic.nic.in";
 
-const LAST_YEARS = Object.keys(PAPERS).sort((a, b) => parseInt(b) - parseInt(a));
-const SUBJECTS   = ["Science", "Mathematics", "English", "Hindi", "Social Science"];
+const YEAR_DATA: YearData[] = [
+  {
+    year: "2025-26",
+    label: "SQP 2025–26",
+    badge: "LATEST SQP",
+    type: "sqp",
+    listingUrl: `${BASE}/sqp_classx_2025-26.html`,
+    subjects: {
+      "Science":          { sqp: `${BASE}/web_material/SQP/ClassX_2025_26/Science-SQP.pdf`,       ms: `${BASE}/web_material/SQP/ClassX_2025_26/Science-MS.pdf` },
+      "Maths Standard":   { sqp: `${BASE}/web_material/SQP/ClassX_2025_26/MathsStandard-SQP.pdf`, ms: `${BASE}/web_material/SQP/ClassX_2025_26/MathsStandard-MS.pdf` },
+      "Maths Basic":      { sqp: `${BASE}/web_material/SQP/ClassX_2025_26/MathsBasic-SQP.pdf`,    ms: `${BASE}/web_material/SQP/ClassX_2025_26/MathsBasic-MS.pdf` },
+      "English (L&L)":    { sqp: `${BASE}/web_material/SQP/ClassX_2025_26/EnglishL-SQP.pdf`,      ms: `${BASE}/web_material/SQP/ClassX_2025_26/EnglishL-MS.pdf` },
+      "Hindi A":          { sqp: `${BASE}/web_material/SQP/ClassX_2025_26/HindiCourseA-SQP.pdf`,  ms: `${BASE}/web_material/SQP/ClassX_2025_26/HindiCourseA-MS.pdf` },
+      "Hindi B":          { sqp: `${BASE}/web_material/SQP/ClassX_2025_26/HindiCourseB-SQP.pdf`,  ms: `${BASE}/web_material/SQP/ClassX_2025_26/HindiCourseB-MS.pdf` },
+      "Social Science":   { sqp: `${BASE}/web_material/SQP/ClassX_2025_26/SocialScience-SQP.pdf`, ms: `${BASE}/web_material/SQP/ClassX_2025_26/SocialScience-MS.pdf` },
+      "Computer App":     { sqp: `${BASE}/web_material/SQP/ClassX_2025_26/ComputerApplication-SQP.pdf`, ms: `${BASE}/web_material/SQP/ClassX_2025_26/ComputerApplication-MS.pdf` },
+    },
+  },
+  {
+    year: "2024-25",
+    label: "SQP 2024–25",
+    badge: "SQP",
+    type: "sqp",
+    listingUrl: `${BASE}/sqp_classx_2024-25.html`,
+    subjects: {
+      "Science":          { sqp: `${BASE}/web_material/SQP/ClassX_2024_25/Science-SQP.pdf`,           ms: `${BASE}/web_material/SQP/ClassX_2024_25/Science-MS.pdf` },
+      "Maths Standard":   { sqp: `${BASE}/web_material/SQP/ClassX_2024_25/MathsStandard-SQP.pdf`,     ms: `${BASE}/web_material/SQP/ClassX_2024_25/MathsStandard-MS.pdf` },
+      "Maths Basic":      { sqp: `${BASE}/web_material/SQP/ClassX_2024_25/MathsBasic-SQP.pdf`,        ms: `${BASE}/web_material/SQP/ClassX_2024_25/MathsBasic-MS.pdf` },
+      "English (L&L)":    { sqp: `${BASE}/web_material/SQP/ClassX_2024_25/EnglishL-SQP.pdf`,          ms: `${BASE}/web_material/SQP/ClassX_2024_25/EnglishL-MS.pdf` },
+      "Hindi A":          { sqp: `${BASE}/web_material/SQP/ClassX_2024_25/HindiCourseA-SQP.pdf`,      ms: `${BASE}/web_material/SQP/ClassX_2024_25/HindiCourseA-MS.pdf` },
+      "Hindi B":          { sqp: `${BASE}/web_material/SQP/ClassX_2024_25/HindiCourseB-SQP.pdf`,      ms: `${BASE}/web_material/SQP/ClassX_2024_25/HindiCourseB-MS.pdf` },
+      "Social Science":   { sqp: `${BASE}/web_material/SQP/ClassX_2024_25/SocialScience-SQP.pdf`,     ms: `${BASE}/web_material/SQP/ClassX_2024_25/SocialScience-MS.pdf` },
+      "Computer App":     { sqp: `${BASE}/web_material/SQP/ClassX_2024_25/ComputerApplication-SQP.pdf`, ms: `${BASE}/web_material/SQP/ClassX_2024_25/ComputerApplication-MS.pdf` },
+    },
+  },
+  {
+    year: "2023-24",
+    label: "SQP 2023–24",
+    badge: "SQP",
+    type: "sqp",
+    listingUrl: `${BASE}/SQP_CLASSX_2023-24.html`,
+    subjects: {
+      "Science":          { sqp: `${BASE}/web_material/SQP/ClassX_2023_24/Science-SQP.pdf`,           ms: `${BASE}/web_material/SQP/ClassX_2023_24/Science-MS.pdf` },
+      "Maths Standard":   { sqp: `${BASE}/web_material/SQP/ClassX_2023_24/MathsStandard-SQP.pdf`,     ms: `${BASE}/web_material/SQP/ClassX_2023_24/MathsStandard-MS.pdf` },
+      "Maths Basic":      { sqp: `${BASE}/web_material/SQP/ClassX_2023_24/MathsBasic-SQP.pdf`,        ms: `${BASE}/web_material/SQP/ClassX_2023_24/MathsBasic-MS.pdf` },
+      "English (L&L)":    { sqp: `${BASE}/web_material/SQP/ClassX_2023_24/EnglishL-SQP.pdf`,          ms: `${BASE}/web_material/SQP/ClassX_2023_24/EnglishL-MS.pdf` },
+      "Hindi A":          { sqp: `${BASE}/web_material/SQP/ClassX_2023_24/HindiCourseA-SQP.pdf`,      ms: `${BASE}/web_material/SQP/ClassX_2023_24/HindiCourseA-MS.pdf` },
+      "Social Science":   { sqp: `${BASE}/web_material/SQP/ClassX_2023_24/SocialScience-SQP.pdf`,     ms: `${BASE}/web_material/SQP/ClassX_2023_24/SocialScience-MS.pdf` },
+    },
+  },
+  {
+    year: "2024-board",
+    label: "Board Exam 2024",
+    badge: "ACTUAL PAPER",
+    type: "board",
+    listingUrl: `${BASE}/qbclass10.html`,
+    subjects: {
+      "Science":          { board: `${BASE}/web_material/Qpapers/2024/classX/Science.pdf` },
+      "Maths Standard":   { board: `${BASE}/web_material/Qpapers/2024/classX/Mathematics_Standard.pdf` },
+      "Maths Basic":      { board: `${BASE}/web_material/Qpapers/2024/classX/Mathematics_Basic.pdf` },
+      "English (L&L)":    { board: `${BASE}/web_material/Qpapers/2024/classX/English_LA.pdf` },
+      "Hindi A":          { board: `${BASE}/web_material/Qpapers/2024/classX/Hindi_A.pdf` },
+      "Hindi B":          { board: `${BASE}/web_material/Qpapers/2024/classX/Hindi_B.pdf` },
+      "Social Science":   { board: `${BASE}/web_material/Qpapers/2024/classX/Social_Science.pdf` },
+    },
+  },
+  {
+    year: "2023-board",
+    label: "Board Exam 2023",
+    badge: "ACTUAL PAPER",
+    type: "board",
+    listingUrl: `${BASE}/qbclass10.html`,
+    subjects: {
+      "Science":          { board: `${BASE}/web_material/Qpapers/2023/classX/Science.pdf` },
+      "Maths Standard":   { board: `${BASE}/web_material/Qpapers/2023/classX/Maths_Standard.pdf` },
+      "Maths Basic":      { board: `${BASE}/web_material/Qpapers/2023/classX/Maths_Basic.pdf` },
+      "English (L&L)":    { board: `${BASE}/web_material/Qpapers/2023/classX/English_LA.pdf` },
+      "Hindi A":          { board: `${BASE}/web_material/Qpapers/2023/classX/Hindi_Course_A.pdf` },
+      "Social Science":   { board: `${BASE}/web_material/Qpapers/2023/classX/Social_Science.pdf` },
+    },
+  },
+  {
+    year: "2020-board",
+    label: "Board Exam 2020",
+    badge: "ACTUAL PAPER",
+    type: "board",
+    listingUrl: `${BASE}/qbclass10.html`,
+    subjects: {
+      "Science":          { board: `${BASE}/web_material/Qpapers/2020/classX/Science.pdf` },
+      "Maths Standard":   { board: `${BASE}/web_material/Qpapers/2020/classX/Mathematics_Standard.pdf` },
+      "Maths Basic":      { board: `${BASE}/web_material/Qpapers/2020/classX/Mathematics_Basic.pdf` },
+      "English (L&L)":    { board: `${BASE}/web_material/Qpapers/2020/classX/English_LA.pdf` },
+      "Hindi A":          { board: `${BASE}/web_material/Qpapers/2020/classX/Hindi_Course_A.pdf` },
+      "Social Science":   { board: `${BASE}/web_material/Qpapers/2020/classX/Social_Science.pdf` },
+    },
+  },
+  {
+    year: "2019-board",
+    label: "Board Exam 2019",
+    badge: "ACTUAL PAPER",
+    type: "board",
+    listingUrl: `${BASE}/qbclass10.html`,
+    subjects: {
+      "Science":          { board: `${BASE}/web_material/Qpapers/2019/classX/Science.pdf` },
+      "Mathematics":      { board: `${BASE}/web_material/Qpapers/2019/classX/Mathematics.pdf` },
+      "English (L&L)":    { board: `${BASE}/web_material/Qpapers/2019/classX/English_LA.pdf` },
+      "Hindi A":          { board: `${BASE}/web_material/Qpapers/2019/classX/Hindi_Course_A.pdf` },
+      "Social Science":   { board: `${BASE}/web_material/Qpapers/2019/classX/Social_Science.pdf` },
+    },
+  },
+];
 
 // ─── FUTURE DATES ─────────────────────────────────────────────
 const FUTURE_DATES = [
@@ -76,13 +158,10 @@ const FUTURE_DATES = [
   { event: "CA Foundation",                      date: "June & Dec 2026",icon: "📒", link: "https://icai.org" },
 ];
 
-// ─── FIX 1 & 2: CAREER DATA with clickable careers + free study links per book ──
-// Each career now has: name, which exams to prepare for, and icon.
-// Each exam has books with FREE online study material links.
-
+// ─── CAREER DATA ──────────────────────────────────────────────
 type Book = { title: string; freeLink: string; linkLabel: string };
 type Exam = { name: string; icon: string; desc: string; dates: string; link: string; books: Book[] };
-type Career = { name: string; icon: string; exams: string[] }; // exam names
+type Career = { name: string; icon: string; exams: string[] };
 
 const CAREER_STREAMS: {
   stream: string; color: string; bg: string; border: string; icon: string;
@@ -122,7 +201,6 @@ const CAREER_STREAMS: {
         books: [
           { title: "NCERT Physics, Chemistry, Maths", freeLink: "https://ncert.nic.in/textbook.php", linkLabel: "Free Official NCERT PDFs" },
           { title: "BITSAT Previous Year Papers", freeLink: "https://www.selfstudys.com/books/bitsat-previous-year-papers", linkLabel: "Free Papers" },
-          { title: "BITSAT Online Practice", freeLink: "https://bitsadmission.com/bitsat-practice", linkLabel: "Official Practice" },
         ],
       },
       { name: "NDA", icon: "🪖", desc: "National Defence Academy — Army, Navy, Air Force", dates: "Apr & Sep every year", link: "https://upsc.gov.in",
@@ -280,7 +358,7 @@ const CAREER_STREAMS: {
   },
 ];
 
-// ─── UPSC RESOURCES (unchanged) ──────────────────────────────
+// ─── UPSC RESOURCES ───────────────────────────────────────────
 const UPSC_RESOURCES = [
   { stage: "Free NCERT & Basics", icon: "📖", color: "#2563EB", items: [
     { label: "NCERT Free PDFs (Official)", link: "https://ncert.nic.in/textbook.php", desc: "Free download — Class 6 to 12 all subjects. Backbone of UPSC." },
@@ -343,6 +421,14 @@ async function generateTimetable(exam: string, weeks: number, hoursPerDay: numbe
   }
 }
 
+// ─── BADGE COLORS ─────────────────────────────────────────────
+function getBadgeStyle(badge?: string) {
+  if (!badge) return {};
+  if (badge === "LATEST SQP") return { background: "#22c55e", color: "#fff" };
+  if (badge === "ACTUAL PAPER") return { background: "#2563EB", color: "#fff" };
+  return { background: "#6b7280", color: "#fff" };
+}
+
 // ─── TAB: ABOUT ───────────────────────────────────────────────
 function AboutTab() {
   return (
@@ -372,61 +458,120 @@ function AboutTab() {
   );
 }
 
-// ─── TAB: LAST YEARS (FIX 3) ──────────────────────────────────
-// Each subject button now opens the direct PDF URL in a new tab using window.open
-// with headers trick to force PDF viewing instead of download.
+// ─── TAB: LAST YEARS ──────────────────────────────────────────
 function LastYearsTab() {
-  const [expanded, setExpanded] = useState<string | null>(LAST_YEARS[0]);
+  const [expanded, setExpanded] = useState<string | null>(YEAR_DATA[0].year);
 
   function openPdf(url: string) {
-    // Opens direct PDF link in new tab — browser PDF viewer handles it inline
     window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  // Group years: SQPs first, then Board papers
+  const sqpYears   = YEAR_DATA.filter(y => y.type === "sqp");
+  const boardYears = YEAR_DATA.filter(y => y.type === "board");
+
+  function renderYearBlock(yd: YearData) {
+    const isOpen = expanded === yd.year;
+    const subjects = Object.entries(yd.subjects);
+
+    return (
+      <div key={yd.year} style={{ marginBottom: 8, border: "1px solid rgba(212,175,55,0.3)", borderRadius: 12, overflow: "hidden" }}>
+        <button
+          onClick={() => setExpanded(isOpen ? null : yd.year)}
+          style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", background: isOpen ? "rgba(212,175,55,0.15)" : "rgba(255,255,255,0.5)", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 700, color: "#0a2540", fontFamily: "inherit" }}
+        >
+          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            📄 CBSE Class 10 — {yd.label}
+            {yd.badge && (
+              <span style={{ fontSize: 10, padding: "1px 7px", borderRadius: 10, ...getBadgeStyle(yd.badge) }}>
+                {yd.badge}
+              </span>
+            )}
+          </span>
+          <span style={{ color: "#D4AF37" }}>{isOpen ? "▲" : "▼"}</span>
+        </button>
+
+        {isOpen && (
+          <div style={{ padding: "14px 18px", background: "rgba(255,255,255,0.7)" }}>
+            {yd.type === "sqp" && (
+              <p style={{ fontSize: 12, color: "#5c6f82", marginBottom: 10 }}>
+                📌 <strong>Sample Question Paper</strong> — released by CBSE before the exam for practice. Click subject to open PDF, or get its Marking Scheme.
+              </p>
+            )}
+            {yd.type === "board" && (
+              <p style={{ fontSize: 12, color: "#2563EB", marginBottom: 10, background: "rgba(37,99,235,0.06)", padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(37,99,235,0.2)" }}>
+                🏫 <strong>Actual Board Exam Paper</strong> — the real paper that appeared in the exam. Official from CBSE Question Bank.
+              </p>
+            )}
+
+            {/* Subject buttons */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+              {subjects.map(([subName, links]) => (
+                <div key={subName} style={{ display: "flex", gap: 4 }}>
+                  {/* SQP / Board paper button */}
+                  <button
+                    onClick={() => openPdf((links.sqp || links.board || yd.listingUrl))}
+                    style={{ padding: "8px 14px", borderRadius: 8, background: yd.type === "board" ? "rgba(37,99,235,0.08)" : "rgba(212,175,55,0.1)", border: `1.5px solid ${yd.type === "board" ? "rgba(37,99,235,0.35)" : "rgba(212,175,55,0.5)"}`, color: "#0a2540", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                    onMouseOver={e => (e.currentTarget.style.opacity = "0.75")}
+                    onMouseOut={e => (e.currentTarget.style.opacity = "1")}
+                  >
+                    📄 {subName}
+                  </button>
+                  {/* Marking Scheme button (SQP only) */}
+                  {links.ms && (
+                    <button
+                      onClick={() => openPdf(links.ms!)}
+                      title="Marking Scheme"
+                      style={{ padding: "8px 10px", borderRadius: 8, background: "rgba(34,197,94,0.08)", border: "1.5px solid rgba(34,197,94,0.35)", color: "#15803d", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                    >
+                      ✅ MS
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Fallback listing link */}
+            <p style={{ fontSize: 11, color: "#5c6f82" }}>
+              💡 Papers not loading? Open the full listing:&nbsp;
+              <a href={yd.listingUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#2563EB" }}>
+                CBSE Official Page ↗
+              </a>
+            </p>
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (
     <div>
       <p style={{ color: "#5c6f82", fontSize: 13, marginBottom: 14 }}>
-        Click any subject to <strong>open the question paper PDF directly</strong> — it opens in your browser's PDF viewer instantly.
+        Click any subject to open the PDF directly. <strong>SQPs</strong> are pre-exam practice papers; <strong>Board Exam Papers</strong> are actual question papers from that year.
       </p>
-      {LAST_YEARS.map(year => (
-        <div key={year} style={{ marginBottom: 8, border: "1px solid rgba(212,175,55,0.3)", borderRadius: 12, overflow: "hidden" }}>
-          <button onClick={() => setExpanded(expanded === year ? null : year)}
-            style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", background: expanded === year ? "rgba(212,175,55,0.15)" : "rgba(255,255,255,0.5)", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 700, color: "#0a2540", fontFamily: "inherit" }}>
-            <span>
-              📄 CBSE Class 10 — {year}
-              {year === LAST_YEARS[0] && <span style={{ fontSize: 10, background: "#22c55e", color: "#fff", padding: "1px 6px", borderRadius: 10, marginLeft: 6 }}>LATEST</span>}
-            </span>
-            <span style={{ color: "#D4AF37" }}>{expanded === year ? "▲" : "▼"}</span>
-          </button>
-          {expanded === year && (
-            <div style={{ padding: "12px 18px", background: "rgba(255,255,255,0.7)" }}>
-              <p style={{ fontSize: 12, color: "#5c6f82", marginBottom: 10 }}>
-                📌 Click subject → PDF opens directly in browser. If it asks to download instead, allow it — it's the official CBSE file.
-              </p>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
-                {SUBJECTS.map(sub => (
-                  <button key={sub}
-                    onClick={() => openPdf(PAPERS[year]?.[sub] || "https://cbseacademic.nic.in")}
-                    style={{ padding: "8px 16px", borderRadius: 8, background: "rgba(212,175,55,0.1)", border: "1.5px solid rgba(212,175,55,0.5)", color: "#0a2540", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, transition: "background 0.15s" }}
-                    onMouseOver={e => (e.currentTarget.style.background = "rgba(212,175,55,0.25)")}
-                    onMouseOut={e => (e.currentTarget.style.background = "rgba(212,175,55,0.1)")}
-                  >
-                    📄 {sub}
-                  </button>
-                ))}
-                <button
-                  onClick={() => openPdf(MARKING_SCHEME[year] || "https://cbseacademic.nic.in")}
-                  style={{ padding: "8px 16px", borderRadius: 8, background: "rgba(34,197,94,0.1)", border: "1.5px solid rgba(34,197,94,0.4)", color: "#15803d", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}
-                >
-                  ✅ Marking Scheme
-                </button>
-              </div>
-            </div>
-          )}
+
+      {/* SQP Section */}
+      <div style={{ marginBottom: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <span style={{ fontWeight: 800, fontSize: 12, color: "#0a2540", letterSpacing: "0.1em" }}>📝 SAMPLE QUESTION PAPERS (SQP)</span>
+          <span style={{ flex: 1, height: 1, background: "rgba(212,175,55,0.3)" }} />
         </div>
-      ))}
-      <p style={{ fontSize: 12, color: "#5c6f82", marginTop: 10 }}>
-        💡 Papers not loading? Visit <a href="https://cbseacademic.nic.in" target="_blank" rel="noopener noreferrer" style={{ color: "#2563EB" }}>cbseacademic.nic.in ↗</a> directly.
+        {sqpYears.map(renderYearBlock)}
+      </div>
+
+      {/* Board Papers Section */}
+      <div style={{ marginTop: 18 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <span style={{ fontWeight: 800, fontSize: 12, color: "#0a2540", letterSpacing: "0.1em" }}>🏫 ACTUAL BOARD EXAM PAPERS</span>
+          <span style={{ flex: 1, height: 1, background: "rgba(37,99,235,0.25)" }} />
+        </div>
+        {boardYears.map(renderYearBlock)}
+      </div>
+
+      <p style={{ fontSize: 12, color: "#5c6f82", marginTop: 12 }}>
+        💡 For more subjects & years, visit{" "}
+        <a href="https://cbseacademic.nic.in" target="_blank" rel="noopener noreferrer" style={{ color: "#2563EB" }}>cbseacademic.nic.in ↗</a>
+        &nbsp;→ Sample Question Paper / Question Bank → Class X
       </p>
     </div>
   );
@@ -508,19 +653,15 @@ function CheckResultTab({ student }: { student: StudentContext }) {
   );
 }
 
-// ─── TAB: CAREER (FIX 1 + FIX 2) ────────────────────────────
-// Career options are now clickable → shows relevant exams for that career.
-// Each exam's books link to free online study material.
+// ─── TAB: CAREER ──────────────────────────────────────────────
 function CareerTab({ studentName }: { studentName: string }) {
-  const [activeStream, setActiveStream]       = useState(0);
-  const [section, setSection]                 = useState<"streams" | "upsc">("streams");
-  const [selectedCareer, setSelectedCareer]   = useState<Career | null>(null);  // FIX 1
-  const [selectedExam, setSelectedExam]       = useState<Exam | null>(null);
-  const [upscSection, setUpscSection]         = useState(0);
+  const [activeStream, setActiveStream]     = useState(0);
+  const [section, setSection]               = useState<"streams" | "upsc">("streams");
+  const [selectedCareer, setSelectedCareer] = useState<Career | null>(null);
+  const [selectedExam, setSelectedExam]     = useState<Exam | null>(null);
+  const [upscSection, setUpscSection]       = useState(0);
 
   const stream = CAREER_STREAMS[activeStream];
-
-  // Get exams relevant to selected career
   const careerExams: Exam[] = selectedCareer
     ? stream.exams.filter(e => selectedCareer.exams.includes(e.name))
     : [];
@@ -536,8 +677,6 @@ function CareerTab({ studentName }: { studentName: string }) {
       <p style={{ color: "#5c6f82", fontSize: 13, marginBottom: 14 }}>
         Hey {studentName}! Click a <strong>career</strong> to see which exams to prepare for, then click any exam for books & study links.
       </p>
-
-      {/* Section toggle */}
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         {[{ key: "streams", label: "🎯 Streams & Exams" }, { key: "upsc", label: "🏛️ UPSC / Civil Services" }].map(({ key, label }) => (
           <button key={key} onClick={() => { setSection(key as any); setSelectedCareer(null); setSelectedExam(null); }}
@@ -549,7 +688,6 @@ function CareerTab({ studentName }: { studentName: string }) {
 
       {section === "streams" && (
         <div>
-          {/* Stream tabs */}
           {!selectedExam && (
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
               {CAREER_STREAMS.map((s, i) => (
@@ -561,18 +699,15 @@ function CareerTab({ studentName }: { studentName: string }) {
             </div>
           )}
 
-          {/* ── VIEW: Career selection (no career chosen yet) ── */}
           {!selectedCareer && !selectedExam && (
             <div style={{ border: `2px solid ${stream.border}`, borderRadius: 14, padding: 18, background: stream.bg }}>
               <p style={{ fontWeight: 800, fontSize: 15, color: stream.color, marginBottom: 4 }}>{stream.icon} {stream.stream}</p>
               <p style={{ fontSize: 12, color: "#5c6f82", marginBottom: 14 }}>Subjects: {stream.subjects.join(", ")}</p>
-              <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 10 }}>
-                👇 Click a career to see which entrance exams you need to prepare for:
-              </p>
+              <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 10 }}>👇 Click a career to see which entrance exams you need:</p>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 {stream.careers.map(career => (
                   <button key={career.name} onClick={() => setSelectedCareer(career)}
-                    style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: 10, border: `1.5px solid ${stream.border}`, background: "#fff", cursor: "pointer", fontFamily: "inherit", textAlign: "left", transition: "all 0.15s" }}
+                    style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: 10, border: `1.5px solid ${stream.border}`, background: "#fff", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}
                     onMouseOver={e => { e.currentTarget.style.background = stream.bg; e.currentTarget.style.borderColor = stream.color; }}
                     onMouseOut={e => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = stream.border; }}
                   >
@@ -588,7 +723,6 @@ function CareerTab({ studentName }: { studentName: string }) {
             </div>
           )}
 
-          {/* ── VIEW: Career chosen → show its exams ── */}
           {selectedCareer && !selectedExam && (
             <div>
               <button onClick={() => setSelectedCareer(null)}
@@ -596,7 +730,7 @@ function CareerTab({ studentName }: { studentName: string }) {
                 ← Back to Careers
               </button>
               <div style={{ border: `2px solid ${stream.border}`, borderRadius: 14, padding: 18, background: stream.bg }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
                   <span style={{ fontSize: 28 }}>{selectedCareer.icon}</span>
                   <div>
                     <p style={{ fontWeight: 800, fontSize: 16, color: stream.color }}>{selectedCareer.name}</p>
@@ -605,13 +739,11 @@ function CareerTab({ studentName }: { studentName: string }) {
                 </div>
                 <div style={{ background: "rgba(255,255,255,0.6)", borderRadius: 10, padding: "10px 14px", marginBottom: 16, border: `1px solid ${stream.border}` }}>
                   <p style={{ fontSize: 12, color: "#5c6f82" }}>
-                    To pursue <strong>{selectedCareer.name}</strong>, you should prepare for:
+                    To pursue <strong>{selectedCareer.name}</strong>, prepare for:
                     <strong style={{ color: stream.color }}> {selectedCareer.exams.join(", ")}</strong>
                   </p>
                 </div>
-                <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 10 }}>
-                  📝 Click any exam to see dates, books & free study material:
-                </p>
+                <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 10 }}>📝 Click any exam for dates, books & free study material:</p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {careerExams.map(exam => (
                     <button key={exam.name} onClick={() => setSelectedExam(exam)}
@@ -628,28 +760,10 @@ function CareerTab({ studentName }: { studentName: string }) {
                     </button>
                   ))}
                 </div>
-
-                {/* Also show other available exams in stream */}
-                {stream.exams.filter(e => !selectedCareer.exams.includes(e.name)).length > 0 && (
-                  <div style={{ marginTop: 16 }}>
-                    <p style={{ fontSize: 12, color: "#5c6f82", marginBottom: 8 }}>
-                      💡 Other exams in {stream.stream} you can also explore:
-                    </p>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                      {stream.exams.filter(e => !selectedCareer.exams.includes(e.name)).map(exam => (
-                        <button key={exam.name} onClick={() => setSelectedExam(exam)}
-                          style={{ padding: "5px 12px", borderRadius: 20, border: `1px solid ${stream.border}`, background: "rgba(255,255,255,0.7)", color: "#5c6f82", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
-                          {exam.icon} {exam.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           )}
 
-          {/* ── VIEW: Exam detail with free book links (FIX 2) ── */}
           {selectedExam && (
             <div>
               <button onClick={() => setSelectedExam(null)}
@@ -669,15 +783,13 @@ function CareerTab({ studentName }: { studentName: string }) {
                     <a href={selectedExam.link} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: "#2563EB", fontWeight: 700 }}>Official Portal ↗</a>
                   </div>
                 </div>
-
-                {/* FIX 2: Books with free study links */}
                 <div style={{ marginBottom: 16 }}>
                   <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 4 }}>📚 Best Books — Click to Access Free Online</p>
                   <p style={{ fontSize: 11, color: "#5c6f82", marginBottom: 10 }}>All links go to free, legal study material — official PDFs, Archive.org, or official portals.</p>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {selectedExam.books.map(book => (
                       <a key={book.title} href={book.freeLink} target="_blank" rel="noopener noreferrer"
-                        style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: "rgba(255,255,255,0.8)", borderRadius: 10, border: "1px solid rgba(212,175,55,0.25)", textDecoration: "none", transition: "background 0.15s" }}
+                        style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: "rgba(255,255,255,0.8)", borderRadius: 10, border: "1px solid rgba(212,175,55,0.25)", textDecoration: "none" }}
                         onMouseOver={e => (e.currentTarget.style.background = "rgba(212,175,55,0.08)")}
                         onMouseOut={e => (e.currentTarget.style.background = "rgba(255,255,255,0.8)")}
                       >
@@ -691,7 +803,6 @@ function CareerTab({ studentName }: { studentName: string }) {
                     ))}
                   </div>
                 </div>
-
                 <a href={selectedExam.link} target="_blank" rel="noopener noreferrer"
                   style={{ display: "block", textAlign: "center", padding: "12px", borderRadius: 10, background: "linear-gradient(135deg, #D4AF37, #92400e)", color: "#fff", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
                   🚀 Go to Official {selectedExam.name} Portal
@@ -702,7 +813,6 @@ function CareerTab({ studentName }: { studentName: string }) {
         </div>
       )}
 
-      {/* UPSC section */}
       {section === "upsc" && (
         <div>
           <div style={{ background: "linear-gradient(135deg, #0a2540, #1e3a5f)", borderRadius: 14, padding: "16px 20px", color: "#fff", marginBottom: 14 }}>
