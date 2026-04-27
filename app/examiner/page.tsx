@@ -189,21 +189,44 @@ function createNewSessionId(): string {
   return sid;
 }
 
-// Only extract confirmed subject from the very first "subject set" reply.
-// Never extract from upload responses (which set subject to the detected name),
-// because that stale value then overrides later subject choices.
+// ─── Extract subject from ANY examiner reply that confirms a subject ──────────
+// Handles all reply formats:
+//   1. "I'll prepare a strict CBSE Board question paper for:\n**English — Class 10**"
+//   2. "I'll prepare a **custom paper** for:\n**English — Class 10**"
+//   3. "Subject is set to **X**"
+//   4. "subject_request is set to **X**"
+//   5. "Got it! ... for:\n**SubjectName — Class N**"
 function extractConfirmedSubject(reply: string): string {
-  // Match "I'll prepare a strict CBSE Board question paper for: **SubjectName — Class X**"
-  const paperMatch = reply.match(/question paper for[:\s]*\n?\*?\*?([^\n*—]+)/i);
-  if (paperMatch) return paperMatch[1].trim();
-  // Match "Subject is set to **X**" — only from READY state replies, not upload confirmations
-  const setMatch = reply.match(/[Ss]ubject is set to\s+\*?\*?([^\n*]+)/i);
-  if (setMatch) return setMatch[1].trim();
+  // Pattern 1 & 2: "for:\n**SubjectName — Class N**" or "for: **SubjectName**"
+  // This covers both "strict CBSE Board question paper for:" and "custom paper for:"
+  const forPattern = reply.match(/(?:paper|test|exam)\s+for[:\s]*\n?\*?\*?([^\n*—\u2014]+)/i);
+  if (forPattern) {
+    const extracted = forPattern[1].trim().replace(/\*\*/g, "").replace(/[—\u2014].*$/, "").trim();
+    if (extracted.length > 1) return extracted;
+  }
+
+  // Pattern 3: "Got it! I'll prepare a custom paper for:\n**English — Class 10**"
+  const gotItPattern = reply.match(/Got it[^.]*?for[:\s]*\n?\*?\*?([^\n*—\u2014]+)/i);
+  if (gotItPattern) {
+    const extracted = gotItPattern[1].trim().replace(/\*\*/g, "").replace(/[—\u2014].*$/, "").trim();
+    if (extracted.length > 1) return extracted;
+  }
+
+  // Pattern 4: "Subject is set to **X**"
+  const setMatch = reply.match(/[Ss]ubject\s+is\s+set\s+to\s+\*?\*?([^\n*]+)/i);
+  if (setMatch) return setMatch[1].trim().replace(/\*\*/g, "").trim();
+
+  // Pattern 5: Bolded subject name after "for:" on same or next line
+  const boldAfterFor = reply.match(/for[:\s]+\*\*([^*\n—\u2014]+)\*\*/i);
+  if (boldAfterFor) {
+    const extracted = boldAfterFor[1].trim();
+    if (extracted.length > 1) return extracted;
+  }
+
   return "";
 }
 
 // Extract detected subject from a syllabus upload confirmation reply.
-// The upload reply contains lines like "**Subject detected:** English"
 function extractUploadedSubject(reply: string): string {
   const match =
     reply.match(/\*\*Subject detected:\*\*\s*([^\n]+)/i) ||
@@ -233,8 +256,7 @@ export default function ExaminerPage() {
 
   // confirmedSubjectRef: set when user explicitly picks a subject via text
   const confirmedSubjectRef = useRef<string>("");
-  // uploadedSubjectRef: set when a syllabus upload is detected — kept separately
-  // so it's always available as a fallback when the user types "start"
+  // uploadedSubjectRef: set when a syllabus upload is detected
   const uploadedSubjectRef  = useRef<string>("");
 
   const timerRef     = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -316,6 +338,10 @@ export default function ExaminerPage() {
           .trim(),
       }));
 
+    // Determine the best confirmedSubject to send:
+    // Priority: explicitly confirmed subject > uploaded subject
+    const resolvedSubject = confirmedSubjectRef.current || uploadedSubjectRef.current || "";
+
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -326,10 +352,7 @@ export default function ExaminerPage() {
           uploadedText: uploadedText || "",
           uploadType:   uploadType || "",
           history,
-          // Send whichever subject ref is populated — uploaded subject is the
-          // critical one that ensures "start" works after a syllabus upload
-          confirmedSubject:
-            confirmedSubjectRef.current || uploadedSubjectRef.current || undefined,
+          confirmedSubject: resolvedSubject || undefined,
           student: {
             name:      student?.name  || "",
             class:     student?.class || "",
@@ -408,16 +431,19 @@ export default function ExaminerPage() {
           reply.includes("Syllabus") && reply.includes("uploaded successfully");
 
         if (!isUploadConfirmation) {
-          // Extract subject from explicit subject-selection replies
+          // Extract subject from ALL subject-selection/confirmation replies
           const extracted = extractConfirmedSubject(reply);
-          if (extracted) confirmedSubjectRef.current = extracted;
+          if (extracted) {
+            confirmedSubjectRef.current = extracted;
+            console.log("[ExaminerPage] Extracted confirmedSubject:", extracted);
+          }
         } else {
-          // Extract the detected subject from upload confirmation so it's
-          // available as confirmedSubject when the user types "start".
-          // This is the critical fix: without this, anonymous users who upload
-          // a syllabus and then type "start" would get "please tell me subject".
+          // Extract the detected subject from upload confirmation
           const detected = extractUploadedSubject(reply);
-          if (detected) uploadedSubjectRef.current = detected;
+          if (detected) {
+            uploadedSubjectRef.current = detected;
+            console.log("[ExaminerPage] Extracted uploadedSubject:", detected);
+          }
         }
 
         setMessages(p => [...p, { role: "assistant", content: reply }]);

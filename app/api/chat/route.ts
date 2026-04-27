@@ -58,6 +58,75 @@ function sanitiseClass(raw: string): string {
 }
 
 // ─────────────────────────────────────────────────────────────
+// STRONG RANDOMISATION HELPERS
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Returns a unique seed string combining timestamp + random hex.
+ * Used in prompts to bust any caching / pattern repetition.
+ */
+function makeSeed(): string {
+  const ts  = Date.now();
+  const r1  = Math.random().toString(36).slice(2, 9);
+  const r2  = Math.random().toString(36).slice(2, 9);
+  const r3  = Math.floor(Math.random() * 999983).toString(); // large prime-ish
+  return `[SEED:${ts}-${r1}-${r2}-${r3}]`;
+}
+
+/** Fisher-Yates shuffle — mutates and returns the array */
+function shuffle<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+/**
+ * Pick a random element from an array.
+ */
+function pick<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// ─────────────────────────────────────────────────────────────
+// VARIETY BANKS  — rotated per paper so question style varies
+// ─────────────────────────────────────────────────────────────
+
+const ENGLISH_VERBS = shuffle([
+  "Explain", "Describe", "Analyse", "Compare", "Discuss",
+  "Illustrate", "Evaluate", "Justify", "Summarise", "Interpret",
+  "Examine", "Elaborate", "Critically analyse", "Comment on",
+]);
+
+const HINDI_VERBS = shuffle([
+  "परिभाषित कीजिए", "उदाहरण दीजिए", "अंतर स्पष्ट कीजिए", "व्याख्या कीजिए",
+  "उचित उदाहरण सहित समझाइए", "पहचान कीजिए", "रिक्त स्थान भरिए",
+  "शुद्ध कीजिए", "वाक्य में प्रयोग कीजिए", "सही विकल्प चुनिए",
+]);
+
+const SCIENCE_CONTEXTS = shuffle([
+  "with a labelled diagram", "using an example from daily life",
+  "with the help of a chemical equation", "referencing a real-world application",
+  "using the correct scientific terminology", "with a suitable experiment",
+  "comparing it with a related concept", "by stating its significance",
+]);
+
+const MATH_CONTEXTS = shuffle([
+  "showing all steps", "providing a proof", "using a diagram",
+  "using a real-life word problem", "by stating the theorem used",
+  "finding all possible cases", "using algebraic methods",
+  "using the formula and substituting values",
+]);
+
+const SST_CONTEXTS = shuffle([
+  "with historical evidence", "citing specific examples from the textbook",
+  "with a map reference where applicable", "mentioning the key causes and effects",
+  "comparing two different perspectives", "using dates and facts",
+  "explaining the significance of the event/concept",
+]);
+
+// ─────────────────────────────────────────────────────────────
 // PARSE CUSTOM PAPER REQUIREMENTS FROM STUDENT COMMAND
 // ─────────────────────────────────────────────────────────────
 
@@ -718,7 +787,7 @@ async function handleSyllabusUpload(
 }
 
 // ─────────────────────────────────────────────────────────────
-// CORE AI CALLER — GROQ (chat) + GEMINI (vision/OCR only)
+// CORE AI CALLER
 // ─────────────────────────────────────────────────────────────
 
 async function callAI(
@@ -753,6 +822,9 @@ async function callAI(
                 content: m.content || "",
               })),
           ],
+          // Temperature slightly raised for more variation
+          temperature: 0.9,
+          top_p: 0.95,
         }),
       }
     );
@@ -820,7 +892,7 @@ export async function POST(req: NextRequest) {
 
     let uploadedText: string = sanitiseUpload(rawUploadedText);
 
-    // ── VISION/OCR — still uses Gemini API key ──────────────────
+    // ── VISION/OCR ──────────────────────────────────────────────
     if (rawUploadedText.includes("[IMAGE_BASE64]")) {
       const base64Match = rawUploadedText.match(/\[IMAGE_BASE64\]\n(data:image\/[^;]+;base64,[^\n]+)/);
       if (base64Match) {
@@ -1638,6 +1710,7 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
         const isSST     = /sst|social|history|geography|civics|economics|politics|contemporary/i.test(subjectName);
         const isEnglish = /english/i.test(subjectName);
         const isHindi   = /hindi/i.test(subjectName);
+        const isScience = /science|physics|chemistry|biology/i.test(subjectName);
         const hasUploadedSyllabus = !!session.syllabus_from_upload;
         const customInstructions  = recoveredInstructions;
         const hasCustomInstr      = !!customInstructions;
@@ -1649,6 +1722,9 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
         const finalMarks    = reqs.totalMarks  || defaultMarks;
         const finalMinutes  = reqs.timeMinutes || defaultMinutes;
         const timeAllowed   = formatTimeAllowed(finalMinutes);
+
+        // ── UNIQUE SEED for this paper generation ─────────────────
+        const paperSeed = makeSeed();
 
         if (hasCustomInstr || hasUploadedSyllabus) {
           let formatSpec = "";
@@ -1735,14 +1811,8 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
 
           if (topicLines.length === 0) topicLines = allTopicLines;
 
-          const shuffled = [...topicLines];
-          for (let i = shuffled.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-          }
-          topicLines = shuffled;
-
-          const attemptSeed = `[Attempt-${Date.now()}-${Math.random().toString(36).slice(2,7)}]`;
+          // Strong shuffle with Fisher-Yates
+          topicLines = shuffle([...topicLines]);
 
           const marksPerQ = reqs.marksEach || (reqs.questionCount
             ? Math.round(finalMarks / reqs.questionCount)
@@ -1762,43 +1832,62 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
             marksAssigned += m;
           }
 
-          const safeQTypes = isHindi
-            ? ["परिभाषा लिखिए", "उदाहरण सहित अंतर स्पष्ट कीजिए", "रिक्त स्थान भरिए", "सही विकल्प चुनिए", "शुद्ध कीजिए", "पहचान कीजिए", "वाक्य में प्रयोग कीजिए"]
-            : isEnglish
-            ? ["Define with example", "Fill in the blanks", "Identify and correct", "Choose the correct option", "Rewrite as directed", "Give two examples of"]
-            : ["Define", "Give examples", "Fill in the blanks", "Identify", "Explain with example"];
+          // Subject-appropriate verb/style banks shuffled per paper
+          const verbBank = isHindi ? shuffle([...HINDI_VERBS])
+            : isEnglish ? shuffle([...ENGLISH_VERBS])
+            : isMath ? shuffle([...MATH_CONTEXTS])
+            : isSST ? shuffle([...SST_CONTEXTS])
+            : isScience ? shuffle([...SCIENCE_CONTEXTS])
+            : shuffle([...ENGLISH_VERBS]);
+
+          // Difficulty rotation: easy → medium → hard → medium → easy…
+          const difficultyRota = ["easy", "medium", "medium", "hard", "medium", "easy"];
 
           const questionTexts: string[] = [];
-          const qTypeOffset = Math.floor(Math.random() * safeQTypes.length);
           for (const slot of questionPlan) {
-            const qTypeSuggestion = safeQTypes[(slot.qNum + qTypeOffset) % safeQTypes.length];
+            const verbStyle  = verbBank[slot.qNum % verbBank.length];
+            const difficulty = difficultyRota[slot.qNum % difficultyRota.length];
+
+            // Pick a random angle/context to force different question stems
+            const angles = [
+              `Ask about a definition or concept`,
+              `Ask for an example or application`,
+              `Ask to compare or contrast two things`,
+              `Ask to explain cause-and-effect`,
+              `Ask a fill-in-the-blank or one-word type`,
+              `Ask a short analytical question`,
+              `Ask for a real-life connection`,
+              `Ask about a process or sequence of steps`,
+            ];
+            const angle = pick(angles);
+
             const singleQPrompt = isHindi
-              ? `You are a Hindi grammar question writer for Class ${cls} CBSE. ${attemptSeed}
-Write EXACTLY ONE FRESH question on the grammar topic: "${slot.topic}"
-The question should be of type: ${qTypeSuggestion} (or similar grammar exercise).
-Marks: ${slot.marks}
-STRICT RULES:
-- The question must test ONLY "${slot.topic}" — a grammar concept.
-- Do NOT repeat questions you have generated before — always create a NEW question.
-- Do NOT mention any story, book chapter, poem, author, or prose passage.
-- Do NOT ask for चित्र-वर्णन, गद्यांश, अपठित, पत्र-लेखन, or निबंध.
-- Do NOT include a reading passage — pure grammar exercise only.
-- Output ONLY the question text (in Hindi). No numbering, no marks label, no explanation.`
-              : `You are a ${subjectName} question writer for Class ${cls} CBSE. ${attemptSeed}
-Write EXACTLY ONE FRESH question on the topic: "${slot.topic}"
-Question type: ${qTypeSuggestion}
-Marks: ${slot.marks}
-${reqs.chapterFilter ? `This question is from: ${reqs.chapterFilter}.` : ""}
-STRICT RULES:
-- Test ONLY "${slot.topic}" from ${subjectName} Class ${cls}.
-- IMPORTANT: Generate a NEW, UNIQUE question — do NOT repeat or reuse previously asked questions.
-- Do NOT add unseen passages, images, or topics outside "${slot.topic}".
-- Do NOT follow the standard 80-mark CBSE section pattern.
-- Do NOT add any NCERT chapter or concept not directly related to "${slot.topic}".
+              ? `You are a Hindi grammar examiner. ${paperSeed}
+Topic: "${slot.topic}" | Marks: ${slot.marks} | Difficulty: ${difficulty}
+Angle: ${angle}
+Style: ${verbStyle}
+
+Write EXACTLY ONE unique Hindi grammar question.
+RULES:
+- Test ONLY the grammar concept "${slot.topic}"
+- Do NOT repeat question patterns used previously
+- Do NOT include any prose passage, poem, letter writing, or essay
+- Output ONLY the question text in Hindi. No numbering, no marks label.`
+              : `You are a ${subjectName} examiner (Class ${cls} CBSE). ${paperSeed}
+Topic: "${slot.topic}" | Marks: ${slot.marks} | Difficulty: ${difficulty}
+Approach: ${angle}
+Style hint: "${verbStyle}"
+${reqs.chapterFilter ? `Chapter scope: ${reqs.chapterFilter}` : ""}
+
+Write EXACTLY ONE fresh, unique question on "${slot.topic}".
+RULES:
+- Do NOT repeat the same question stem used in any previous question
+- Do NOT add topics outside "${slot.topic}"
+- Vary the question type — use the Approach and Style hint as inspiration
 - Output ONLY the question text. No numbering, no marks label, no explanation.`;
 
             const qText = await callAI(singleQPrompt, [
-              { role: "user", content: `Write one ${slot.marks}-mark question on "${slot.topic}".` }
+              { role: "user", content: `Write one ${slot.marks}-mark ${difficulty} question on "${slot.topic}".` }
             ]);
             const cleanQ = qText.trim().replace(/^(Q\.?\d+\.?\s*|\d+\.\s*)/i, "").trim();
             questionTexts.push(cleanQ);
@@ -1968,7 +2057,7 @@ Q36–Q38  [4 marks each]`.trim();
           : isEnglish ? englishSections
           : isHindi   ? hindiSections
           : isSST     ? sstSections
-          : /science|physics|chemistry|biology/i.test(subjectName) ? scienceSections
+          : isScience ? scienceSections
           : standardSections;
 
         const uploadCoverageNote = hasUploadedSyllabus ? `
@@ -1979,11 +2068,45 @@ Every single question MUST come from a topic explicitly listed in the uploaded s
 Do NOT include any chapter, unit, or concept absent from the uploaded list.
 Do NOT use NCERT or CBSE default chapter lists — the uploaded list replaces them entirely.`.trim() : "";
 
-        const standardPaperSeed = `[Paper-${Date.now()}-${Math.random().toString(36).slice(2,8)}]`;
+        // ── Pick random difficulty distribution and question verb styles ──
+        const difficultyDistrib = pick([
+          "30% easy | 50% medium | 20% HOTs",
+          "20% easy | 55% medium | 25% HOTs",
+          "25% easy | 45% medium | 30% HOTs",
+          "35% easy | 40% medium | 25% HOTs",
+        ]);
+
+        // Pick shuffled verb set for this paper's question stems
+        const paperVerbSet = isHindi
+          ? shuffle([...HINDI_VERBS]).slice(0, 6).join(", ")
+          : isMath
+          ? shuffle([...MATH_CONTEXTS]).slice(0, 5).join(" | ")
+          : isSST
+          ? shuffle([...SST_CONTEXTS]).slice(0, 5).join(" | ")
+          : isScience
+          ? shuffle([...SCIENCE_CONTEXTS]).slice(0, 5).join(" | ")
+          : shuffle([...ENGLISH_VERBS]).slice(0, 6).join(", ");
+
         const paperPrompt = `
-You are an official CBSE Board question paper setter for Class ${cls}. ${standardPaperSeed}
+You are an official CBSE Board question paper setter for Class ${cls}.
+${paperSeed}
 Subject: ${subjectName} | Board: ${board} | Maximum Marks: 80 | Time: 3 Hours
-IMPORTANT: Generate a COMPLETELY FRESH paper — every question must be unique and different from any previously generated paper. Do NOT reuse question stems, values, or examples.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+UNIQUENESS MANDATE — READ CAREFULLY:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+This paper MUST be completely different from any previously generated paper.
+The seed above is unique — use it as your creative anchor.
+
+VARIATION REQUIREMENTS:
+1. MCQs: Use fresh answer options and NEW scenarios/values — never reuse the same stem
+2. Short answers: Rotate the question verb. Preferred verbs for this paper: ${paperVerbSet}
+3. Long answers: Choose DIFFERENT events, concepts, or examples than a typical paper
+4. Case studies: Use a NOVEL real-world scenario — NOT a textbook example
+5. Passages (English): Write a FRESH unseen passage on a topic not typically used (e.g., urban farming, space tourism, community science)
+6. Numbers (Math): ALL numerical values, coordinates, dimensions must be freshly chosen
+7. Difficulty: ${difficultyDistrib}
+
 Follow the EXACT official CBSE 2024-25 paper pattern for ${subjectName} as specified below.
 Output the complete question paper ONLY — no commentary, no preamble, no notes outside the paper.
 
@@ -2014,19 +2137,19 @@ ${hasUploadedSyllabus
 ${uploadCoverageNote ? uploadCoverageNote + "\n\n" : ""}${sectionBlocks}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-QUALITY RULES:
+FINAL QUALITY CHECKS:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 • Generate ALL sections completely — no section may be missing or short
 • Total marks MUST add up to exactly 80
 • Every question must show its mark value in [brackets]
-• Difficulty spread: 30% easy | 50% medium | 20% HOTs
+• No two questions should test the exact same concept in the same way
 • Do NOT add any text after the last question
         `.trim();
 
         const paper = await callAI(paperPrompt, [
           {
             role: "user",
-            content: `Generate CBSE Board paper: ${board} Class ${cls} — ${subjectName}${hasUploadedSyllabus ? " (UPLOADED SYLLABUS — use ONLY listed topics)" : ""}`,
+            content: `Generate a FRESH UNIQUE CBSE Board paper: ${board} Class ${cls} — ${subjectName}${hasUploadedSyllabus ? " (UPLOADED SYLLABUS — use ONLY listed topics)" : ""}. Paper seed: ${paperSeed}`,
           },
         ]);
 
