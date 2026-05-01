@@ -61,19 +61,14 @@ function sanitiseClass(raw: string): string {
 // STRONG RANDOMISATION HELPERS
 // ─────────────────────────────────────────────────────────────
 
-/**
- * Returns a unique seed string combining timestamp + random hex.
- * Used in prompts to bust any caching / pattern repetition.
- */
 function makeSeed(): string {
   const ts  = Date.now();
   const r1  = Math.random().toString(36).slice(2, 9);
   const r2  = Math.random().toString(36).slice(2, 9);
-  const r3  = Math.floor(Math.random() * 999983).toString(); // large prime-ish
+  const r3  = Math.floor(Math.random() * 999983).toString();
   return `[SEED:${ts}-${r1}-${r2}-${r3}]`;
 }
 
-/** Fisher-Yates shuffle — mutates and returns the array */
 function shuffle<T>(arr: T[]): T[] {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -82,15 +77,12 @@ function shuffle<T>(arr: T[]): T[] {
   return arr;
 }
 
-/**
- * Pick a random element from an array.
- */
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
 // ─────────────────────────────────────────────────────────────
-// VARIETY BANKS  — rotated per paper so question style varies
+// VARIETY BANKS
 // ─────────────────────────────────────────────────────────────
 
 const ENGLISH_VERBS = shuffle([
@@ -127,7 +119,7 @@ const SST_CONTEXTS = shuffle([
 ]);
 
 // ─────────────────────────────────────────────────────────────
-// PARSE CUSTOM PAPER REQUIREMENTS FROM STUDENT COMMAND
+// PARSE CUSTOM PAPER REQUIREMENTS
 // ─────────────────────────────────────────────────────────────
 
 interface PaperRequirements {
@@ -329,12 +321,30 @@ async function getSessionByStudent(
 // SYLLABUS HELPERS
 // ─────────────────────────────────────────────────────────────
 
+/**
+ * Returns subject display name and chapter list for the AI prompt.
+ * FIX: For non-class-9 classes, the chapterList now provides a clean AI instruction
+ * that does NOT bleed "instruction text" into question content.
+ */
 function getChaptersForSubject(
   subjectRequest: string,
   studentClass: string
 ): { subjectName: string; chapterList: string } {
   const req      = subjectRequest.toLowerCase();
   const classNum = parseInt(studentClass) || 9;
+
+  // ── Determine clean subject label ──────────────────────────
+  const subjectLabel =
+    /science|physics|chemistry|biology/.test(req) ? "Science" :
+    /math/.test(req)                               ? "Mathematics" :
+    /history/.test(req)                            ? "Social Science – History" :
+    /geo|geography/.test(req)                      ? "Social Science – Geography" :
+    /civic|politic|democracy/.test(req)            ? "Social Science – Civics/Political Science" :
+    /econ/.test(req)                               ? "Economics" :
+    /sst|social/.test(req)                         ? "Social Science (History + Geography + Civics + Economics)" :
+    /english/.test(req)                            ? "English" :
+    /hindi/.test(req)                              ? "Hindi" :
+    subjectRequest;
 
   if (classNum === 9) {
     const s = syllabus.subjects;
@@ -416,35 +426,93 @@ function getChaptersForSubject(
     }
     return {
       subjectName: subjectRequest,
-      chapterList:
-        `INSTRUCTION FOR AI: Retrieve the complete official NCERT Class 9 ` +
-        `${subjectRequest} chapter list from your training knowledge and use those exact chapters. Do NOT invent chapters.`,
+      chapterList: `Use the complete official NCERT Class 9 ${subjectRequest} syllabus from your training knowledge.`,
     };
   }
 
-  const subjectLabel =
-    /science|physics|chemistry|biology/.test(req) ? "Science" :
-    /math/.test(req)                               ? "Mathematics" :
-    /history/.test(req)                            ? "Social Science – History" :
-    /geo|geography/.test(req)                      ? "Social Science – Geography" :
-    /civic|politic|democracy/.test(req)            ? "Social Science – Civics/Political Science" :
-    /econ/.test(req)                               ? "Economics" :
-    /sst|social/.test(req)                         ? "Social Science (History + Geography + Civics + Economics)" :
-    /english/.test(req)                            ? "English" :
-    /hindi/.test(req)                              ? "Hindi" :
-    subjectRequest;
+  // ── Non-class-9: use AI's training knowledge with a CLEAN prompt ──
+  // FIX: Previously this leaked "Local syllabus data is not stored" instruction text
+  // into the chapterList which the AI then used as question topics. Now we provide
+  // a clean directive that reads like a system note, not question fodder.
+  const subjectName = `${subjectLabel} – Class ${classNum}`;
 
-  return {
-    subjectName: `${subjectLabel} – Class ${classNum}`,
-    chapterList:
-      `INSTRUCTION FOR AI: Local syllabus data is not stored for Class ${classNum}.\n` +
-      `You MUST retrieve the complete and accurate official NCERT/CBSE Class ${classNum} ` +
-      `${subjectLabel} chapter list from your training knowledge of the ncert.nic.in curriculum.\n` +
-      `Use the REAL chapter names exactly as they appear in the NCERT textbooks for Class ${classNum}.\n` +
-      `Do NOT invent or guess chapter names.\n` +
-      `Do NOT use chapters from any other class.\n` +
-      `Use only the genuine NCERT Class ${classNum} ${subjectLabel} syllabus as prescribed by CBSE.`,
-  };
+  const chapterList = [
+    `[NCERT SYLLABUS — CLASS ${classNum} ${subjectLabel.toUpperCase()}]`,
+    `Use the real, complete official NCERT/CBSE Class ${classNum} ${subjectLabel} syllabus.`,
+    `Draw questions ONLY from genuine NCERT Class ${classNum} ${subjectLabel} chapters as prescribed by CBSE.`,
+    `Do NOT invent chapter names. Do NOT use chapters from any other class.`,
+    `Examples of topics to cover (Class ${classNum} ${subjectLabel}):`,
+    getNcertTopicHints(subjectLabel, classNum),
+  ].join("\n");
+
+  return { subjectName, chapterList };
+}
+
+/**
+ * Returns a short list of real NCERT topic keywords per subject/class.
+ * This guides the AI toward correct content without leaking instruction text
+ * into question stems.
+ */
+function getNcertTopicHints(subject: string, classNum: number): string {
+  const s = subject.toLowerCase();
+
+  if (/english/.test(s)) {
+    const hintMap: Record<number, string> = {
+      6:  "A Tale of Two Birds, The Friendly Mongoose, The Shepherd's Treasure, Taro's Reward, An Indian – American Woman in Space, The Wonder Called Sleep, A Pact with the Sun",
+      7:  "Three Questions, A Gift of Chappals, Gopal and the Hilsa-Fish, The Ashes That Made Trees Bloom, Quality, Expert Detectives, The Invention of Vita-Wonk",
+      8:  "The Best Christmas Present in the World, The Tsunami, Glimpses of the Past, Bepin Choudhury's Lapse of Memory, The Summit Within, This is Jody's Fawn, A Visit to Cambridge",
+      10: "A Letter to God, Nelson Mandela: Long Walk to Freedom, Two Stories about Flying, From the Diary of Anne Frank, Glimpses of India, Mijbil the Otter, Madam Rides the Bus",
+      11: "The Portrait of a Lady, We're Not Afraid to Die, Discovering Tut, The Laburnum Top, The Voice of the Rain, Silk Road, Father to Son",
+      12: "The Last Lesson, Lost Spring, Deep Water, The Rattrap, Indigo, Poets and Pancakes, The Interview, Going Places",
+    };
+    return hintMap[classNum] || `NCERT Class ${classNum} English chapters from the prescribed textbook`;
+  }
+
+  if (/mathematics|maths/.test(s)) {
+    const hintMap: Record<number, string> = {
+      6:  "Knowing Our Numbers, Whole Numbers, Playing with Numbers, Basic Geometrical Ideas, Understanding Elementary Shapes, Integers, Fractions, Decimals, Data Handling, Mensuration, Algebra, Ratio and Proportion",
+      7:  "Integers, Fractions and Decimals, Data Handling, Simple Equations, Lines and Angles, The Triangle and its Properties, Congruence of Triangles, Comparing Quantities, Rational Numbers, Practical Geometry, Perimeter and Area, Algebraic Expressions, Exponents and Powers",
+      8:  "Rational Numbers, Linear Equations in One Variable, Understanding Quadrilaterals, Practical Geometry, Data Handling, Squares and Square Roots, Cubes and Cube Roots, Comparing Quantities, Algebraic Expressions and Identities, Mensuration, Exponents and Powers, Direct and Inverse Proportions, Factorisation, Introduction to Graphs",
+      10: "Real Numbers, Polynomials, Pair of Linear Equations, Quadratic Equations, Arithmetic Progressions, Triangles, Coordinate Geometry, Introduction to Trigonometry, Circles, Constructions, Areas Related to Circles, Surface Areas and Volumes, Statistics, Probability",
+      11: "Sets, Relations and Functions, Trigonometric Functions, Principle of Mathematical Induction, Complex Numbers, Linear Inequalities, Permutations and Combinations, Binomial Theorem, Sequences and Series, Straight Lines, Conic Sections, Introduction to 3D Geometry, Limits and Derivatives, Statistics, Probability",
+      12: "Relations and Functions, Inverse Trigonometric Functions, Matrices, Determinants, Continuity and Differentiability, Application of Derivatives, Integrals, Application of Integrals, Differential Equations, Vector Algebra, 3D Geometry, Linear Programming, Probability",
+    };
+    return hintMap[classNum] || `NCERT Class ${classNum} Mathematics chapters`;
+  }
+
+  if (/science/.test(s)) {
+    const hintMap: Record<number, string> = {
+      6:  "Food: Where Does It Come From?, Components of Food, Fibre to Fabric, Sorting Materials into Groups, Separation of Substances, Changes Around Us, Getting to Know Plants, Body Movements, The Living Organisms and their Surroundings, Motion and Measurement of Distances, Light Shadows and Reflections, Electricity and Circuits, Fun with Magnets, Water, Air Around Us, Garbage In Garbage Out",
+      7:  "Nutrition in Plants, Nutrition in Animals, Fibre to Fabric, Heat, Acids Bases and Salts, Physical and Chemical Changes, Weather Climate and Adaptations, Winds Storms and Cyclones, Soil, Respiration in Organisms, Transportation in Animals and Plants, Reproduction in Plants, Motion and Time, Electric Current and its Effects, Light, Water: A Precious Resource, Forests: Our Lifeline, Wastewater Story",
+      8:  "Crop Production and Management, Microorganisms, Synthetic Fibres and Plastics, Materials: Metals and Non-Metals, Coal and Petroleum, Combustion and Flame, Conservation of Plants and Animals, Cell Structure and Functions, Reproduction in Animals, Reaching the Age of Adolescence, Force and Pressure, Friction, Sound, Chemical Effects of Electric Current, Some Natural Phenomena, Light, Stars and the Solar System, Pollution of Air and Water",
+      10: "Chemical Reactions and Equations, Acids Bases and Salts, Metals and Non-metals, Carbon and its Compounds, Life Processes, Control and Coordination, How do Organisms Reproduce?, Heredity, Light – Reflection and Refraction, Human Eye and Colourful World, Electricity, Magnetic Effects of Electric Current, Our Environment",
+      11: "Physical World, Units and Measurement, Motion in a Straight Line, Motion in a Plane, Laws of Motion, Work Energy and Power, System of Particles, Gravitation, Mechanical Properties of Solids, Mechanical Properties of Fluids, Thermal Properties of Matter, Thermodynamics, Kinetic Theory, Oscillations, Waves",
+      12: "Electric Charges and Fields, Electrostatic Potential, Current Electricity, Moving Charges and Magnetism, Magnetism and Matter, Electromagnetic Induction, Alternating Current, Electromagnetic Waves, Ray Optics, Wave Optics, Dual Nature of Radiation, Atoms, Nuclei, Semiconductor Electronics",
+    };
+    return hintMap[classNum] || `NCERT Class ${classNum} Science chapters`;
+  }
+
+  if (/social science|history/.test(s)) {
+    const hintMap: Record<number, string> = {
+      6:  "What Where How and When, From Hunting Gathering to Growing Food, In the Earliest Cities, What Books and Burials Tell Us, Kingdoms Kings and an Early Republic, New Questions and Ideas, Ashoka the Emperor, Vital Villages Thriving Towns, Traders Kings and Pilgrims, New Empires and Kingdoms, Buildings Paintings and Books",
+      7:  "Tracing Changes through a Thousand Years, New Kings and Kingdoms, The Delhi Sultans, The Mughal Empire, Rulers and Buildings, Towns Traders and Craftspersons, Tribes Nomads and Settled Communities, Devotional Paths to the Divine, The Making of Regional Cultures, Eighteenth-Century Political Formations",
+      8:  "How When and Where, From Trade to Territory, Ruling the Countryside, Tribals Dikus and the Vision of a Golden Age, When People Rebel 1857, Colonialism and the City, Weavers Iron Smelters and Factory Owners, Civilising the Native Educating the Nation, Women Caste and Reform, The Changing World of Visual Arts, The Making of the National Movement",
+      10: "The Rise of Nationalism in Europe, Nationalism in India, The Making of a Global World, The Age of Industrialisation, Print Culture and the Modern World, Resources and Development, Forest and Wildlife Resources, Water Resources, Agriculture, Minerals and Energy Resources, Manufacturing Industries, Lifelines of National Economy, Power Sharing, Federalism, Gender Religion and Caste, Political Parties, Outcomes of Democracy, Development, Sectors of the Indian Economy, Money and Credit, Globalisation and the Indian Economy, Consumer Rights",
+    };
+    return hintMap[classNum] || `NCERT Class ${classNum} Social Science chapters (History, Geography, Civics, Economics)`;
+  }
+
+  if (/hindi/.test(s)) {
+    const hintMap: Record<number, string> = {
+      6:  "वह चिड़िया जो, बचपन, नादान दोस्त, चाँद से थोड़ी सी गप्पें, अक्षरों का महत्व, पार नज़र के, साथी हाथ बढ़ाना, ऐसे–ऐसे, टिकट एल्बम, झाँसी की रानी, जो देखकर भी नहीं देखते, संसार पुस्तक है",
+      7:  "हम पंछी उन्मुक्त गगन के, दादी माँ, हिमालय की बेटियाँ, कठपुतली, मिठाईवाला, रक्त और हमारा शरीर, पापा खो गए, शाम एक किसान, चिड़िया की बच्ची, अपूर्व अनुभव",
+      8:  "ध्वनि, लाख की चूड़ियाँ, बस की यात्रा, दीवानों की हस्ती, चिट्ठियों की अनूठी दुनिया, भगवान के डाकिए, क्या निराश हुआ जाए, यह सबसे कठिन समय नहीं, कबीर की साखियाँ, कामचोर",
+      10: "पद, राम-लक्ष्मण-परशुराम संवाद, देव, आत्मकथ्य, उत्साह, यह दंतुरहित मुस्कान, फसल, संगतकार, नेताजी का चश्मा, बालगोबिन भगत, लखनवी अंदाज़, मानवीय करुणा की दिव्य चमक",
+    };
+    return hintMap[classNum] || `NCERT Class ${classNum} Hindi chapters (Vasant/Sparsh/Aroh/Vitan as applicable)`;
+  }
+
+  return `NCERT Class ${classNum} ${subject} chapters as per the official CBSE curriculum`;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -822,7 +890,6 @@ async function callAI(
                 content: m.content || "",
               })),
           ],
-          // Temperature slightly raised for more variation
           temperature: 0.9,
           top_p: 0.95,
         }),
@@ -1619,13 +1686,21 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
 
         const messageReqs = parsePaperRequirements(message);
         const coreSubject = messageReqs.isCustom ? extractSubjectFromInstruction(message) : message;
+
+        // FIX: Always use getChaptersForSubject to get a clean subjectName.
+        // The subjectName returned is now clean (e.g. "English – Class 6")
+        // and does NOT include any instruction/meta text.
         const { subjectName } = getChaptersForSubject(coreSubject, cls);
+
+        // FIX: Strip " – Class N" suffix for display in the confirmation reply
+        // so the user sees "English — Class 6" not "English – Class 6 — Class 6"
+        const displaySubject = subjectName.replace(/\s*[–-]\s*Class\s*\d+$/i, "");
 
         const newSession: ExamSession = {
           session_key:         key,
           status:              "READY",
           subject_request:     coreSubject,
-          subject:             subjectName,
+          subject:             subjectName,  // Store full name for paper generation
           custom_instructions: messageReqs.isCustom ? message.trim() : undefined,
           answer_log:          [],
           student_name:        name,
@@ -1642,7 +1717,7 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
           return NextResponse.json({
             reply:
               `📚 Got it! I'll prepare a **custom paper** for:\n` +
-              `**${subjectName.replace(/\s*[–-]\s*Class\s*\d+$/i, "")} — Class ${cls}**\n\n` +
+              `**${displaySubject} — Class ${cls}**\n\n` +
               `📝 **Paper format:**\n` +
               `   Marks: ${totalDesc}${timeDesc}${typeDesc}${chapterDesc}\n\n` +
               `The paper will be generated **exactly** as you described — no extra sections added.\n\n` +
@@ -1654,7 +1729,7 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
         return NextResponse.json({
           reply:
             `📚 Got it! I'll prepare a **strict CBSE Board question paper** for:\n` +
-            `**${subjectName.replace(/\s*[–-]\s*Class\s*\d+$/i, "")} — Class ${cls}**\n\n` +
+            `**${displaySubject} — Class ${cls}**\n\n` +
             `Paper will strictly follow the NCERT Class ${cls} syllabus chapters.\n\n` +
             `📎 **Tip:** Want a paper based on YOUR specific syllabus?\n` +
             `Upload your syllabus as a PDF or image now, before typing start.\n\n` +
@@ -1700,8 +1775,12 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
           chapterList = session.syllabus_from_upload;
           console.log("[START] Using UPLOADED syllabus for:", subjectName, "| length:", chapterList.length);
         } else {
-          console.log("[START] No uploaded syllabus — using NCERT default for:", session.subject_request);
-          const resolved = getChaptersForSubject(session.subject_request || "", cls);
+          // FIX: Use session.subject_request (the raw user input like "english")
+          // rather than session.subject (which includes "– Class N" suffix).
+          // This ensures getChaptersForSubject gets clean input.
+          const subjectKey = session.subject_request || session.subject?.replace(/\s*[–-]\s*Class\s*\d+$/i, "") || "";
+          console.log("[START] No uploaded syllabus — using NCERT default for:", subjectKey);
+          const resolved = getChaptersForSubject(subjectKey, cls);
           subjectName = resolved.subjectName;
           chapterList = resolved.chapterList;
         }
@@ -1723,7 +1802,6 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
         const finalMinutes  = reqs.timeMinutes || defaultMinutes;
         const timeAllowed   = formatTimeAllowed(finalMinutes);
 
-        // ── UNIQUE SEED for this paper generation ─────────────────
         const paperSeed = makeSeed();
 
         if (hasCustomInstr || hasUploadedSyllabus) {
@@ -1758,6 +1836,12 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
             .replace(/.*A topic NOT listed.*\n/g, "")
             .replace(/.*Do NOT use standard.*\n/g, "")
             .replace(/.*Do NOT "fill gaps".*\n/g, "")
+            // FIX: Also strip the NCERT directive lines so they don't become question topics
+            .replace(/\[NCERT SYLLABUS.*\]\n?/g, "")
+            .replace(/Use the real, complete.*\n/g, "")
+            .replace(/Draw questions ONLY.*\n/g, "")
+            .replace(/Do NOT invent.*\n/g, "")
+            .replace(/Examples of topics.*\n/g, "")
             .trim();
 
           const allTopicLines = cleanTopicList
@@ -1811,7 +1895,6 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
 
           if (topicLines.length === 0) topicLines = allTopicLines;
 
-          // Strong shuffle with Fisher-Yates
           topicLines = shuffle([...topicLines]);
 
           const marksPerQ = reqs.marksEach || (reqs.questionCount
@@ -1832,7 +1915,6 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
             marksAssigned += m;
           }
 
-          // Subject-appropriate verb/style banks shuffled per paper
           const verbBank = isHindi ? shuffle([...HINDI_VERBS])
             : isEnglish ? shuffle([...ENGLISH_VERBS])
             : isMath ? shuffle([...MATH_CONTEXTS])
@@ -1840,7 +1922,6 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
             : isScience ? shuffle([...SCIENCE_CONTEXTS])
             : shuffle([...ENGLISH_VERBS]);
 
-          // Difficulty rotation: easy → medium → hard → medium → easy…
           const difficultyRota = ["easy", "medium", "medium", "hard", "medium", "easy"];
 
           const questionTexts: string[] = [];
@@ -1848,7 +1929,6 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
             const verbStyle  = verbBank[slot.qNum % verbBank.length];
             const difficulty = difficultyRota[slot.qNum % difficultyRota.length];
 
-            // Pick a random angle/context to force different question stems
             const angles = [
               `Ask about a definition or concept`,
               `Ask for an example or application`,
@@ -2068,7 +2148,6 @@ Every single question MUST come from a topic explicitly listed in the uploaded s
 Do NOT include any chapter, unit, or concept absent from the uploaded list.
 Do NOT use NCERT or CBSE default chapter lists — the uploaded list replaces them entirely.`.trim() : "";
 
-        // ── Pick random difficulty distribution and question verb styles ──
         const difficultyDistrib = pick([
           "30% easy | 50% medium | 20% HOTs",
           "20% easy | 55% medium | 25% HOTs",
@@ -2076,7 +2155,6 @@ Do NOT use NCERT or CBSE default chapter lists — the uploaded list replaces th
           "35% easy | 40% medium | 25% HOTs",
         ]);
 
-        // Pick shuffled verb set for this paper's question stems
         const paperVerbSet = isHindi
           ? shuffle([...HINDI_VERBS]).slice(0, 6).join(", ")
           : isMath
@@ -2086,6 +2164,22 @@ Do NOT use NCERT or CBSE default chapter lists — the uploaded list replaces th
           : isScience
           ? shuffle([...SCIENCE_CONTEXTS]).slice(0, 5).join(" | ")
           : shuffle([...ENGLISH_VERBS]).slice(0, 6).join(", ");
+
+        // FIX: Clean chapterList by stripping meta-directive lines before including
+        // in the prompt, so the AI sees only actual topic/chapter names.
+        const cleanedChapterList = chapterList
+          .split("\n")
+          .filter(line => {
+            const l = line.trim();
+            return l.length > 0
+              && !/^\[NCERT SYLLABUS/i.test(l)
+              && !/^Use the real, complete/i.test(l)
+              && !/^Draw questions ONLY/i.test(l)
+              && !/^Do NOT invent/i.test(l)
+              && !/^Do NOT use chapters/i.test(l)
+              && !/^Examples of topics/i.test(l);
+          })
+          .join("\n");
 
         const paperPrompt = `
 You are an official CBSE Board question paper setter for Class ${cls}.
@@ -2129,8 +2223,8 @@ General Instructions:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ${hasUploadedSyllabus
-  ? `AUTHORISED TOPICS — ALL QUESTIONS MUST COME FROM THIS LIST ONLY:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${chapterList}`
-  : `AUTHORISED SYLLABUS:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${chapterList}`
+  ? `AUTHORISED TOPICS — ALL QUESTIONS MUST COME FROM THIS LIST ONLY:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${cleanedChapterList}`
+  : `AUTHORISED SYLLABUS (NCERT Class ${cls} ${subjectName}):\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${cleanedChapterList}`
 }
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
