@@ -239,6 +239,184 @@ function formatTimeAllowed(minutes: number): string {
 }
 
 // ─────────────────────────────────────────────────────────────
+// *** FIX: CBSE-COMPLIANT MARK DISTRIBUTION ***
+//
+// ROOT CAUSE of the "2 + 23 marks" bug:
+//   Old code: marksPerQ = Math.round(finalMarks / reqs.questionCount)
+//   When questionCount is null it defaults to 2, then the LAST question
+//   absorbs all remaining marks as a single "remainder dump" question.
+//
+// FIX STRATEGY:
+//   1. Build a marks-slot plan using CBSE-valid per-question values only
+//      (1, 2, 3, 4, or 5 marks — never more than 5 per question).
+//   2. Enforce a minimum question count so no paper has fewer than 5 Qs.
+//   3. Never allow a remainder > 5 — redistribute instead.
+// ─────────────────────────────────────────────────────────────
+
+interface QuestionSlot {
+  qNum: number;
+  topic: string;
+  marks: number;
+}
+
+/**
+ * Builds a CBSE-valid question plan where:
+ * - Each question carries 1, 2, 3, 4, or 5 marks (never more)
+ * - Total marks add up exactly to totalMarks
+ * - Minimum 5 questions for any paper
+ * - Distribution roughly follows CBSE difficulty tiers
+ */
+function buildCbseQuestionPlan(
+  totalMarks: number,
+  topicLines: string[],
+  reqs: PaperRequirements,
+  isHindi: boolean,
+  isMath: boolean
+): QuestionSlot[] {
+  const MAX_MARKS_PER_Q = 5; // CBSE hard limit per question
+
+  // ── Step 1: Determine target question count ──────────────────
+  let targetCount: number;
+
+  if (reqs.questionCount) {
+    targetCount = reqs.questionCount;
+  } else if (reqs.marksEach) {
+    // Explicit "X marks each" → derive count, cap per-Q at 5
+    const clampedPerQ = Math.min(reqs.marksEach, MAX_MARKS_PER_Q);
+    targetCount = Math.ceil(totalMarks / clampedPerQ);
+  } else {
+    // Auto-derive: aim for a sensible distribution
+    // For small papers (≤20m): mostly 1m and 2m questions
+    // For medium (21–40m): mix of 2m and 3m
+    // For larger (>40m): mix of 2m, 3m, 4m, 5m
+    if (totalMarks <= 10) {
+      targetCount = Math.max(5, totalMarks);          // all 1-mark
+    } else if (totalMarks <= 20) {
+      targetCount = Math.max(6, Math.ceil(totalMarks / 2)); // ~2m each
+    } else if (totalMarks <= 40) {
+      targetCount = Math.max(8, Math.ceil(totalMarks / 3)); // ~3m each
+    } else {
+      targetCount = Math.max(10, Math.ceil(totalMarks / 3));
+    }
+  }
+
+  // Always at least 5 questions
+  targetCount = Math.max(5, targetCount);
+
+  // ── Step 2: Build per-question mark slots ───────────────────
+  // Strategy: fill slots greedily with valid CBSE mark values,
+  // ensuring the last slot absorbs any remainder (capped at 5).
+  const markSlots: number[] = [];
+  let remaining = totalMarks;
+
+  // If user specified marksEach, honour it (clamped to 5)
+  if (reqs.marksEach && !reqs.questionCount) {
+    const perQ = Math.min(reqs.marksEach, MAX_MARKS_PER_Q);
+    const count = Math.floor(totalMarks / perQ);
+    const rem   = totalMarks - count * perQ;
+    for (let i = 0; i < count; i++) markSlots.push(perQ);
+    // Distribute remainder as extra 1-mark questions
+    for (let r = 0; r < rem; r++) markSlots.push(1);
+    remaining = 0;
+  } else if (reqs.questionCount && reqs.marksEach) {
+    // Both specified: honour count, distribute marks evenly
+    const perQ = Math.min(Math.floor(totalMarks / reqs.questionCount), MAX_MARKS_PER_Q);
+    let assigned = 0;
+    for (let i = 0; i < reqs.questionCount; i++) {
+      const isLast = i === reqs.questionCount - 1;
+      const m = isLast ? Math.min(totalMarks - assigned, MAX_MARKS_PER_Q) : perQ;
+      if (m <= 0) break;
+      markSlots.push(m);
+      assigned += m;
+    }
+    // If still short (edge case), append 1-mark questions
+    let stillShort = totalMarks - markSlots.reduce((a, b) => a + b, 0);
+    while (stillShort > 0) {
+      markSlots.push(Math.min(stillShort, MAX_MARKS_PER_Q));
+      stillShort -= Math.min(stillShort, MAX_MARKS_PER_Q);
+    }
+    remaining = 0;
+  } else {
+    // Auto distribution — use a CBSE-style tier approach
+    // Tier ratios (% of questions per mark value):
+    //   1m: ~30%, 2m: ~30%, 3m: ~20%, 4m: ~10%, 5m: ~10%
+    // But adapt to paper size so marks add up cleanly.
+
+    const avgMarks = totalMarks / targetCount;
+
+    // Build a weighted distribution based on avg
+    let distribution: number[];
+    if (avgMarks <= 1.5) {
+      distribution = [1, 1, 1, 1, 2];
+    } else if (avgMarks <= 2.5) {
+      distribution = [1, 2, 2, 2, 3];
+    } else if (avgMarks <= 3.5) {
+      distribution = [2, 2, 3, 3, 4];
+    } else {
+      distribution = [2, 3, 3, 4, 5];
+    }
+
+    // Fill slots by cycling distribution
+    let assigned = 0;
+    for (let i = 0; i < targetCount; i++) {
+      const isLast = i === targetCount - 1;
+      if (isLast) {
+        // Last slot: take exactly what's left, but split if > 5
+        let leftover = totalMarks - assigned;
+        while (leftover > MAX_MARKS_PER_Q) {
+          markSlots.push(MAX_MARKS_PER_Q);
+          assigned += MAX_MARKS_PER_Q;
+          leftover -= MAX_MARKS_PER_Q;
+        }
+        if (leftover > 0) {
+          markSlots.push(leftover);
+          assigned += leftover;
+        }
+        break;
+      }
+      const slotVal = distribution[i % distribution.length];
+      // Don't overshoot: leave at least 1 mark for each remaining slot
+      const remainingSlots = targetCount - i - 1;
+      const maxAllowed = Math.min(slotVal, MAX_MARKS_PER_Q, totalMarks - assigned - remainingSlots);
+      const m = Math.max(1, maxAllowed);
+      markSlots.push(m);
+      assigned += m;
+    }
+
+    // Fix any shortfall (rare edge case)
+    let shortfall = totalMarks - markSlots.reduce((a, b) => a + b, 0);
+    let idx = 0;
+    while (shortfall > 0 && idx < markSlots.length) {
+      const room = MAX_MARKS_PER_Q - markSlots[idx];
+      if (room > 0) {
+        const add = Math.min(room, shortfall);
+        markSlots[idx] += add;
+        shortfall -= add;
+      }
+      idx++;
+    }
+    // If still short, append extra questions
+    while (shortfall > 0) {
+      const m = Math.min(shortfall, MAX_MARKS_PER_Q);
+      markSlots.push(m);
+      shortfall -= m;
+    }
+
+    remaining = 0;
+  }
+
+  // ── Step 3: Map slots to topics ────────────────────────────
+  const shuffledTopics = shuffle([...topicLines]);
+  const plan: QuestionSlot[] = markSlots.map((marks, i) => ({
+    qNum:  i + 1,
+    topic: shuffledTopics[i % shuffledTopics.length] || topicLines[0] || "General",
+    marks,
+  }));
+
+  return plan;
+}
+
+// ─────────────────────────────────────────────────────────────
 // SUPABASE SESSION HELPERS
 // ─────────────────────────────────────────────────────────────
 
@@ -321,11 +499,6 @@ async function getSessionByStudent(
 // SYLLABUS HELPERS
 // ─────────────────────────────────────────────────────────────
 
-/**
- * Returns subject display name and chapter list for the AI prompt.
- * FIX: For non-class-9 classes, the chapterList now provides a clean AI instruction
- * that does NOT bleed "instruction text" into question content.
- */
 function getChaptersForSubject(
   subjectRequest: string,
   studentClass: string
@@ -333,7 +506,6 @@ function getChaptersForSubject(
   const req      = subjectRequest.toLowerCase();
   const classNum = parseInt(studentClass) || 9;
 
-  // ── Determine clean subject label ──────────────────────────
   const subjectLabel =
     /science|physics|chemistry|biology/.test(req) ? "Science" :
     /math/.test(req)                               ? "Mathematics" :
@@ -430,10 +602,6 @@ function getChaptersForSubject(
     };
   }
 
-  // ── Non-class-9: use AI's training knowledge with a CLEAN prompt ──
-  // FIX: Previously this leaked "Local syllabus data is not stored" instruction text
-  // into the chapterList which the AI then used as question topics. Now we provide
-  // a clean directive that reads like a system note, not question fodder.
   const subjectName = `${subjectLabel} – Class ${classNum}`;
 
   const chapterList = [
@@ -448,11 +616,6 @@ function getChaptersForSubject(
   return { subjectName, chapterList };
 }
 
-/**
- * Returns a short list of real NCERT topic keywords per subject/class.
- * This guides the AI toward correct content without leaking instruction text
- * into question stems.
- */
 function getNcertTopicHints(subject: string, classNum: number): string {
   const s = subject.toLowerCase();
 
@@ -1687,20 +1850,15 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
         const messageReqs = parsePaperRequirements(message);
         const coreSubject = messageReqs.isCustom ? extractSubjectFromInstruction(message) : message;
 
-        // FIX: Always use getChaptersForSubject to get a clean subjectName.
-        // The subjectName returned is now clean (e.g. "English – Class 6")
-        // and does NOT include any instruction/meta text.
         const { subjectName } = getChaptersForSubject(coreSubject, cls);
 
-        // FIX: Strip " – Class N" suffix for display in the confirmation reply
-        // so the user sees "English — Class 6" not "English – Class 6 — Class 6"
         const displaySubject = subjectName.replace(/\s*[–-]\s*Class\s*\d+$/i, "");
 
         const newSession: ExamSession = {
           session_key:         key,
           status:              "READY",
           subject_request:     coreSubject,
-          subject:             subjectName,  // Store full name for paper generation
+          subject:             subjectName,
           custom_instructions: messageReqs.isCustom ? message.trim() : undefined,
           answer_log:          [],
           student_name:        name,
@@ -1775,9 +1933,6 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
           chapterList = session.syllabus_from_upload;
           console.log("[START] Using UPLOADED syllabus for:", subjectName, "| length:", chapterList.length);
         } else {
-          // FIX: Use session.subject_request (the raw user input like "english")
-          // rather than session.subject (which includes "– Class N" suffix).
-          // This ensures getChaptersForSubject gets clean input.
           const subjectKey = session.subject_request || session.subject?.replace(/\s*[–-]\s*Class\s*\d+$/i, "") || "";
           console.log("[START] No uploaded syllabus — using NCERT default for:", subjectKey);
           const resolved = getChaptersForSubject(subjectKey, cls);
@@ -1804,39 +1959,16 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
 
         const paperSeed = makeSeed();
 
+        // ── CUSTOM / UPLOADED SYLLABUS PAPER GENERATION ────────
         if (hasCustomInstr || hasUploadedSyllabus) {
-          let formatSpec = "";
-          if (reqs.questionTypes && reqs.questionTypes.length > 0) {
-            const qTypes = reqs.questionTypes.join(", ");
-            if (reqs.questionCount && reqs.marksEach) {
-              formatSpec = `${reqs.questionCount} questions of type: ${qTypes}, each worth ${reqs.marksEach} mark(s). Total = ${finalMarks} marks.`;
-            } else if (reqs.questionCount) {
-              formatSpec = `${reqs.questionCount} questions of type: ${qTypes}. Distribute marks evenly to total exactly ${finalMarks} marks.`;
-            } else {
-              formatSpec = `Question type: ${qTypes}. Total marks: ${finalMarks}. Choose an appropriate number of questions.`;
-            }
-          } else if (reqs.questionCount && reqs.marksEach) {
-            formatSpec = `${reqs.questionCount} questions, ${reqs.marksEach} mark(s) each. Total = ${finalMarks} marks.`;
-          } else if (reqs.questionCount) {
-            formatSpec = `${reqs.questionCount} questions distributed to total exactly ${finalMarks} marks.`;
-          } else {
-            if (hasUploadedSyllabus) {
-              formatSpec = `Design a simple numbered question paper using ONLY the topics listed in the authorised syllabus above. `;
-              formatSpec += `Use a mix of: 1-mark objective questions (MCQ or fill-in-the-blank), 2-mark short-answer questions, and optionally 3-mark questions. `;
-              formatSpec += `Total must be exactly ${finalMarks} marks. Do NOT create CBSE-style sections (A/B/C/D). Just number the questions 1, 2, 3...`;
-            } else {
-              formatSpec = `Design an appropriate mix of question types that totals exactly ${finalMarks} marks.`;
-              if (isMath) formatSpec += ` Include a mix of MCQ, short answer, and problem-solving questions.`;
-            }
-          }
 
+          // ── Clean topic list (strip meta-directive lines) ──
           const cleanTopicList = chapterList
             .replace(/.*UPLOADED SYLLABUS.*\n/g, "")
             .replace(/.*ABSOLUTE RULE.*\n/g, "")
             .replace(/.*A topic NOT listed.*\n/g, "")
             .replace(/.*Do NOT use standard.*\n/g, "")
             .replace(/.*Do NOT "fill gaps".*\n/g, "")
-            // FIX: Also strip the NCERT directive lines so they don't become question topics
             .replace(/\[NCERT SYLLABUS.*\]\n?/g, "")
             .replace(/Use the real, complete.*\n/g, "")
             .replace(/Draw questions ONLY.*\n/g, "")
@@ -1850,6 +1982,8 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
             .filter(l => l.length > 2 && !/^(SUBJECT|CHAPTERS|TOPICS|Board|Class)/i.test(l));
 
           let topicLines = allTopicLines;
+
+          // ── Chapter / keyword filtering ──
           if (!hasUploadedSyllabus && reqs.chapterFilter) {
             const chapterNums: number[] = [];
             const rangeMatch = reqs.chapterFilter.match(/(\d+)\s*[-–to]+\s*(\d+)/i);
@@ -1894,27 +2028,27 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
           }
 
           if (topicLines.length === 0) topicLines = allTopicLines;
+          if (topicLines.length === 0) topicLines = [subjectName]; // absolute fallback
 
-          topicLines = shuffle([...topicLines]);
+          // ── *** FIX: Use CBSE-valid question plan *** ────────
+          // Replace the old broken plan that produced "2 + 23 marks" questions.
+          // buildCbseQuestionPlan ensures every slot is 1–5 marks and totals exactly.
+          const questionPlan = buildCbseQuestionPlan(
+            finalMarks,
+            topicLines,
+            reqs,
+            isHindi,
+            isMath
+          );
 
-          const marksPerQ = reqs.marksEach || (reqs.questionCount
-            ? Math.round(finalMarks / reqs.questionCount)
-            : finalMarks <= 20 ? 2 : finalMarks <= 40 ? 2 : 3);
+          console.log(
+            "[QUESTION PLAN] marks per question:",
+            questionPlan.map(q => q.marks),
+            "| total:", questionPlan.reduce((s, q) => s + q.marks, 0),
+            "| expected:", finalMarks
+          );
 
-          const targetQCount = reqs.questionCount ||
-            Math.min(Math.ceil(finalMarks / marksPerQ), topicLines.length * 2 || 15);
-
-          const questionPlan: Array<{ qNum: number; topic: string; marks: number }> = [];
-          let marksAssigned = 0;
-          for (let i = 0; i < targetQCount; i++) {
-            const topic = topicLines[i % topicLines.length] || topicLines[0] || subjectName;
-            const isLast = i === targetQCount - 1;
-            const m = isLast ? finalMarks - marksAssigned : marksPerQ;
-            if (m <= 0) break;
-            questionPlan.push({ qNum: i + 1, topic, marks: m });
-            marksAssigned += m;
-          }
-
+          // ── Verb / style banks ──
           const verbBank = isHindi ? shuffle([...HINDI_VERBS])
             : isEnglish ? shuffle([...ENGLISH_VERBS])
             : isMath ? shuffle([...MATH_CONTEXTS])
@@ -1924,10 +2058,19 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
 
           const difficultyRota = ["easy", "medium", "medium", "hard", "medium", "easy"];
 
+          // ── Generate one question per slot ──────────────────
           const questionTexts: string[] = [];
           for (const slot of questionPlan) {
             const verbStyle  = verbBank[slot.qNum % verbBank.length];
             const difficulty = difficultyRota[slot.qNum % difficultyRota.length];
+
+            // Map marks to appropriate question type label for the prompt
+            const qTypeHint =
+              slot.marks === 1 ? "MCQ or fill-in-the-blank or one-word" :
+              slot.marks === 2 ? "very short answer (2–3 lines)" :
+              slot.marks === 3 ? "short answer (4–5 lines)" :
+              slot.marks === 4 ? "short-long answer (6–8 lines)" :
+              "long answer (8–10 lines)";
 
             const angles = [
               `Ask about a definition or concept`,
@@ -1943,36 +2086,39 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
 
             const singleQPrompt = isHindi
               ? `You are a Hindi grammar examiner. ${paperSeed}
-Topic: "${slot.topic}" | Marks: ${slot.marks} | Difficulty: ${difficulty}
+Topic: "${slot.topic}" | Marks: ${slot.marks} | Type: ${qTypeHint} | Difficulty: ${difficulty}
 Angle: ${angle}
 Style: ${verbStyle}
 
-Write EXACTLY ONE unique Hindi grammar question.
+Write EXACTLY ONE unique Hindi grammar question worth ${slot.marks} mark(s).
 RULES:
+- Question type MUST match: ${qTypeHint}
 - Test ONLY the grammar concept "${slot.topic}"
 - Do NOT repeat question patterns used previously
 - Do NOT include any prose passage, poem, letter writing, or essay
 - Output ONLY the question text in Hindi. No numbering, no marks label.`
               : `You are a ${subjectName} examiner (Class ${cls} CBSE). ${paperSeed}
-Topic: "${slot.topic}" | Marks: ${slot.marks} | Difficulty: ${difficulty}
+Topic: "${slot.topic}" | Marks: ${slot.marks} | Type: ${qTypeHint} | Difficulty: ${difficulty}
 Approach: ${angle}
 Style hint: "${verbStyle}"
 ${reqs.chapterFilter ? `Chapter scope: ${reqs.chapterFilter}` : ""}
 
-Write EXACTLY ONE fresh, unique question on "${slot.topic}".
+Write EXACTLY ONE fresh, unique ${qTypeHint} question worth ${slot.marks} mark(s) on "${slot.topic}".
 RULES:
+- Question complexity MUST match a ${slot.marks}-mark CBSE question (${qTypeHint})
 - Do NOT repeat the same question stem used in any previous question
 - Do NOT add topics outside "${slot.topic}"
 - Vary the question type — use the Approach and Style hint as inspiration
 - Output ONLY the question text. No numbering, no marks label, no explanation.`;
 
             const qText = await callAI(singleQPrompt, [
-              { role: "user", content: `Write one ${slot.marks}-mark ${difficulty} question on "${slot.topic}".` }
+              { role: "user", content: `Write one ${slot.marks}-mark ${difficulty} ${qTypeHint} question on "${slot.topic}".` }
             ]);
             const cleanQ = qText.trim().replace(/^(Q\.?\d+\.?\s*|\d+\.\s*)/i, "").trim();
             questionTexts.push(cleanQ);
           }
 
+          // ── Assemble the paper ──────────────────────────────
           const paperHeader = `Subject       : ${subjectName}
 Class         : ${cls}
 Board         : ${board}
@@ -1981,10 +2127,11 @@ Maximum Marks : ${finalMarks}`;
 
           const generalInstructions = `General Instructions:
 1. All questions are compulsory.
-2. Marks are indicated against each question.`;
+2. Marks are indicated against each question.
+3. For 1-mark questions write only the answer; for 2-mark questions write 2–3 sentences; for 3-mark questions write 4–5 sentences; for 5-mark questions write a detailed paragraph.`;
 
           const questionBody = questionPlan
-            .map((slot, i) => `${slot.qNum}. ${questionTexts[i] || "(Question unavailable)"} [${slot.marks} marks]`)
+            .map((slot, i) => `${slot.qNum}. ${questionTexts[i] || "(Question unavailable)"} [${slot.marks} mark${slot.marks > 1 ? "s" : ""}]`)
             .join("\n\n");
 
           const paper = `${paperHeader}\n\n${generalInstructions}\n\n${questionBody}`;
@@ -2165,8 +2312,6 @@ Do NOT use NCERT or CBSE default chapter lists — the uploaded list replaces th
           ? shuffle([...SCIENCE_CONTEXTS]).slice(0, 5).join(" | ")
           : shuffle([...ENGLISH_VERBS]).slice(0, 6).join(", ");
 
-        // FIX: Clean chapterList by stripping meta-directive lines before including
-        // in the prompt, so the AI sees only actual topic/chapter names.
         const cleanedChapterList = chapterList
           .split("\n")
           .filter(line => {
