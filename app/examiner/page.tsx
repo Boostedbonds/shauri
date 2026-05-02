@@ -7,7 +7,6 @@ type Message = { role: "user" | "assistant"; content: string };
 const CHAT_STORAGE_KEY = "shauri_chat_examiner";
 const MAX_SAVED_MSGS   = 10;
 
-// ─── Persist helpers ─────────────────────────────────────────
 function saveMessages(msgs: Message[]) {
   try {
     localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(msgs.slice(-MAX_SAVED_MSGS)));
@@ -17,7 +16,6 @@ function clearSavedMessages() {
   try { localStorage.removeItem(CHAT_STORAGE_KEY); } catch {}
 }
 
-// ─── Render markdown-lite ────────────────────────────────────
 function renderText(text: string): React.ReactNode {
   return text.split("\n").map((line, i, arr) => {
     const parts = line.split(/(\*\*[^*]+\*\*)/g).map((p, j) =>
@@ -27,7 +25,6 @@ function renderText(text: string): React.ReactNode {
   });
 }
 
-// ─── Chat bubble ─────────────────────────────────────────────
 function Bubble({ m }: { m: Message }) {
   const isUser = m.role === "user";
   return (
@@ -47,7 +44,6 @@ function Bubble({ m }: { m: Message }) {
   );
 }
 
-// ─── Resume Banner ────────────────────────────────────────────
 function ResumeBanner({ subject, elapsed, onDismiss }: {
   subject?: string; elapsed: string; onDismiss: () => void;
 }) {
@@ -74,7 +70,6 @@ function ResumeBanner({ subject, elapsed, onDismiss }: {
   );
 }
 
-// ─── CBSE Print ──────────────────────────────────────────────
 function printCBSEPaper({ paperContent, subject, studentName, studentClass }: {
   paperContent: string; subject?: string; studentName?: string; studentClass?: string;
 }) {
@@ -181,7 +176,6 @@ function printCBSEPaper({ paperContent, subject, studentName, studentClass }: {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-// ─── Session ID ───────────────────────────────────────────────
 function createNewSessionId(): string {
   if (typeof window === "undefined") return "";
   const sid = crypto.randomUUID();
@@ -189,44 +183,75 @@ function createNewSessionId(): string {
   return sid;
 }
 
-// ─── Extract subject from ANY examiner reply that confirms a subject ──────────
-// Handles all reply formats:
-//   1. "I'll prepare a strict CBSE Board question paper for:\n**English — Class 10**"
-//   2. "I'll prepare a **custom paper** for:\n**English — Class 10**"
-//   3. "Subject is set to **X**"
-//   4. "subject_request is set to **X**"
-//   5. "Got it! ... for:\n**SubjectName — Class N**"
+// ─────────────────────────────────────────────────────────────
+// FIX 1: extractConfirmedSubject
+//
+// ROOT CAUSE of "mat: – Class 6" bug:
+//   The reply contains "**Paper format:**\n   Marks: custom marks · Scope: **chapters 1**"
+//   The old regex /(?:paper|test|exam)\s+for[:\s]*/i matched:
+//     - "paper" inside "**Paper format" ✓ (word match)
+//     - then "for" inside "format:" ✓ (no word boundary — "for" is a substring of "format")
+//     - captured everything after: "mat:**\n   Marks..." → trimmed to "mat:"
+//
+// FIX: Add \b word boundary before "for" AND require "for" to be followed
+//      directly by optional whitespace then ":" — NOT part of a longer word.
+//      Also gate on looksLikeSubjectConfirmation in the caller (belt + braces).
+// ─────────────────────────────────────────────────────────────
 function extractConfirmedSubject(reply: string): string {
-  // Pattern 1 & 2: "for:\n**SubjectName — Class N**" or "for: **SubjectName**"
-  // This covers both "strict CBSE Board question paper for:" and "custom paper for:"
-  const forPattern = reply.match(/(?:paper|test|exam)\s+for[:\s]*\n?\*?\*?([^\n*—\u2014]+)/i);
-  if (forPattern) {
-    const extracted = forPattern[1].trim().replace(/\*\*/g, "").replace(/[—\u2014].*$/, "").trim();
+  // Pattern 1: "...paper/test/exam ... for:\n**SubjectName**"
+  // \bfor\b ensures "for" is a standalone word (not inside "format", "before", etc.)
+  const forNewlineBold = reply.match(
+    /\b(?:paper|test|exam)\b[^:\n]{0,40}?\bfor\s*:\s*\n\s*\*{1,2}([^*\n—\u2014]+)/i
+  );
+  if (forNewlineBold) {
+    const extracted = forNewlineBold[1].trim().replace(/\*+/g, "").replace(/[—\u2014].*$/, "").trim();
     if (extracted.length > 1) return extracted;
   }
 
-  // Pattern 3: "Got it! I'll prepare a custom paper for:\n**English — Class 10**"
-  const gotItPattern = reply.match(/Got it[^.]*?for[:\s]*\n?\*?\*?([^\n*—\u2014]+)/i);
+  // Pattern 2: "...for: **SubjectName**" on the SAME line
+  const forInlineBold = reply.match(
+    /\b(?:paper|test|exam)\b[^:\n]{0,40}?\bfor\s*:\s*\*{1,2}([^*\n—\u2014]+)/i
+  );
+  if (forInlineBold) {
+    const extracted = forInlineBold[1].trim().replace(/\*+/g, "").replace(/[—\u2014].*$/, "").trim();
+    if (extracted.length > 1) return extracted;
+  }
+
+  // Pattern 3: "Got it!...for:\n**SubjectName**"
+  const gotItPattern = reply.match(
+    /Got it[^.!]{0,60}?\bfor\s*:\s*\n\s*\*{1,2}([^*\n—\u2014]+)/i
+  );
   if (gotItPattern) {
-    const extracted = gotItPattern[1].trim().replace(/\*\*/g, "").replace(/[—\u2014].*$/, "").trim();
+    const extracted = gotItPattern[1].trim().replace(/\*+/g, "").replace(/[—\u2014].*$/, "").trim();
     if (extracted.length > 1) return extracted;
   }
 
   // Pattern 4: "Subject is set to **X**"
-  const setMatch = reply.match(/[Ss]ubject\s+is\s+set\s+to\s+\*?\*?([^\n*]+)/i);
-  if (setMatch) return setMatch[1].trim().replace(/\*\*/g, "").trim();
-
-  // Pattern 5: Bolded subject name after "for:" on same or next line
-  const boldAfterFor = reply.match(/for[:\s]+\*\*([^*\n—\u2014]+)\*\*/i);
-  if (boldAfterFor) {
-    const extracted = boldAfterFor[1].trim();
-    if (extracted.length > 1) return extracted;
-  }
+  const setMatch = reply.match(/[Ss]ubject\s+is\s+set\s+to\s+\*{1,2}([^\n*]+)/i);
+  if (setMatch) return setMatch[1].trim().replace(/\*+/g, "").trim();
 
   return "";
 }
 
-// Extract detected subject from a syllabus upload confirmation reply.
+// ─────────────────────────────────────────────────────────────
+// FIX 2: extractSubjectFromPaper
+//
+// The old code used an inline regex that captured the raw "Subject : ..." line
+// including suffixes like " – Class 6" or junk like "mat:".
+// Now we use a dedicated function that strips the class suffix and junk.
+// ─────────────────────────────────────────────────────────────
+function extractSubjectFromPaper(paper: string): string {
+  const match = paper.match(/^Subject\s*[:\|]\s*(.+)$/im);
+  if (!match) return "";
+  return match[1]
+    .trim()
+    // Strip " – Class N" or " — Class N" suffix that backend appends
+    .replace(/\s*[–—\-]\s*Class\s*\d+.*$/i, "")
+    // Strip any leading lowercase-word-colon junk e.g. "mat: "
+    .replace(/^[a-z]{2,6}:\s*/i, "")
+    .trim();
+}
+
 function extractUploadedSubject(reply: string): string {
   const match =
     reply.match(/\*\*Subject detected:\*\*\s*([^\n]+)/i) ||
@@ -254,9 +279,7 @@ export default function ExaminerPage() {
   const [studentName,  setStudentName]  = useState("");
   const [studentClass, setStudentClass] = useState("");
 
-  // confirmedSubjectRef: set when user explicitly picks a subject via text
   const confirmedSubjectRef = useRef<string>("");
-  // uploadedSubjectRef: set when a syllabus upload is detected
   const uploadedSubjectRef  = useRef<string>("");
 
   const timerRef     = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -276,7 +299,6 @@ export default function ExaminerPage() {
     saveMessages(messages);
   }, [messages]);
 
-  // ── On mount: always start fresh ─────────────────────────────
   useEffect(() => {
     clearSavedMessages();
     localStorage.removeItem("shauri_exam_sid");
@@ -327,7 +349,6 @@ export default function ExaminerPage() {
     let student: any = null;
     try { student = JSON.parse(localStorage.getItem("shauri_student") || "null"); } catch {}
 
-    // Strip display-only labels from history before sending to backend
     const history = msgsRef.current
       .slice(1)
       .map(m => ({
@@ -338,8 +359,6 @@ export default function ExaminerPage() {
           .trim(),
       }));
 
-    // Determine the best confirmedSubject to send:
-    // Priority: explicitly confirmed subject > uploaded subject
     const resolvedSubject = confirmedSubjectRef.current || uploadedSubjectRef.current || "";
 
     try {
@@ -347,10 +366,10 @@ export default function ExaminerPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          mode:         "examiner",
-          message:      text,
-          uploadedText: uploadedText || "",
-          uploadType:   uploadType || "",
+          mode:             "examiner",
+          message:          text,
+          uploadedText:     uploadedText || "",
+          uploadType:       uploadType || "",
           history,
           confirmedSubject: resolvedSubject || undefined,
           student: {
@@ -365,17 +384,14 @@ export default function ExaminerPage() {
       const data = await res.json();
       const reply: string = data?.reply ?? "";
 
-      // ── Handle resumeExam FIRST ──────────────────────────────
+      // ── resumeExam ──
       if (data?.resumeExam === true) {
         const ts = typeof data.startTime === "number"
           ? data.startTime
           : typeof data.startTime === "string"
             ? parseInt(data.startTime)
             : null;
-
-        if (ts && !isNaN(ts)) {
-          startTimer(ts);
-        }
+        if (ts && !isNaN(ts)) startTimer(ts);
         setMeta(p => ({ ...p, subject: data.subject || p.subject }));
         if (data.questionPaper) setPaper(data.questionPaper);
         if (reply) setMessages(p => [...p, { role: "assistant", content: reply }]);
@@ -383,14 +399,21 @@ export default function ExaminerPage() {
         return;
       }
 
-      // ── Exam just started: backend returns { reply, paper, startTime } ──
+      // ── Exam started ──
       if (typeof data?.startTime === "number" && data?.paper) {
         startTimer(data.startTime);
         const paper = data.paper;
-        const subjMatch = paper.match(/Subject\s*[:\|]\s*([^\n]+)/i);
-        setMeta(p => ({ ...p, subject: subjMatch ? subjMatch[1].trim() : data?.subject || p.subject }));
+
+        // FIX: prefer backend's data.subject (most reliable source), then refs,
+        // then parse from paper using the safe helper that strips " – Class N".
+        const paperSubject =
+          data?.subject ||
+          confirmedSubjectRef.current ||
+          uploadedSubjectRef.current ||
+          extractSubjectFromPaper(paper);
+
+        setMeta(p => ({ ...p, subject: paperSubject || p.subject }));
         setPaper(paper);
-        // Clear both subject refs now that the exam has started
         confirmedSubjectRef.current = "";
         uploadedSubjectRef.current  = "";
         setMessages(p => [...p, {
@@ -400,7 +423,7 @@ export default function ExaminerPage() {
         return;
       }
 
-      // ── Exam evaluation complete ──
+      // ── Exam ended ──
       if (data?.examEnded === true) {
         stopTimer();
         const taken = elapsedRef.current;
@@ -419,30 +442,37 @@ export default function ExaminerPage() {
         }));
         localStorage.removeItem("shauri_exam_sid");
         clearSavedMessages();
-        // Clear both subject refs on exam end
         confirmedSubjectRef.current = "";
         uploadedSubjectRef.current  = "";
         return;
       }
 
-      // ── Regular chat reply ──
+      // ── Regular reply ──
       if (reply) {
         const isUploadConfirmation =
           reply.includes("Syllabus") && reply.includes("uploaded successfully");
 
         if (!isUploadConfirmation) {
-          // Extract subject from ALL subject-selection/confirmation replies
-          const extracted = extractConfirmedSubject(reply);
-          if (extracted) {
-            confirmedSubjectRef.current = extracted;
-            console.log("[ExaminerPage] Extracted confirmedSubject:", extracted);
+          // FIX: Only attempt subject extraction on replies that look like
+          // subject-selection confirmations. Skip replies that contain
+          // "Paper format:" — those are format-update replies on an already-
+          // confirmed subject and will cause the "mat:" corruption.
+          const looksLikeSubjectConfirmation =
+            /(?:I'll prepare|preparing|strict CBSE|custom paper)/i.test(reply) &&
+            !/Paper format:/i.test(reply);
+
+          if (looksLikeSubjectConfirmation) {
+            const extracted = extractConfirmedSubject(reply);
+            if (extracted) {
+              confirmedSubjectRef.current = extracted;
+              console.log("[ExaminerPage] confirmedSubject:", extracted);
+            }
           }
         } else {
-          // Extract the detected subject from upload confirmation
           const detected = extractUploadedSubject(reply);
           if (detected) {
             uploadedSubjectRef.current = detected;
-            console.log("[ExaminerPage] Extracted uploadedSubject:", detected);
+            console.log("[ExaminerPage] uploadedSubject:", detected);
           }
         }
 
@@ -462,7 +492,6 @@ export default function ExaminerPage() {
     if (!text.trim() && !uploadedText) return;
     if (sendingRef.current) return;
 
-    // Build display label for upload
     let display = text.trim();
     if (uploadedText) {
       const lbl = uploadType === "syllabus" ? "📋 [Syllabus uploaded]" : "📝 [Answer uploaded]";
@@ -488,7 +517,7 @@ export default function ExaminerPage() {
         .print-btn:hover{background:#1d4ed8!important}
       `}</style>
 
-      {/* ── TOP BAR ── */}
+      {/* TOP BAR */}
       <div style={{
         height: 52, display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "0 16px", background: "#fff", borderBottom: "1px solid #e2e8f0", flexShrink: 0,
@@ -515,7 +544,6 @@ export default function ExaminerPage() {
                 cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
                 transition: "background 0.15s",
               }}
-              title="Open printable CBSE question paper"
             >
               🖨️ Print Paper
             </button>
@@ -532,13 +560,11 @@ export default function ExaminerPage() {
         </div>
       </div>
 
-      {/* ── SPLIT ── */}
+      {/* SPLIT */}
       <div className="ex-split">
 
         {/* LEFT — chat */}
         <div className="ex-chat">
-
-          {/* Sub-header */}
           <div style={{
             padding: "10px 16px", borderBottom: "1px solid #e2e8f0",
             background: "#fff", fontSize: 13, fontWeight: 600, color: "#475569",
@@ -552,10 +578,9 @@ export default function ExaminerPage() {
               }} />
               {examMeta.examEnded ? "Evaluation Complete" : examActive ? "Type your answers here" : "Examiner Chat"}
             </div>
-            {/* Mobile-only print button shown in sub-header */}
             {paperContent && (
               <button
-                className="print-btn mobile-print-btn"
+                className="print-btn"
                 onClick={() => printCBSEPaper({ paperContent, subject: examMeta.subject, studentName, studentClass })}
                 style={{
                   padding: "4px 10px", background: "#2563eb", color: "#fff",
@@ -567,14 +592,12 @@ export default function ExaminerPage() {
             )}
           </div>
 
-          {/* Resume banner */}
           {showResumeBanner && (
             <div style={{ padding: "10px 14px", flexShrink: 0 }}>
               <ResumeBanner subject={examMeta.subject} elapsed={elapsed} onDismiss={() => setResumeBanner(false)} />
             </div>
           )}
 
-          {/* Exam ended strip */}
           {examMeta.examEnded && (
             <div style={{
               background: "#f0fdf4", borderBottom: "1px solid #bbf7d0",
@@ -586,7 +609,6 @@ export default function ExaminerPage() {
             </div>
           )}
 
-          {/* Messages */}
           <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px" }}>
             {messages.map((m, i) => <Bubble key={i} m={m} />)}
             {isLoading && (
@@ -607,7 +629,7 @@ export default function ExaminerPage() {
           </div>
         </div>
 
-        {/* RIGHT — paper panel (desktop only) */}
+        {/* RIGHT — paper panel */}
         <div className="ex-paper">
           {paperContent ? (
             <>
