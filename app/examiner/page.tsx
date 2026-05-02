@@ -187,20 +187,24 @@ function createNewSessionId(): string {
 // FIX 1: extractConfirmedSubject
 //
 // ROOT CAUSE of "mat: – Class 6" bug:
-//   The reply contains "**Paper format:**\n   Marks: custom marks · Scope: **chapters 1**"
-//   The old regex /(?:paper|test|exam)\s+for[:\s]*/i matched:
-//     - "paper" inside "**Paper format" ✓ (word match)
-//     - then "for" inside "format:" ✓ (no word boundary — "for" is a substring of "format")
-//     - captured everything after: "mat:**\n   Marks..." → trimmed to "mat:"
+//   Reply: "Got it! I'll prepare a **custom paper** for:\n**Hindi — Class 10**\n\n📝 **Paper format:**\n..."
+//   Old regex matched "paper" in "**Paper format:**" then "for" inside "format"
+//   (no word boundary) → captured "mat: – Class 10".
 //
-// FIX: Add \b word boundary before "for" AND require "for" to be followed
-//      directly by optional whitespace then ":" — NOT part of a longer word.
-//      Also gate on looksLikeSubjectConfirmation in the caller (belt + braces).
+// FIX STRATEGY:
+//   1. Truncate the reply at "Paper format:" BEFORE running any regex.
+//      The subject bold always appears BEFORE that section, so we never
+//      accidentally match inside it.
+//   2. Use \bfor\b word boundary so "for" can't match inside "format".
 // ─────────────────────────────────────────────────────────────
 function extractConfirmedSubject(reply: string): string {
+  // KEY FIX: Only search the portion of the reply BEFORE "Paper format:"
+  // The subject confirmation always appears before the format details block.
+  const searchIn = reply.split(/📝\s*\*{0,2}Paper format/i)[0];
+
   // Pattern 1: "...paper/test/exam ... for:\n**SubjectName**"
   // \bfor\b ensures "for" is a standalone word (not inside "format", "before", etc.)
-  const forNewlineBold = reply.match(
+  const forNewlineBold = searchIn.match(
     /\b(?:paper|test|exam)\b[^:\n]{0,40}?\bfor\s*:\s*\n\s*\*{1,2}([^*\n—\u2014]+)/i
   );
   if (forNewlineBold) {
@@ -209,7 +213,7 @@ function extractConfirmedSubject(reply: string): string {
   }
 
   // Pattern 2: "...for: **SubjectName**" on the SAME line
-  const forInlineBold = reply.match(
+  const forInlineBold = searchIn.match(
     /\b(?:paper|test|exam)\b[^:\n]{0,40}?\bfor\s*:\s*\*{1,2}([^*\n—\u2014]+)/i
   );
   if (forInlineBold) {
@@ -218,7 +222,7 @@ function extractConfirmedSubject(reply: string): string {
   }
 
   // Pattern 3: "Got it!...for:\n**SubjectName**"
-  const gotItPattern = reply.match(
+  const gotItPattern = searchIn.match(
     /Got it[^.!]{0,60}?\bfor\s*:\s*\n\s*\*{1,2}([^*\n—\u2014]+)/i
   );
   if (gotItPattern) {
@@ -227,7 +231,7 @@ function extractConfirmedSubject(reply: string): string {
   }
 
   // Pattern 4: "Subject is set to **X**"
-  const setMatch = reply.match(/[Ss]ubject\s+is\s+set\s+to\s+\*{1,2}([^\n*]+)/i);
+  const setMatch = searchIn.match(/[Ss]ubject\s+is\s+set\s+to\s+\*{1,2}([^\n*]+)/i);
   if (setMatch) return setMatch[1].trim().replace(/\*+/g, "").trim();
 
   return "";
@@ -453,13 +457,12 @@ export default function ExaminerPage() {
           reply.includes("Syllabus") && reply.includes("uploaded successfully");
 
         if (!isUploadConfirmation) {
-          // FIX: Only attempt subject extraction on replies that look like
-          // subject-selection confirmations. Skip replies that contain
-          // "Paper format:" — those are format-update replies on an already-
-          // confirmed subject and will cause the "mat:" corruption.
+          // Only attempt extraction on replies that look like subject confirmations.
+          // NOTE: We no longer block on "Paper format:" — extractConfirmedSubject
+          // internally truncates the reply at that marker before searching,
+          // so it's safe to run even when the reply contains a format block.
           const looksLikeSubjectConfirmation =
-            /(?:I'll prepare|preparing|strict CBSE|custom paper)/i.test(reply) &&
-            !/Paper format:/i.test(reply);
+            /(?:I'll prepare|preparing|strict CBSE|custom paper|paper for)/i.test(reply);
 
           if (looksLikeSubjectConfirmation) {
             const extracted = extractConfirmedSubject(reply);
