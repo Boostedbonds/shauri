@@ -394,6 +394,113 @@ function buildCbseQuestionPlan(
 }
 
 // ─────────────────────────────────────────────────────────────
+// *** FIX 1: COMPLETE CLASS 10 CHAPTER DATABASE ***
+// Class 9 was hardcoded but Class 10 was missing — patched below
+// ─────────────────────────────────────────────────────────────
+
+const CLASS10_CHAPTERS: Record<string, { subjectName: string; chapterList: string }> = {
+  mathematics: {
+    subjectName: "Mathematics",
+    chapterList: [
+      "Chapter 1: Real Numbers (Euclid's Division Lemma, Fundamental Theorem of Arithmetic, Irrational Numbers, Decimal Expansions)",
+      "Chapter 2: Polynomials (Zeros of Polynomial, Relationship between Zeros and Coefficients, Division Algorithm)",
+      "Chapter 3: Pair of Linear Equations in Two Variables (Graphical Method, Substitution, Elimination, Cross-Multiplication)",
+      "Chapter 4: Quadratic Equations (Standard Form, Factorisation, Completing the Square, Quadratic Formula, Discriminant)",
+      "Chapter 5: Arithmetic Progressions (nth Term, Sum of n Terms, Application Problems)",
+      "Chapter 6: Triangles (Similar Triangles, BPT, AA/SAS/SSS Criteria, Pythagoras Theorem, Converse)",
+      "Chapter 7: Coordinate Geometry (Distance Formula, Section Formula, Area of Triangle)",
+      "Chapter 8: Introduction to Trigonometry (Sin/Cos/Tan, Trigonometric Identities, Complementary Angles)",
+      "Chapter 9: Some Applications of Trigonometry (Heights and Distances, Angle of Elevation, Angle of Depression)",
+      "Chapter 10: Circles (Tangent to Circle, Two Tangents from External Point)",
+      "Chapter 11: Areas Related to Circles (Perimeter/Area of Circle, Sector, Segment, Combination of Figures)",
+      "Chapter 12: Surface Areas and Volumes (Cone, Cylinder, Sphere, Hemisphere, Frustum, Combinations)",
+      "Chapter 13: Statistics (Mean by Direct/Assumed Mean/Step-Deviation, Median, Mode, Ogive)",
+      "Chapter 14: Probability (Classical Probability, Sample Space, Events)",
+    ].join("\n"),
+  },
+  science: {
+    subjectName: "Science",
+    chapterList: [
+      "Chapter 1: Chemical Reactions and Equations (Writing & Balancing, Types: Combination/Decomposition/Displacement/Double Displacement/Redox, Oxidation, Corrosion, Rancidity)",
+      "Chapter 2: Acids, Bases and Salts (Properties, pH Scale, Indicators, Salts: NaCl/NaHCO3/Na2CO3/Bleaching Powder, Plaster of Paris)",
+      "Chapter 3: Metals and Non-metals (Physical & Chemical Properties, Reactivity Series, Ionic Bond, Extraction, Corrosion Prevention)",
+      "Chapter 4: Carbon and Its Compounds (Covalent Bond, Allotropes, Homologous Series, IUPAC Naming, Functional Groups, Ethanol & Ethanoic Acid, Saponification)",
+      "Chapter 5: Life Processes (Nutrition: Autotrophic/Heterotrophic, Photosynthesis, Respiration: Aerobic/Anaerobic, Transportation: Heart/Blood/Xylem/Phloem, Excretion: Kidneys/Nephron)",
+      "Chapter 6: Control and Coordination (Nervous System, Neuron, Reflex Arc, Brain Parts, Hormones: Endocrine Glands)",
+      "Chapter 7: How do Organisms Reproduce? (Asexual: Binary Fission/Budding/Spore/Vegetative, Sexual: Pollination/Fertilisation/Seeds, Human Reproductive System)",
+      "Chapter 8: Heredity (Mendel's Laws, Dominant/Recessive, Sex Determination, Evolution)",
+      "Chapter 9: Light – Reflection and Refraction (Laws of Reflection, Spherical Mirrors, Mirror Formula, Refraction, Snell's Law, Lens Formula, Power)",
+      "Chapter 10: Human Eye and Colourful World (Structure of Eye, Defects: Myopia/Hypermetropia/Presbyopia, Dispersion, Scattering)",
+      "Chapter 11: Electricity (Ohm's Law, Resistance, Series/Parallel Circuits, Heating Effect, Electric Power)",
+      "Chapter 12: Magnetic Effects of Electric Current (Magnetic Field, Fleming's Rules, Electric Motor, Electromagnetic Induction, AC/DC, Generator)",
+      "Chapter 13: Our Environment (Food Chain/Web, Ecosystem, Ozone Depletion, Waste Management)",
+    ].join("\n"),
+  },
+  history: {
+    subjectName: "Social Science – History (India and the Contemporary World II)",
+    chapterList: [
+      "Chapter 1: The Rise of Nationalism in Europe (French Revolution, Napoleon, Romanticism, Grimm Brothers, Zollverein, Unification of Germany & Italy, Balkan Crisis)",
+      "Chapter 2: Nationalism in India (Rowlatt Act, Jallianwala Bagh, Khilafat Movement, Non-Cooperation Movement, Civil Disobedience Movement, Salt March, Round Table Conferences, Sense of Collective Belonging)",
+      "Chapter 3: The Making of a Global World (Silk Routes, Food Travels, Conquest/Disease/Trade, Indentured Labour, Great Depression, Bretton Woods, Post-War Recovery)",
+      "Chapter 4: The Age of Industrialisation (Proto-Industrialisation, East India Company & Weavers, Factories in Britain & India, Manchester Comes to India, Small-Scale Industries)",
+      "Chapter 5: Print Culture and the Modern World (Gutenberg Press, Print in Europe, Print in India, Religious Reform, Women and Print, Print and the Poor)",
+    ].join("\n"),
+  },
+  geography: {
+    subjectName: "Social Science – Geography (Contemporary India II)",
+    chapterList: [
+      "Chapter 1: Resources and Development (Types of Resources, Development of Resources, Land Use Pattern, Soil Types, Soil Erosion & Conservation)",
+      "Chapter 2: Forest and Wildlife Resources (Types of Forests, Flora & Fauna, Causes of Depletion, Conservation, Project Tiger, Biosphere Reserves)",
+      "Chapter 3: Water Resources (Scarcity, Multi-Purpose River Projects, Rainwater Harvesting, Watershed Management)",
+      "Chapter 4: Agriculture (Types: Primitive/Commercial/Plantation, Food Crops, Non-Food Crops, Green Revolution, Impact of Globalisation on Agriculture)",
+      "Chapter 5: Minerals and Energy Resources (Types of Minerals, Distribution, Conservation, Conventional & Non-Conventional Energy Sources)",
+      "Chapter 6: Manufacturing Industries (Importance, Industrial Pollution, Textile/Steel/Automobile/Chemical/IT Industries)",
+      "Chapter 7: Lifelines of National Economy (Roadways, Railways, Pipelines, Waterways, Airways, Communication, International Trade)",
+    ].join("\n"),
+  },
+  civics: {
+    subjectName: "Social Science – Political Science / Civics (Democratic Politics II)",
+    chapterList: [
+      "Chapter 1: Power Sharing (Belgian & Sri Lankan Models, Forms of Power Sharing, Majoritarianism vs Accommodation)",
+      "Chapter 2: Federalism (What is Federalism, India as a Federal Country, Decentralisation, Panchayati Raj)",
+      "Chapter 3: Gender, Religion and Caste (Gender & Politics, Religion & Communalism, Caste & Politics)",
+      "Chapter 4: Political Parties (Functions, Types, National vs Regional, Challenges, Reforms)",
+      "Chapter 5: Outcomes of Democracy (Accountable/Legitimate Government, Economic Growth, Inequality, Dignity, Evaluation)",
+    ].join("\n"),
+  },
+  economics: {
+    subjectName: "Social Science – Economics (Understanding Economic Development)",
+    chapterList: [
+      "Chapter 1: Development (What is Development, Income and Other Goals, National Development, Sustainable Development)",
+      "Chapter 2: Sectors of the Indian Economy (Primary/Secondary/Tertiary, GDP, Organised/Unorganised, MNREGA)",
+      "Chapter 3: Money and Credit (Barter System, Money, Formal/Informal Credit, SHGs, Credit in India)",
+      "Chapter 4: Globalisation and the Indian Economy (MNCs, FDI, WTO, Impact of Globalisation, Fair Globalisation)",
+      "Chapter 5: Consumer Rights (Consumer Exploitation, Rights, COPRA, Consumer Awareness, ISI/Agmark)",
+    ].join("\n"),
+  },
+  english: {
+    subjectName: "English – First Flight & Footprints Without Feet",
+    chapterList: [
+      "First Flight – Prose: A Letter to God, Nelson Mandela Long Walk to Freedom, Two Stories About Flying, From the Diary of Anne Frank, Glimpses of India, Mijbil the Otter, Madam Rides the Bus, The Sermon at Benares, The Proposal (Drama)",
+      "First Flight – Poetry: Dust of Snow, Fire and Ice, A Tiger in the Zoo, How to Tell Wild Animals, The Ball Poem, Amanda, Animals, The Trees, Fog, The Tale of Custard the Dragon, For Anne Gregory",
+      "Footprints Without Feet: A Triumph of Surgery, The Thief's Story, The Midnight Visitor, A Question of Trust, Footprints Without Feet, The Making of a Scientist, The Necklace, Bholi, The Book That Saved the Earth",
+      "Grammar: Determiners, Tenses, Modals, Active-Passive Voice, Reported Speech, Subject-Verb Agreement, Clauses",
+      "Writing Skills: Formal Letter, Informal Letter, Notice, Article, Story Completion, Paragraph",
+    ].join("\n"),
+  },
+  hindi: {
+    subjectName: "Hindi – Sparsh, Sanchayan, Kshitij, Kritika",
+    chapterList: [
+      "Kshitij (Prose): Surdas ke Pad, Tulsidas ke Pad, Dev ke Savaiye/Kavitt, Jaishankar Prasad – Aatmakathya, Suryakant Tripathi Nirala – Utsah/At nahi rahi, Nagarjuna – Yeh Danturit Muskaan, Mangu Bai – Fasal",
+      "Kshitij (Prose): Premchand – Netaji ka Chashma, Sarveshwar Dayal Saxena – Balgobin Bhagat, Anu Sinha – Lakhnavii Andaz, Mannu Bhandari – Manaviya Karuna ki Divya Chamak, Mahadevi Verma – Mera Chhota sa Niji Pustakalaya",
+      "Kritika: Maa ka Anchu, George Pancham ki Naak, Saana Saana Haath Jodi, Aye Aariz Nahi, Main Kyon Likhta Hoon",
+      "Grammar: Shabd-Bhed (Sangya/Sarvanaam/Visheshan/Kriya/Avyay), Sandhi-Viched, Samas, Alankar (Anupras/Rupak/Upma/Utpreksha), Vakya-Bhed, Muhavare, Lokoktiyan",
+      "Writing: Patra Lekhan (Aupcharik/Anaupcharik), Anuched Lekhan, Suchna Lekhan, Sandesh Lekhan, Vigyapan",
+    ].join("\n"),
+  },
+};
+
+// ─────────────────────────────────────────────────────────────
 // SUPABASE SESSION HELPERS
 // ─────────────────────────────────────────────────────────────
 
@@ -472,7 +579,7 @@ async function getSessionByStudent(
 }
 
 // ─────────────────────────────────────────────────────────────
-// SYLLABUS HELPERS
+// SYLLABUS HELPERS — now with complete Class 10 database
 // ─────────────────────────────────────────────────────────────
 
 function getChaptersForSubject(
@@ -482,18 +589,42 @@ function getChaptersForSubject(
   const req      = subjectRequest.toLowerCase();
   const classNum = parseInt(studentClass) || 9;
 
-  const subjectLabel =
-    /science|physics|chemistry|biology/.test(req) ? "Science" :
-    /math/.test(req)                               ? "Mathematics" :
-    /history/.test(req)                            ? "Social Science – History" :
-    /geo|geography/.test(req)                      ? "Social Science – Geography" :
-    /civic|politic|democracy/.test(req)            ? "Social Science – Civics/Political Science" :
-    /econ/.test(req)                               ? "Economics" :
-    /sst|social/.test(req)                         ? "Social Science (History + Geography + Civics + Economics)" :
-    /english/.test(req)                            ? "English" :
-    /hindi/.test(req)                              ? "Hindi" :
-    subjectRequest;
+  // ── FIX: Class 10 now has its own full chapter database ──
+  if (classNum === 10) {
+    if (/science|physics|chemistry|biology/.test(req))
+      return CLASS10_CHAPTERS.science;
+    if (/math/.test(req))
+      return CLASS10_CHAPTERS.mathematics;
+    if (/history/.test(req))
+      return CLASS10_CHAPTERS.history;
+    if (/geo|geography/.test(req))
+      return CLASS10_CHAPTERS.geography;
+    if (/civic|politic|democracy/.test(req))
+      return CLASS10_CHAPTERS.civics;
+    if (/econ/.test(req))
+      return CLASS10_CHAPTERS.economics;
+    if (/sst|social/.test(req)) {
+      return {
+        subjectName: "Social Science (History + Geography + Civics + Economics)",
+        chapterList:
+          `HISTORY:\n${CLASS10_CHAPTERS.history.chapterList}\n\n` +
+          `GEOGRAPHY:\n${CLASS10_CHAPTERS.geography.chapterList}\n\n` +
+          `CIVICS:\n${CLASS10_CHAPTERS.civics.chapterList}\n\n` +
+          `ECONOMICS:\n${CLASS10_CHAPTERS.economics.chapterList}`,
+      };
+    }
+    if (/english/.test(req))
+      return CLASS10_CHAPTERS.english;
+    if (/hindi/.test(req))
+      return CLASS10_CHAPTERS.hindi;
+    // fallback for unknown subjects at Class 10
+    return {
+      subjectName: subjectRequest,
+      chapterList: `Use the complete official NCERT Class 10 ${subjectRequest} syllabus.`,
+    };
+  }
 
+  // ── Class 9 (unchanged) ──
   if (classNum === 9) {
     const s = syllabus.subjects;
 
@@ -578,14 +709,24 @@ function getChaptersForSubject(
     };
   }
 
-  const subjectName = `${subjectLabel} – Class ${classNum}`;
+  // ── Other classes — use NCERT topic hints ──
+  const subjectLabel =
+    /science|physics|chemistry|biology/.test(req) ? "Science" :
+    /math/.test(req)                               ? "Mathematics" :
+    /history/.test(req)                            ? "Social Science – History" :
+    /geo|geography/.test(req)                      ? "Social Science – Geography" :
+    /civic|politic|democracy/.test(req)            ? "Social Science – Civics/Political Science" :
+    /econ/.test(req)                               ? "Economics" :
+    /sst|social/.test(req)                         ? "Social Science" :
+    /english/.test(req)                            ? "English" :
+    /hindi/.test(req)                              ? "Hindi" :
+    subjectRequest;
 
+  const subjectName = `${subjectLabel} – Class ${classNum}`;
   const chapterList = [
     `[NCERT SYLLABUS — CLASS ${classNum} ${subjectLabel.toUpperCase()}]`,
     `Use the real, complete official NCERT/CBSE Class ${classNum} ${subjectLabel} syllabus.`,
     `Draw questions ONLY from genuine NCERT Class ${classNum} ${subjectLabel} chapters as prescribed by CBSE.`,
-    `Do NOT invent chapter names. Do NOT use chapters from any other class.`,
-    `Examples of topics to cover (Class ${classNum} ${subjectLabel}):`,
     getNcertTopicHints(subjectLabel, classNum),
   ].join("\n");
 
@@ -600,7 +741,6 @@ function getNcertTopicHints(subject: string, classNum: number): string {
       6:  "A Tale of Two Birds, The Friendly Mongoose, The Shepherd's Treasure, Taro's Reward, An Indian – American Woman in Space, The Wonder Called Sleep, A Pact with the Sun",
       7:  "Three Questions, A Gift of Chappals, Gopal and the Hilsa-Fish, The Ashes That Made Trees Bloom, Quality, Expert Detectives, The Invention of Vita-Wonk",
       8:  "The Best Christmas Present in the World, The Tsunami, Glimpses of the Past, Bepin Choudhury's Lapse of Memory, The Summit Within, This is Jody's Fawn, A Visit to Cambridge",
-      10: "A Letter to God, Nelson Mandela: Long Walk to Freedom, Two Stories about Flying, From the Diary of Anne Frank, Glimpses of India, Mijbil the Otter, Madam Rides the Bus",
       11: "The Portrait of a Lady, We're Not Afraid to Die, Discovering Tut, The Laburnum Top, The Voice of the Rain, Silk Road, Father to Son",
       12: "The Last Lesson, Lost Spring, Deep Water, The Rattrap, Indigo, Poets and Pancakes, The Interview, Going Places",
     };
@@ -612,7 +752,6 @@ function getNcertTopicHints(subject: string, classNum: number): string {
       6:  "Knowing Our Numbers, Whole Numbers, Playing with Numbers, Basic Geometrical Ideas, Understanding Elementary Shapes, Integers, Fractions, Decimals, Data Handling, Mensuration, Algebra, Ratio and Proportion",
       7:  "Integers, Fractions and Decimals, Data Handling, Simple Equations, Lines and Angles, The Triangle and its Properties, Congruence of Triangles, Comparing Quantities, Rational Numbers, Practical Geometry, Perimeter and Area, Algebraic Expressions, Exponents and Powers",
       8:  "Rational Numbers, Linear Equations in One Variable, Understanding Quadrilaterals, Practical Geometry, Data Handling, Squares and Square Roots, Cubes and Cube Roots, Comparing Quantities, Algebraic Expressions and Identities, Mensuration, Exponents and Powers, Direct and Inverse Proportions, Factorisation, Introduction to Graphs",
-      10: "Real Numbers, Polynomials, Pair of Linear Equations, Quadratic Equations, Arithmetic Progressions, Triangles, Coordinate Geometry, Introduction to Trigonometry, Circles, Constructions, Areas Related to Circles, Surface Areas and Volumes, Statistics, Probability",
       11: "Sets, Relations and Functions, Trigonometric Functions, Principle of Mathematical Induction, Complex Numbers, Linear Inequalities, Permutations and Combinations, Binomial Theorem, Sequences and Series, Straight Lines, Conic Sections, Introduction to 3D Geometry, Limits and Derivatives, Statistics, Probability",
       12: "Relations and Functions, Inverse Trigonometric Functions, Matrices, Determinants, Continuity and Differentiability, Application of Derivatives, Integrals, Application of Integrals, Differential Equations, Vector Algebra, 3D Geometry, Linear Programming, Probability",
     };
@@ -621,11 +760,10 @@ function getNcertTopicHints(subject: string, classNum: number): string {
 
   if (/science/.test(s)) {
     const hintMap: Record<number, string> = {
-      6:  "Food: Where Does It Come From?, Components of Food, Fibre to Fabric, Sorting Materials into Groups, Separation of Substances, Changes Around Us, Getting to Know Plants, Body Movements, The Living Organisms and their Surroundings, Motion and Measurement of Distances, Light Shadows and Reflections, Electricity and Circuits, Fun with Magnets, Water, Air Around Us, Garbage In Garbage Out",
-      7:  "Nutrition in Plants, Nutrition in Animals, Fibre to Fabric, Heat, Acids Bases and Salts, Physical and Chemical Changes, Weather Climate and Adaptations, Winds Storms and Cyclones, Soil, Respiration in Organisms, Transportation in Animals and Plants, Reproduction in Plants, Motion and Time, Electric Current and its Effects, Light, Water: A Precious Resource, Forests: Our Lifeline, Wastewater Story",
-      8:  "Crop Production and Management, Microorganisms, Synthetic Fibres and Plastics, Materials: Metals and Non-Metals, Coal and Petroleum, Combustion and Flame, Conservation of Plants and Animals, Cell Structure and Functions, Reproduction in Animals, Reaching the Age of Adolescence, Force and Pressure, Friction, Sound, Chemical Effects of Electric Current, Some Natural Phenomena, Light, Stars and the Solar System, Pollution of Air and Water",
-      10: "Chemical Reactions and Equations, Acids Bases and Salts, Metals and Non-metals, Carbon and its Compounds, Life Processes, Control and Coordination, How do Organisms Reproduce?, Heredity, Light – Reflection and Refraction, Human Eye and Colourful World, Electricity, Magnetic Effects of Electric Current, Our Environment",
-      11: "Physical World, Units and Measurement, Motion in a Straight Line, Motion in a Plane, Laws of Motion, Work Energy and Power, System of Particles, Gravitation, Mechanical Properties of Solids, Mechanical Properties of Fluids, Thermal Properties of Matter, Thermodynamics, Kinetic Theory, Oscillations, Waves",
+      6:  "Food: Where Does It Come From?, Components of Food, Fibre to Fabric, Sorting Materials into Groups, Separation of Substances, Changes Around Us, Getting to Know Plants, Body Movements, The Living Organisms, Motion and Measurement, Light Shadows and Reflections, Electricity and Circuits, Fun with Magnets, Water, Air Around Us",
+      7:  "Nutrition in Plants, Nutrition in Animals, Fibre to Fabric, Heat, Acids Bases and Salts, Physical and Chemical Changes, Weather Climate Adaptations, Winds Storms Cyclones, Soil, Respiration in Organisms, Transportation, Reproduction in Plants, Motion and Time, Electric Current, Light, Water Resources, Forests, Wastewater",
+      8:  "Crop Production, Microorganisms, Synthetic Fibres and Plastics, Metals and Non-Metals, Coal and Petroleum, Combustion and Flame, Conservation, Cell Structure, Reproduction in Animals, Adolescence, Force and Pressure, Friction, Sound, Chemical Effects of Electric Current, Natural Phenomena, Light, Stars and Solar System, Pollution",
+      11: "Physical World, Units and Measurement, Motion in a Straight Line, Motion in a Plane, Laws of Motion, Work Energy and Power, System of Particles, Gravitation, Mechanical Properties of Solids and Fluids, Thermal Properties, Thermodynamics, Kinetic Theory, Oscillations, Waves",
       12: "Electric Charges and Fields, Electrostatic Potential, Current Electricity, Moving Charges and Magnetism, Magnetism and Matter, Electromagnetic Induction, Alternating Current, Electromagnetic Waves, Ray Optics, Wave Optics, Dual Nature of Radiation, Atoms, Nuclei, Semiconductor Electronics",
     };
     return hintMap[classNum] || `NCERT Class ${classNum} Science chapters`;
@@ -633,25 +771,61 @@ function getNcertTopicHints(subject: string, classNum: number): string {
 
   if (/social science|history/.test(s)) {
     const hintMap: Record<number, string> = {
-      6:  "What Where How and When, From Hunting Gathering to Growing Food, In the Earliest Cities, What Books and Burials Tell Us, Kingdoms Kings and an Early Republic, New Questions and Ideas, Ashoka the Emperor, Vital Villages Thriving Towns, Traders Kings and Pilgrims, New Empires and Kingdoms, Buildings Paintings and Books",
-      7:  "Tracing Changes through a Thousand Years, New Kings and Kingdoms, The Delhi Sultans, The Mughal Empire, Rulers and Buildings, Towns Traders and Craftspersons, Tribes Nomads and Settled Communities, Devotional Paths to the Divine, The Making of Regional Cultures, Eighteenth-Century Political Formations",
-      8:  "How When and Where, From Trade to Territory, Ruling the Countryside, Tribals Dikus and the Vision of a Golden Age, When People Rebel 1857, Colonialism and the City, Weavers Iron Smelters and Factory Owners, Civilising the Native Educating the Nation, Women Caste and Reform, The Changing World of Visual Arts, The Making of the National Movement",
-      10: "The Rise of Nationalism in Europe, Nationalism in India, The Making of a Global World, The Age of Industrialisation, Print Culture and the Modern World, Resources and Development, Forest and Wildlife Resources, Water Resources, Agriculture, Minerals and Energy Resources, Manufacturing Industries, Lifelines of National Economy, Power Sharing, Federalism, Gender Religion and Caste, Political Parties, Outcomes of Democracy, Development, Sectors of the Indian Economy, Money and Credit, Globalisation and the Indian Economy, Consumer Rights",
+      6:  "What Where How and When, From Hunting Gathering to Growing Food, In the Earliest Cities, What Books and Burials Tell Us, Kingdoms Kings and an Early Republic, New Questions and Ideas, Ashoka, Vital Villages, Traders Kings and Pilgrims, New Empires, Buildings Paintings and Books",
+      7:  "Tracing Changes, New Kings and Kingdoms, The Delhi Sultans, The Mughal Empire, Rulers and Buildings, Towns Traders Craftspersons, Tribes Nomads, Devotional Paths, Making of Regional Cultures, Eighteenth-Century Political Formations",
+      8:  "How When and Where, From Trade to Territory, Ruling the Countryside, Tribals Dikus, When People Rebel 1857, Colonialism and the City, Weavers Iron Smelters, Civilising the Native, Women Caste and Reform, Changing World of Visual Arts, Making of the National Movement",
     };
-    return hintMap[classNum] || `NCERT Class ${classNum} Social Science chapters (History, Geography, Civics, Economics)`;
+    return hintMap[classNum] || `NCERT Class ${classNum} Social Science chapters`;
   }
 
   if (/hindi/.test(s)) {
     const hintMap: Record<number, string> = {
-      6:  "वह चिड़िया जो, बचपन, नादान दोस्त, चाँद से थोड़ी सी गप्पें, अक्षरों का महत्व, पार नज़र के, साथी हाथ बढ़ाना, ऐसे–ऐसे, टिकट एल्बम, झाँसी की रानी, जो देखकर भी नहीं देखते, संसार पुस्तक है",
-      7:  "हम पंछी उन्मुक्त গগन के, दादी माँ, हिमालय की बेटियाँ, कठपुतली, मिठाईवाला, रक्त और हमारा शरीर, पापा खो गए, शाम एक किसान, चिड़िया की बच्ची, अपूर्व अनुभव",
+      6:  "वह चिड़िया जो, बचपन, नादान दोस्त, चाँद से थोड़ी सी गप्पें, अक्षरों का महत्व, पार नज़र के, साथी हाथ बढ़ाना, ऐसे-ऐसे, टिकट एल्बम, झाँसी की रानी, जो देखकर भी नहीं देखते, संसार पुस्तक है",
+      7:  "हम पंछी उन्मुक्त গগন के, दादी माँ, हिमालय की बेटियाँ, कठपुतली, मिठाईवाला, रक्त और हमारा शरीर, पापा खो गए, शाम एक किसान, चिड़िया की बच्ची, अपूर्व अनुभव",
       8:  "ध्वनि, लाख की चूड़ियाँ, बस की यात्रा, दीवानों की हस्ती, चिट्ठियों की अनूठी दुनिया, भगवान के डाकिए, क्या निराश हुआ जाए, यह सबसे कठिन समय नहीं, कबीर की साखियाँ, कामचोर",
-      10: "पद, राम-लक्ष्मण-परशुराम संवाद, देव, आत्मकथ्य, उत्साह, यह दंतुरहित मुस्कान, फसल, संगतकार, नेताजी का चश्मा, बालगोबिन भगत, लखनवी अंदाज़, मानवीय करुणा की दिव्य चमक",
     };
-    return hintMap[classNum] || `NCERT Class ${classNum} Hindi chapters (Vasant/Sparsh/Aroh/Vitan as applicable)`;
+    return hintMap[classNum] || `NCERT Class ${classNum} Hindi chapters`;
   }
 
   return `NCERT Class ${classNum} ${subject} chapters as per the official CBSE curriculum`;
+}
+
+// ─────────────────────────────────────────────────────────────
+// *** FIX 2: POST-GENERATION MARKS VERIFICATION ***
+// Counts actual [X mark] patterns from generated paper and warns if off
+// ─────────────────────────────────────────────────────────────
+
+function verifyPaperMarks(paper: string, expectedTotal: number): {
+  verified: number;
+  isOff: boolean;
+  warningMsg: string;
+} {
+  // Match all [N mark] or [N marks] patterns
+  const matches = [...paper.matchAll(/\[(\d+)\s*marks?\]/gi)];
+  let sum = 0;
+  for (const m of matches) sum += parseInt(m[1]);
+
+  const tolerance = 2; // allow ±2 due to internal choice questions
+  const isOff = Math.abs(sum - expectedTotal) > tolerance;
+
+  const warningMsg = isOff
+    ? `[PAPER MARKS WARNING] Expected ${expectedTotal}, counted ${sum} from question marks. Paper may be incomplete.`
+    : "";
+
+  if (isOff) {
+    console.warn(warningMsg);
+  }
+
+  return { verified: sum > 0 ? sum : expectedTotal, isOff, warningMsg };
+}
+
+function parseTotalMarksFromPaper(paper: string, fallback: number = 25): number {
+  const match = paper.match(/(?:maximum\s*marks?|total\s*marks?)\s*[:\-]\s*(\d+)/i);
+  if (!match) {
+    console.warn(`[parseTotalMarksFromPaper] Could not extract total marks — defaulting to ${fallback}.`);
+    return fallback;
+  }
+  return parseInt(match[1]);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -705,13 +879,23 @@ function parseScore(text: string): { obtained: number; total: number } {
   if (match) {
     return { obtained: parseInt(match[1]), total: parseInt(match[2]) };
   }
-  console.warn("[parseScore] Could not extract score from evaluation text.");
   return { obtained: 0, total: 0 };
+}
+
+function sanitiseUpload(raw: string): string {
+  return raw
+    .slice(0, 8000)
+    .replace(/system\s*:/gi, "")
+    .replace(/ignore\s+previous\s+instructions?/gi, "")
+    .replace(/you\s+are\s+now/gi, "")
+    .replace(/disregard\s+all/gi, "")
+    .trim();
 }
 
 // ─────────────────────────────────────────────────────────────
 // BUILD RICH HTML EVALUATION REPORT
 // ─────────────────────────────────────────────────────────────
+
 function buildEvalHtml(evalJson: Record<string, unknown>, fallbackText: string): string {
   try {
     const {
@@ -725,7 +909,12 @@ function buildEvalHtml(evalJson: Record<string, unknown>, fallbackText: string):
       grade: string; gradeLabel: string;
       sections: Array<{
         name: string; obtained: number; maxMarks: number;
-        questions: Array<{ qNum: string; topic: string; obtained: number; maxMarks: number; status: string; feedback: string; correctAnswer?: string }>;
+        questions: Array<{
+          qNum: string; topic: string; obtained: number; maxMarks: number;
+          status: string; feedback: string; correctAnswer?: string;
+          detailedExplanation?: string; marksDeductionReason?: string;
+          keyConceptMissed?: string;
+        }>;
       }>;
       strengths: string; weaknesses: string; studyTip: string;
     };
@@ -740,17 +929,50 @@ function buildEvalHtml(evalJson: Record<string, unknown>, fallbackText: string):
         const statusIcon = q.status === "correct" ? "✓" : q.status === "partial" ? "~" : q.status === "unattempted" ? "—" : "✗";
         const rowBg = q.status === "correct" ? "#f0fff0" : q.status === "partial" ? "#fffde7" : q.status === "unattempted" ? "#f5f5f5" : "#fff0f0";
         const statusColor = q.status === "correct" ? "#27AE60" : q.status === "partial" ? "#E67E22" : q.status === "unattempted" ? "#888" : "#E74C3C";
-        const wrongNote = (q.correctAnswer && q.status !== "correct")
-          ? `<div style="font-size:12px;color:#1A5276;margin-top:4px;"><b>✎ Correct:</b> ${q.correctAnswer}</div>` : "";
-        const feedbackNote = q.feedback
-          ? `<div style="font-size:12px;color:#5D4037;margin-top:2px;">${q.feedback}</div>` : "";
+
+        // ── DETAILED EXPLANATION BLOCK (new) ──
+        let detailBlock = "";
+
+        // Show marks deduction reason for partial/wrong answers
+        if (q.marksDeductionReason && q.status !== "correct") {
+          detailBlock += `<div style="margin-top:5px;padding:5px 8px;background:#fef9c3;border-left:3px solid #f59e0b;border-radius:0 4px 4px 0;font-size:11px;color:#78350f;">
+            <strong>Why marks were deducted:</strong> ${q.marksDeductionReason}
+          </div>`;
+        }
+
+        // Show the correct answer with full explanation
+        if (q.correctAnswer && q.status !== "correct") {
+          detailBlock += `<div style="margin-top:5px;padding:5px 8px;background:#e0f2fe;border-left:3px solid #0284c7;border-radius:0 4px 4px 0;font-size:11px;color:#0c4a6e;">
+            <strong>Correct answer:</strong> ${q.correctAnswer}
+          </div>`;
+        }
+
+        // Show detailed concept explanation for wrong/partial answers
+        if (q.detailedExplanation && q.status !== "correct") {
+          detailBlock += `<div style="margin-top:5px;padding:6px 8px;background:#f0fdf4;border-left:3px solid #16a34a;border-radius:0 4px 4px 0;font-size:11px;color:#14532d;line-height:1.6;">
+            <strong>Explanation to remember:</strong> ${q.detailedExplanation}
+          </div>`;
+        }
+
+        // Show key concept missed
+        if (q.keyConceptMissed && q.status !== "correct") {
+          detailBlock += `<div style="margin-top:5px;padding:5px 8px;background:#fdf2f8;border-left:3px solid #a21caf;border-radius:0 4px 4px 0;font-size:11px;color:#701a75;">
+            <strong>Key concept to revise:</strong> ${q.keyConceptMissed}
+          </div>`;
+        }
+
         return `
           <tr style="background:${rowBg};">
-            <td style="padding:7px 10px;font-weight:600;color:#333;border:1px solid #ddd;white-space:nowrap;">${q.qNum}</td>
-            <td style="padding:7px 10px;color:#333;border:1px solid #ddd;">${q.topic || "—"}${feedbackNote}${wrongNote}</td>
-            <td style="padding:7px 10px;text-align:center;font-weight:700;color:${statusColor};border:1px solid #ddd;white-space:nowrap;">${statusIcon} ${q.obtained}/${q.maxMarks}</td>
+            <td style="padding:8px 10px;font-weight:700;color:#333;border:1px solid #ddd;white-space:nowrap;vertical-align:top;">${q.qNum}</td>
+            <td style="padding:8px 10px;color:#333;border:1px solid #ddd;vertical-align:top;">
+              <div style="font-weight:600;margin-bottom:2px;">${q.topic || "—"}</div>
+              <div style="font-size:12px;color:#475569;">${q.feedback || ""}</div>
+              ${detailBlock}
+            </td>
+            <td style="padding:8px 10px;text-align:center;font-weight:700;color:${statusColor};border:1px solid #ddd;white-space:nowrap;vertical-align:top;">${statusIcon} ${q.obtained}/${q.maxMarks}</td>
           </tr>`;
       }).join("");
+
       return `
         <div style="margin-bottom:24px;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.10);">
           <div style="background:#2C3E50;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;">
@@ -761,7 +983,7 @@ function buildEvalHtml(evalJson: Record<string, unknown>, fallbackText: string):
             <thead>
               <tr style="background:#D6E4F7;">
                 <th style="padding:7px 10px;text-align:left;border:1px solid #ddd;font-size:13px;color:#1F4E79;">Q#</th>
-                <th style="padding:7px 10px;text-align:left;border:1px solid #ddd;font-size:13px;color:#1F4E79;">Topic / Feedback</th>
+                <th style="padding:7px 10px;text-align:left;border:1px solid #ddd;font-size:13px;color:#1F4E79;">Topic / Feedback / Explanation</th>
                 <th style="padding:7px 10px;text-align:center;border:1px solid #ddd;font-size:13px;color:#1F4E79;">Score</th>
               </tr>
             </thead>
@@ -800,7 +1022,10 @@ function buildEvalHtml(evalJson: Record<string, unknown>, fallbackText: string):
       <div style="font-size:14px;color:#555;">${gradeLabel}</div>
     </div>
   </div>
-  <div style="font-size:17px;font-weight:700;color:#1F4E79;border-bottom:3px solid #1F4E79;padding-bottom:6px;margin-bottom:16px;">📊 Section-wise Breakdown</div>
+  <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#92400e;">
+    <strong>📖 How to use this report:</strong> Every question where marks were deducted shows (1) why marks were cut, (2) the correct answer, (3) a detailed explanation to help you understand the concept, and (4) the key concept to revise. Use this to directly fix your weak areas.
+  </div>
+  <div style="font-size:17px;font-weight:700;color:#1F4E79;border-bottom:3px solid #1F4E79;padding-bottom:6px;margin-bottom:16px;">📊 Question-wise Breakdown with Explanations</div>
   ${sectionHtml}
   <div style="font-size:17px;font-weight:700;color:#1F4E79;border-bottom:3px solid #1F4E79;padding-bottom:6px;margin-bottom:16px;margin-top:8px;">📈 Summary</div>
   <table style="width:100%;border-collapse:collapse;margin-bottom:24px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.08);border-radius:6px;overflow:hidden;">
@@ -833,29 +1058,6 @@ function buildEvalHtml(evalJson: Record<string, unknown>, fallbackText: string):
 }
 
 // ─────────────────────────────────────────────────────────────
-// parseTotalMarksFromPaper — reads from paper header
-// FIX: default changed from 80 to 25 (SHAURI study day default)
-// ─────────────────────────────────────────────────────────────
-function parseTotalMarksFromPaper(paper: string, fallback: number = 25): number {
-  const match = paper.match(/(?:maximum\s*marks?|total\s*marks?)\s*[:\-]\s*(\d+)/i);
-  if (!match) {
-    console.warn(`[parseTotalMarksFromPaper] Could not extract total marks — defaulting to ${fallback}.`);
-    return fallback;
-  }
-  return parseInt(match[1]);
-}
-
-function sanitiseUpload(raw: string): string {
-  return raw
-    .slice(0, 8000)
-    .replace(/system\s*:/gi, "")
-    .replace(/ignore\s+previous\s+instructions?/gi, "")
-    .replace(/you\s+are\s+now/gi, "")
-    .replace(/disregard\s+all/gi, "")
-    .trim();
-}
-
-// ─────────────────────────────────────────────────────────────
 // SYLLABUS EXTRACTION FROM UPLOAD
 // ─────────────────────────────────────────────────────────────
 
@@ -871,7 +1073,7 @@ You are a syllabus extraction assistant for CBSE Class ${cls} students.
 The following text was extracted from a student's uploaded syllabus document.
 
 Your job:
-1. Identify the PRIMARY subject name. If multiple subjects appear in the document, pick the ONE that has the most content listed. Write it as a clean, short name (e.g. "English", "Mathematics", "Science", "Social Science – History", "Hindi"). DO NOT list multiple subjects as a single subject name.
+1. Identify the PRIMARY subject name. If multiple subjects appear, pick the ONE with the most content. Write it as a clean, short name.
 2. List every chapter, topic, unit, or section for that subject exactly as it appears.
 3. Format your output EXACTLY as:
 
@@ -883,10 +1085,7 @@ CHAPTERS / TOPICS:
 ...
 
 Rules:
-- SUBJECT line must be ONE subject only — not a comma-separated list
-- If you see "English Language and Literature" → write SUBJECT: English
-- If you see "Democratic Politics" or "Contemporary India" → write SUBJECT: Social Science
-- If you see "Mathematics" or "Maths" → write SUBJECT: Mathematics
+- SUBJECT line must be ONE subject only
 - Do NOT include any commentary — output the structured list only
 
 RAW EXTRACTED TEXT FROM UPLOAD:
@@ -908,8 +1107,7 @@ ${safe}
       `🚨 UPLOADED SYLLABUS — STRICT BOUNDARY 🚨\n` +
       `ABSOLUTE RULE: Every question on this paper must come EXCLUSIVELY from the topics listed below.\n` +
       `A topic NOT listed below does NOT exist for this exam — do NOT include it under any circumstance.\n` +
-      `Do NOT use standard NCERT chapters that are absent from this list.\n` +
-      `Do NOT "fill gaps" with NCERT content. If fewer topics are listed, write more questions per listed topic.\n\n` +
+      `Do NOT use standard NCERT chapters that are absent from this list.\n\n` +
       extracted,
     raw: extracted,
   };
@@ -984,11 +1182,6 @@ async function handleSyllabusUpload(
       `The exam paper will be generated **strictly based on the above syllabus only**.\n` +
       formatConfirmation + `\n` +
       `✅ If this looks correct, type **start** to begin your exam.\n` +
-      (reqs?.isCustom ? `` :
-        `💡 You can also specify the format, e.g.:\n` +
-        `   • "prepare 30 marks exam"\n` +
-        `   • "give 20 MCQ questions"\n` +
-        `   • "1 hour test with short answers"\n`) +
       `✏️ If something is wrong, upload a clearer image or retype the subject name.`,
   });
 }
@@ -1065,13 +1258,13 @@ function isOverTime(startedAt?: number): boolean {
 }
 
 // ─────────────────────────────────────────────────────────────
-// SHAURI PLANNER PAPER GENERATOR
+// *** FIX 3: SHAURI PLANNER PAPER GENERATOR — ALL THREE GAPS PATCHED ***
 //
-// CRITICAL FIXES applied here:
-// 1. Subject label uses ALL subjects (primary + secondary + writing), not just primary
-// 2. totalMarks comes directly from shauriPaper.totalMarks — never from parsePaperRequirements
-// 3. formatBlock is passed as system prompt instructions, not in the user message
-// 4. parseTotalMarksFromPaper called with correct fallback
+// Changes from original:
+// 1. TOPIC BOUNDARY injected as hard constraint in system prompt
+// 2. getChaptersForSubject() now called to inject full NCERT chapter list
+//    alongside the specific day topic — so LLM has both context AND a hard boundary
+// 3. verifyPaperMarks() runs after generation and logs a warning if marks are off
 // ─────────────────────────────────────────────────────────────
 
 async function generateShauriPaper(
@@ -1084,7 +1277,7 @@ async function generateShauriPaper(
 ): Promise<NextResponse> {
   const {
     isRevisionDay,
-    totalMarks,      // Always use this directly — never re-parse from text
+    totalMarks,
     timeMinutes,
     primarySubject,
     primaryTopic,
@@ -1105,30 +1298,66 @@ async function generateShauriPaper(
       ? `${primarySubject} + ${secondarySubject} (${writingSubject} Writing)`
       : primarySubject;
 
-  // System prompt contains the format instructions — keeps paper header clean
+  // ── FIX 2: Look up NCERT chapter context for the primary subject ──
+  // This injects the full chapter list alongside the specific topic boundary
+  const { chapterList: primaryChapterContext } = getChaptersForSubject(primarySubject, cls);
+  const { chapterList: secondaryChapterContext } = secondarySubject
+    ? getChaptersForSubject(secondarySubject, cls)
+    : { chapterList: "" };
+
+  // ── FIX 1: TOPIC BOUNDARY — hard constraint injected in system prompt ──
+  // This is the most critical fix. Without this, the LLM drifts to the full chapter.
+  const topicBoundaryBlock = isRevisionDay
+    ? `
+TOPIC BOUNDARY — WEEK REVISION (ABSOLUTE RULE):
+Questions must ONLY come from the following week's topics. Do NOT go outside these topics.
+Week topics covered:
+${weekCoverage || "All topics from this study week"}
+
+Each topic in the week must have at least 1-2 questions in the paper.
+Distribute questions evenly across ALL listed week topics.
+`.trim()
+    : `
+TOPIC BOUNDARY — STUDY DAY (ABSOLUTE RULE):
+PRIMARY TOPIC CONSTRAINT: Every question in Sections A, B, C, D must test ONLY:
+"${primaryTopic}"
+
+Do NOT include any other concept, chapter, or topic — even if it is part of the same subject.
+Example: If topic is "Euclid's Division Lemma; Ex 1.1 Q1-4" — ask ONLY about Euclid's Division Lemma
+and Exercise 1.1. Do NOT ask about Fundamental Theorem, irrational numbers, or any other chapter.
+
+${secondarySubject ? `SECONDARY TOPIC CONSTRAINT: Section B may include 1 question on:
+"${secondaryTopic}" from ${secondarySubject}` : ""}
+
+SECTION E WRITING: Must be in ${writingSubject} language only.
+
+AUTHORISED CHAPTER CONTEXT for ${primarySubject} (Class ${cls}):
+${primaryChapterContext}
+${secondarySubject ? `\nAUTHORISED CHAPTER CONTEXT for ${secondarySubject} (Class ${cls}):\n${secondaryChapterContext}` : ""}
+`.trim();
+
+  // System prompt: format block + topic boundary + paper header
   const paperSystemPrompt = `
 You are an official CBSE-aligned question paper setter for Class ${cls}.
 ${seed}
 
 ${formatBlock}
 
+${topicBoundaryBlock}
+
 CRITICAL RULES — READ BEFORE GENERATING:
-1. Total marks MUST equal exactly ${totalMarks}. Count all marks before finalising.
+1. Total marks MUST equal exactly ${totalMarks}. Count ALL question marks before finalising.
 2. Generate ALL sections (A through E) completely — never stop early or skip a section.
 3. Every section must have EXACTLY the number of questions specified in the format above.
 4. Show marks for every question in [brackets].
-5. The paper header must show Maximum Marks: ${totalMarks} and Time Allowed: ${timeAllowed}.
-6. Output ONLY the question paper — no commentary, no preamble, no notes after the paper.
+5. Paper header must show: Maximum Marks: ${totalMarks} | Time Allowed: ${timeAllowed}
+6. Output ONLY the question paper — no commentary, no preamble, nothing after the last question.
+7. Each section must be clearly labelled: SECTION A, SECTION B, etc.
+8. Every question with an internal choice must use the word "OR" on its own line.
 `.trim();
 
-  // User message is clean — no format block details, no marks confusion
-  const userMessage = isRevisionDay
-    ? `Generate the complete SHAURI Revision Day test paper for Week covering: ${weekCoverage || "all week topics"}. Maximum Marks: ${totalMarks}. Writing section in ${writingSubject}.`
-    : `Generate the complete SHAURI Study Day test paper. Primary subject: ${primarySubject} — ${primaryTopic}. Secondary: ${secondarySubject} — ${secondaryTopic}. Writing section in ${writingSubject}. Maximum Marks: ${totalMarks}.`;
-
-  // Paper header is injected via system prompt context
   const paperHeaderContext = `
-PAPER HEADER — output this EXACTLY at the top of the paper:
+PAPER HEADER — output this EXACTLY at the top:
 Subject       : ${paperSubjectLabel}
 Class         : ${cls}
 Board         : ${board}
@@ -1138,6 +1367,11 @@ Maximum Marks : ${totalMarks}
 
   const fullSystemPrompt = paperSystemPrompt + "\n\n" + paperHeaderContext;
 
+  // User message is clean and matches the system prompt constraints
+  const userMessage = isRevisionDay
+    ? `Generate the complete SHAURI Revision Day test paper. Topics: ${weekCoverage || "all week topics"}. Maximum Marks: ${totalMarks}. Writing section in ${writingSubject}. Generate ALL sections A through E completely.`
+    : `Generate the complete SHAURI Study Day test paper. Topic: ${primaryTopic} (${primarySubject}). ${secondarySubject ? `Secondary: ${secondaryTopic} (${secondarySubject}).` : ""} Writing in ${writingSubject}. Maximum Marks: ${totalMarks}. Generate ALL sections A through E completely.`;
+
   const paper = await callAI(
     fullSystemPrompt,
     [{ role: "user", content: userMessage }],
@@ -1146,9 +1380,13 @@ Maximum Marks : ${totalMarks}
 
   const startTime = Date.now();
 
-  // Use totalMarks directly from shauriPaper — don't re-parse from paper text
-  // parseTotalMarksFromPaper is only used as a sanity check with correct fallback
-  const verifiedMarks = parseTotalMarksFromPaper(paper, totalMarks);
+  // ── FIX 3: Verify actual marks count in generated paper ──
+  const { verified: verifiedMarks, isOff, warningMsg } = verifyPaperMarks(paper, totalMarks);
+
+  if (isOff) {
+    // Log for monitoring — paper still served but with warning in console
+    console.warn(`[SHAURI PAPER MARKS OFF] Expected=${totalMarks} Verified=${verifiedMarks} Subject=${paperSubjectLabel}`);
+  }
 
   const activeSession: ExamSession = {
     session_key:     key,
@@ -1158,7 +1396,7 @@ Maximum Marks : ${totalMarks}
     question_paper:  paper,
     answer_log:      [],
     started_at:      startTime,
-    total_marks:     verifiedMarks,
+    total_marks:     totalMarks, // always trust shauriPaper.totalMarks, not parsed
     student_name:    name,
     student_class:   cls,
     student_board:   board,
@@ -1171,6 +1409,7 @@ Maximum Marks : ${totalMarks}
     verifiedMarks,
     isRevision: isRevisionDay,
     timeMinutes,
+    marksOff: isOff,
   });
 
   return NextResponse.json({
@@ -1188,6 +1427,207 @@ Maximum Marks : ${totalMarks}
     isRevisionDay,
     subject: paperSubjectLabel,
   });
+}
+
+// ─────────────────────────────────────────────────────────────
+// *** STRICT SUBJECT-SPECIFIC MARKING RULES ***
+// Expanded and made much stricter with step-level detail
+// ─────────────────────────────────────────────────────────────
+
+function getSubjectMarkingRules(evalSubj: string): string {
+  const isEnglish = /english/i.test(evalSubj);
+  const isHindi   = /hindi/i.test(evalSubj);
+  const isMath    = /math/i.test(evalSubj);
+  const isSST     = /sst|social|history|geography|civics|economics|politics|contemporary/i.test(evalSubj);
+  const isScience = /science|physics|chemistry|biology/i.test(evalSubj);
+
+  if (isMath) return `
+MATHEMATICS STRICT MARKING RULES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION A — MCQ & Assertion-Reason [1 mark each]:
+• MCQ: Correct option letter = 1 mark. Wrong option or no option = 0. Absolutely no partial marks.
+• Assertion-Reason: Award 1 mark ONLY for selecting the exact correct option (a/b/c/d). No partial.
+• If student writes working for an MCQ: ignore it. Mark only on the option selected.
+
+SECTION B — Very Short Answer [2 marks each]:
+• BOTH steps must be correct for 2/2.
+• Correct method + arithmetic error in final step = 1/2 (method mark).
+• Wrong formula or wrong approach from the start = 0/2.
+• Correct answer without ANY working shown = 0/2 (working is compulsory for 2-mark questions).
+• Partially correct setup with no answer = 1/2.
+
+SECTION C — Short Answer [3 marks each]:
+• Step marking: correct setup/formula (1) + correct working/substitution (1) + correct final answer with unit (1).
+• Correct method but wrong final answer due to arithmetic = 2/3.
+• Correct answer without showing steps = 1/3 maximum.
+• For geometry: correct construction/diagram (1) + correct proof steps (1) + correct conclusion (1).
+• Unit missing in final answer: deduct 0.5 (round down to nearest integer).
+
+SECTION D — Long Answer [5 marks each]:
+• Theorem: Statement (1) + Given/To Prove/Construction (1) + Proof steps with reasons (2) + Conclusion (1).
+• Numerical: Formula stated (1) + Values substituted correctly (1) + Calculation steps shown (2) + Final answer with unit (1).
+• Skipping even one step = lose that step's mark.
+• Correct answer without full working = maximum 2/5.
+• Alternate valid methods: award full marks if method is correct and complete.
+
+SECTION E — Case Study [4 marks each per case]:
+• Sub (i) [1 mark]: Exact correct numerical answer or identification = 1. Wrong = 0. No partial.
+• Sub (ii) [1 mark]: Same as above.
+• Sub (iii) [2 marks]: Method (1) + Answer (1). Correct method wrong answer = 1/2.
+
+STRICTNESS RULES:
+• No marks for vague answers. "The answer is positive" is not an answer.
+• Correct answer in wrong units (e.g., cm instead of m) = deduct 1 mark.
+• No negative marking — minimum is always 0 per question.`;
+
+  if (isScience) return `
+SCIENCE STRICT MARKING RULES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION A — Objective [1 mark each]:
+• MCQ: Only the exact correct option = 1. Wrong option = 0. No partial.
+• Assertion-Reason: Only exact correct option = 1.
+• Fill in blank: ONLY exact scientific term = 1. Synonym or approximate term = 0.
+• True/False with reason: True/False (0.5) + reason (0.5). Wrong True/False = 0 even if reason is correct.
+
+SECTION B — Very Short Answer [2 marks each]:
+• Chemical equation questions: Correct reactants+products (1) + correctly balanced (1).
+• Unbalanced equation = 1/2 maximum even if formula is correct.
+• Definition: Must include ALL key terms from NCERT definition. Missing a key term = 1/2.
+• Diagram: Must be labelled. Unlabelled diagram = 0/2. Partial labels = 1/2.
+• 2 correct points = 2/2. Only 1 correct point = 1/2. 0 correct = 0.
+
+SECTION C — Short Answer [3 marks each]:
+• 3 distinct NCERT-accurate points = 3/3.
+• 2 correct points = 2/3. 1 correct point = 1/3.
+• Vague/general points that could apply to any topic = 0 each.
+• Diagram: all key parts labelled correctly = full marks. Missing a key label = −0.5 per label, max −1.
+• Chemical equation questions: correct formula (1) + balanced (1) + state symbols if asked (1).
+
+SECTION D — Long Answer [5 marks each]:
+• Introduction/definition (1) + explanation with mechanism (2) + example/diagram (1) + conclusion/significance (1).
+• Numericals in Science: Formula (1) + substitution with units (1) + calculation (2) + answer with unit (1).
+• Missing units = deduct 0.5 per instance.
+• Diagram without labels = 0 for diagram mark.
+
+SECTION E — Case Study [4 marks each]:
+• Sub (i) [1 mark]: Exact identification from case = 1. Wrong = 0.
+• Sub (ii) [1 mark]: Correct inference or connection = 1. Vague = 0.
+• Sub (iii) [2 marks]: Scientific explanation (1) + correct conclusion/application (1).
+
+STRICTNESS RULES:
+• NCERT terminology is mandatory. Using wrong scientific terms = deduct marks.
+• "It is important because it helps" type vague answers = 0.
+• Common-sense answers without scientific backing = 0.`;
+
+  if (isSST) return `
+SOCIAL SCIENCE STRICT MARKING RULES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION A — Objective [1 mark each]:
+• MCQ: Only exact correct option = 1. Wrong = 0.
+• Assertion-Reason: Correct option = 1. Wrong = 0.
+• Fill in blank: Exact correct term = 1. Close/approximate = 0.
+• Match the following: Each correct pair = 1. Partial matches in a row = 0.
+
+SECTION B — Short Answer [3 marks each]:
+• Award 1 mark per distinct, NCERT-accurate, relevant point.
+• Maximum 3 points = 3 marks. Must name specific events, people, dates, places.
+• "The government did many things" = 0 (too vague).
+• Mentioning a fact that is off-topic for the question = 0 for that point.
+• Copy-paste of entire paragraph without relevance to question = 0.
+
+SECTION C — Long Answer [5 marks each]:
+• Introduction with context (1) + main body with min 3 NCERT-accurate points (2) + example/evidence (1) + conclusion (1).
+• Each point in main body must be distinct — repeating same idea in different words = counts as 1 point only.
+• Must answer the SPECIFIC question asked — answering a related but different question = max 2/5.
+
+SECTION D — Source-Based [4 marks each]:
+• Sub (i) [1 mark]: Correct identification directly from source text = 1. Guessing = 0.
+• Sub (ii) [1 mark]: Correct inference from source = 1. Stating something not in source = 0.
+• Sub (iii) [2 marks]: Source reference (1) + own knowledge extension (1). Own knowledge only without source = 1/2.
+
+SECTION E — Map [5 marks total]:
+• Each correctly marked and labelled location = 1. Location marked in wrong region = 0.
+• No partial marks for map — exact location or nothing.
+• Illegible label = 0.
+
+STRICTNESS RULES:
+• Must use NCERT chapter-specific facts. General knowledge answers = 0.
+• Dates, specific names, and places must be accurate — "around 1800s" for a known date = 0.
+• Answers must be in the context of Class 10 NCERT content only.`;
+
+  if (isEnglish) return `
+ENGLISH STRICT MARKING RULES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION A — Reading Comprehension [20 marks]:
+• MCQ (1 mark each): Correct option only = 1. Wrong = 0. No partial.
+• Short answer (1 mark each): Answer must be directly from the passage. Outside inference = 0.
+• Paraphrased passage content = 1. Fabricated answer not in passage = 0.
+
+SECTION B — Writing Skills [20 marks]:
+• Format marks (1): Must include ALL required format elements (e.g., date, subject, salutation for letter). Missing even one = 0 for format.
+• Content marks (2): Award 1 per relevant content point up to maximum. Irrelevant content = 0.
+• Expression marks (2): Correct sentence structure + appropriate vocabulary = 2. Multiple grammar errors = 1. Incomprehensible writing = 0.
+• Word limit: Significantly over/under limit (>30% deviation) = deduct 1 from expression.
+
+SECTION C — Grammar [20 marks — 1 mark each]:
+• Only the grammatically correct answer = 1. Almost-correct answers = 0.
+• Spelling error that changes grammar (e.g., "there" vs "their") = 0.
+• Spelling error that does NOT change grammar = deduct 0 (content accepted).
+• Two answers written: mark only the first one.
+
+SECTION D — Literature [20 marks]:
+• Extract MCQ (1 mark each): Correct option = 1. Wrong = 0.
+• Short answer (2 marks): Correct answer with textual reference = 2. Correct answer without reference = 1. Wrong answer = 0.
+• Long answer (4 marks): Relevant argument (2) + expression/clarity (1) + textual evidence (1).
+  - Answer that ignores the question = max 1/4.
+  - No textual evidence = max 2/4.
+
+STRICTNESS RULES:
+• Grammar answers are binary — no partial marks.
+• Writing tasks: vague/off-topic content = 0 for content marks.
+• Incorrect format for formal letter/notice = always 0 for format mark.`;
+
+  if (isHindi) return `
+HINDI STRICT MARKING RULES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION A — Apathit Gadyansh/Kavyansh [20 marks]:
+• MCQ (1 mark each): Only exact correct option = 1.
+• Laghuttari prashn (1 mark each): Answer must come directly from the passage. Outside content = 0.
+
+SECTION B — Lekhan [20 marks]:
+• Patra format (1): All required elements (bhejne wale ka pata, tarikh, vishay, sambodhan, hastakshar) must be present. Even one missing = 0 for format.
+• Vishay vastu / content (2): 1 per relevant, specific point. General/vague content = 0.
+• Bhasha / language (2): Correct Hindi grammar + appropriate vocabulary = 2. Multiple vyakaran dosha = 1. Incomprehensible = 0.
+
+SECTION C — Vyakaran [20 marks — 1 mark each]:
+• Only the exact grammatically correct answer = 1.
+• Close but wrong = 0. No partial marks for grammar.
+• Two answers written = mark only the first.
+
+SECTION D — Pathen [20 marks]:
+• Extract MCQ (1 mark): Correct option = 1.
+• Short answer (2 marks): Correct answer with sandarbh = 2. Correct without sandarbh = 1. Wrong = 0.
+• Long answer (4 marks): Content (2) + Bhasha (1) + Sandarbh/prasang (1).
+
+STRICTNESS RULES:
+• Grammar section: binary marking — no partial marks.
+• Vigyapan/Sandesh: missing required format elements = 0 for format marks.
+• Hindi must be grammatically correct — English words substituted unnecessarily = deduct from Bhasha.`;
+
+  // Default for unknown subjects
+  return `
+GENERAL STRICT MARKING RULES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION A — Objective [1 mark each]: Exact correct answer only = 1. Wrong/vague = 0. No partial.
+SECTION B — Very Short Answer [2 marks]: 2 accurate points = 2. 1 point = 1. Vague = 0.
+SECTION C — Short Answer [3 marks]: 3 accurate NCERT points = 3. Award 1 per distinct correct point.
+SECTION D — Long Answer [5 marks]: Introduction (1) + 3 main points (2) + example (1) + conclusion (1).
+SECTION E — Case Study [4 marks]: Sub(i) 1m + Sub(ii) 1m + Sub(iii) 2m. Strict — no vague answers.
+
+UNIVERSAL STRICTNESS:
+• Vague answers without specific content = 0.
+• "It is important/useful/helpful" without explaining HOW = 0.
+• No marks for answers that are off-topic even if they look long.`;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1222,13 +1662,11 @@ export async function POST(req: NextRequest) {
     const bodySubject: string = body?.subject || "";
     const bodyLang: string    = body?.lang    || "";
 
-    // ── SHAURI planner paper structured data ──
-    // This is the complete structured object from the frontend — never parsed from text
     const shauriPaper: ShauriPaperData | null = body?.shauriPaper || null;
 
     let uploadedText: string = sanitiseUpload(rawUploadedText);
 
-    // ── VISION/OCR ──────────────────────────────────────────────
+    // ── VISION/OCR ──
     if (rawUploadedText.includes("[IMAGE_BASE64]")) {
       const base64Match = rawUploadedText.match(/\[IMAGE_BASE64\]\n(data:image\/[^;]+;base64,[^\n]+)/);
       if (base64Match) {
@@ -1345,7 +1783,7 @@ export async function POST(req: NextRequest) {
       const teacherSystemPrompt = name
         ? systemPrompt("teacher", subjectOverride) +
           `\n\nSTUDENT IDENTITY: The student's name is ${name}${cls ? `, Class ${cls}` : ""}${board ? `, ${board}` : ""}. Always address them as ${name} — NEVER as "Student" or "there".` +
-          `\n\nRESPONSE RULES: Be concise and natural — like a real classroom teacher, not a chatbot. For greetings or small talk, reply in 1-2 sentences max. Only give longer explanations when the student asks about a concept or topic. Never bullet-point conversational replies. Be warm, direct, encouraging.`
+          `\n\nRESPONSE RULES: Be concise and natural. For greetings or small talk, reply in 1-2 sentences max. Only give longer explanations when the student asks about a concept or topic. Be warm, direct, encouraging.`
         : systemPrompt("teacher", subjectOverride);
 
       const reply = await callAI(teacherSystemPrompt, teacherConversation);
@@ -1358,16 +1796,14 @@ export async function POST(req: NextRequest) {
     if (mode === "examiner") {
       const key = getKey(student, clsRaw);
 
-      // ── SHAURI PLANNER PAPER ──────────────────────────────────
-      // Triggered when frontend sends body.shauriPaper AND message is "start"
-      // This path COMPLETELY bypasses all session management and parsePaperRequirements.
-      // totalMarks comes exclusively from shauriPaper.totalMarks (25 or 50).
+      // ── SHAURI PLANNER PAPER — direct generation path ──
       if (shauriPaper && isStart(lower)) {
         console.log("[SHAURI] Direct paper generation triggered.", {
           totalMarks: shauriPaper.totalMarks,
           isRevisionDay: shauriPaper.isRevisionDay,
           primarySubject: shauriPaper.primarySubject,
           secondarySubject: shauriPaper.secondarySubject,
+          primaryTopic: shauriPaper.primaryTopic,
         });
         return generateShauriPaper(shauriPaper, cls, board, name, key, callName);
       }
@@ -1418,11 +1854,8 @@ export async function POST(req: NextRequest) {
           reply:
             `📚 Welcome back${callName}! Your subject is set to **${session.subject}**.\n\n` +
             `Type **start** when you're ready to begin your exam. ⏱️ Timer starts immediately.\n\n` +
-            `💡 Want a custom format? Type something like:\n` +
-            `   • "prepare 30 marks exam"\n` +
-            `   • "give 20 MCQ questions"\n` +
-            `   • "1 hour test"\n\n` +
-            `📎 Want to use a different syllabus? Upload a PDF or image now to override.`,
+            `💡 Want a custom format? Type: "prepare 30 marks exam" or "give 20 MCQ questions"\n\n` +
+            `📎 Want a different syllabus? Upload a PDF or image now to override.`,
         });
       }
 
@@ -1558,6 +1991,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // ── SUBMIT HANDLER — strict evaluation with detailed explanations ──
       if (isSubmit(lower) && session.status === "IN_EXAM") {
         const endTime   = Date.now();
         const overtime  = isOverTime(session.started_at);
@@ -1574,135 +2008,56 @@ export async function POST(req: NextRequest) {
           .join("\n\n────────────────────────────────\n\n");
 
         const totalMarks = session.total_marks || 25;
+        const evalSubj   = (session.subject || "").toLowerCase();
+        const evalIsMath = /math/i.test(evalSubj);
 
-        const evalSubj      = (session.subject || "").toLowerCase();
-        const evalIsEnglish = /english/i.test(evalSubj);
-        const evalIsHindi   = /hindi/i.test(evalSubj);
-        const evalIsMath    = /math/i.test(evalSubj);
-        const evalIsSST     = /sst|social|history|geography|civics|economics/i.test(evalSubj);
-        const evalIsScience = /science|physics|chemistry|biology/i.test(evalSubj);
+        // ── Get strict marking rules for this subject ──
+        const subjectMarkingRules = getSubjectMarkingRules(session.subject || "");
 
-        const subjectMarkingRules = evalIsEnglish ? `
-SECTION A — READING [20 marks total]
-• Unseen passage MCQs (Q1a, Q2a): 1 mark each — correct = 1, wrong = 0
-• Short-answer reading questions (Q1b, Q2b): 1 mark each for relevant, on-point answer
-  — Deduct 0.5 for vague/incomplete, award 0 for irrelevant
-SECTION B — WRITING SKILLS [20 marks total]
-• Each writing task has sub-marks for: Format / Content / Expression / Accuracy
-• Q3 Notice/Paragraph/Dialogue [5 marks]: Format 1 + Content 2 + Expression 2
-• Q4 Short Writing [5 marks]: Format 1 + Content 2 + Expression 2
-• Q5 Letter [5 marks]: Format 1 + Content 2 + Expression 2
-• Q6 Long Composition [5 marks]: Content 2 + Expression 2 + Organisation 1
-• Award marks proportionally — a strong answer with wrong format loses only format marks
-• Language errors: deduct from Expression marks, not Content marks
-SECTION C — GRAMMAR [20 marks total]
-• Every grammar question is 1 mark — fully correct = 1, wrong/missing = 0
-• No partial marks for grammar answers
-• Accept alternate correct grammatical forms if they are standard English
-• Spelling errors in grammar answers: deduct mark only if the error changes the grammar
-SECTION D — LITERATURE [20 marks total]
-• Extract MCQs (Q12, Q13): 1 mark each — correct = 1, wrong = 0
-• Short answer (Q14): 2 marks each
-    → Full answer with textual reference = 2/2
-    → Correct idea but vague/no reference = 1/2
-    → Wrong or off-topic = 0/2
-• Long answer (Q15): 4 marks
-    → Content/argument  : 2 marks
-    → Expression/clarity: 1 mark
-    → Textual evidence  : 1 mark` : evalIsHindi ? `
-SECTION A — APATHIT (Unseen Reading) [20 marks]
-• MCQs: 1 mark each — correct = 1, wrong = 0
-• Short answers: 1 mark each for relevant answer in correct Hindi
-SECTION B — LEKHAN (Writing) [20 marks]
-• Each writing task [5 marks]: Format 1 + Content 2 + Bhasha (Language) 2
-• Deduct from Bhasha for grammatical/spelling errors, not from Content
-SECTION C — VYAKARAN (Grammar) [20 marks]
-• 1 mark each — fully correct = 1, wrong = 0
-• Accept grammatically valid alternatives
-SECTION D — PATHEN (Literature) [20 marks]
-• Extract MCQs: 1 mark each
-• Short answers: 2 marks each (content 1 + expression 1)
-• Long answer: 4 marks (content 2 + expression 1 + sandarbh/reference 1)` : evalIsMath ? `
-SECTION A — MCQ & Assertion-Reason [1 mark each]
-• MCQ: Correct option = 1, wrong = 0. No negative marking.
-• Assertion-Reason: Award 1 mark ONLY for the correct option (a/b/c/d). No partial.
-SECTION B — Very Short Answer [2 marks each]
-• Both steps correct = 2/2
-• Correct method but arithmetic error = 1/2
-• Wrong method = 0/2
-SECTION C — Short Answer [3 marks each]
-• Award step marks: setup (1) + working (1) + correct answer (1)
-• Correct method with wrong final answer due to arithmetic = 2/3
-• Incomplete but correct start = 1/3
-SECTION D — Long Answer [5 marks each]
-• Award step marks throughout: each correct step = 1 mark
-• Full working must be shown — answer without steps = 0
-• Theorem proofs: Statement (1) + Construction/Figure (1) + Proof steps (2) + Conclusion (1)
-SECTION E — Case Study [4 marks each]
-• Sub-question (i): 1 mark — correct answer only
-• Sub-question (ii): 1 mark — correct answer only
-• Sub-question (iii): 2 marks — method (1) + answer (1)` : evalIsSST ? `
-SECTION A — Objective [1 mark each]
-• MCQ: Correct = 1, Wrong = 0. No negative marking.
-• Assertion-Reason: Correct option = 1, wrong = 0.
-• Fill in blank: Correct term = 1. Accept close paraphrases only if factually identical.
-SECTION B — Short Answer [3 marks each]
-• Award 1 mark per valid NCERT-accurate point (max 3 points)
-• Must be from the correct chapter — off-topic answers = 0
-SECTION C — Long Answer [5 marks each]
-• Introduction/Context : 1 mark
-• Main explanation     : 2 marks (min 3 correct NCERT points)
-• Example/Evidence     : 1 mark
-• Conclusion           : 1 mark
-SECTION D — Source-Based [4 marks each]
-• Sub (i) 1 mark: factual identification from source
-• Sub (ii) 1 mark: inference or connection
-• Sub (iii) 2 marks: explanation using source + own knowledge
-SECTION E — Map [5 marks total]
-• Each correctly identified and labelled location = 1 mark
-• Marking in wrong location = 0 (no partial for map questions)` : evalIsScience ? `
-SECTION A — Objective [1 mark each]
-• MCQ: Correct = 1, wrong = 0. No negative marking.
-• Assertion-Reason: Correct option = 1.
-• Fill in blank / one-word: Correct scientific term = 1. No partial.
-SECTION B — Very Short Answer [2 marks each]
-• 2 correct points / steps = 2/2
-• 1 correct point = 1/2
-• Diagrams in this section: optional but credited if labelled correctly
-SECTION C — Short Answer [3 marks each]
-• 3 correct NCERT-accurate points = 3/3
-• Diagram questions: correct diagram with all labels = full marks
-  Missing labels = deduct 1 mark per missing key label (max deduction 2)
-SECTION D — Long Answer [5 marks each]
-• Detailed marking: Introduction (1) + Explanation/Points (2) + Diagram/Example (1) + Conclusion (1)
-• Numerical questions: formula (1) + substitution (1) + calculation (2) + unit/answer (1)
-SECTION E — Case Study [4 marks each]
-• Sub (i) 1 mark + Sub (ii) 1 mark + Sub (iii) 2 marks
-• Scientific accuracy required — vague answers score 0` : `
-SECTION A — Objective [1 mark each]: Correct = 1, wrong = 0. No negative marking.
-SECTION B — Short Answer [2–3 marks each]: Award proportionally per correct point.
-SECTION C — Long Answer [5 marks each]: Introduction(1) + Content(2) + Example(1) + Conclusion(1).
-SECTION D — Long Answer [5 marks each]: Same as Section C.
-SECTION E — Case Study [4 marks each]: Sub(i) 1m + Sub(ii) 1m + Sub(iii) 2m.`;
-
+        // ── STRICT EVALUATION PROMPT — with detailed per-question explanations ──
         const evaluationPrompt = `
-You are an official CBSE Board Examiner for Class ${cls}.
+You are a STRICT official CBSE Board Examiner for Class ${cls}.
 Subject: ${session.subject || "General"} | Board: ${board} | Maximum Marks: ${totalMarks}
 ${evalIsMath ? "MATH FORMATTING: Use LaTeX notation for all equations. Wrap inline math in $...$ and display math in $$...$$." : ""}
 Time Taken: ${timeTaken}${overtime ? " ⚠️ SUBMITTED AFTER 3-HOUR LIMIT" : ""}
 
-MARKING RULES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MARKING SCHEME (STRICTLY ENFORCED):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${subjectMarkingRules}
 
-UNIVERSAL RULES:
-• No negative marking — minimum per question is always 0
-• Match answers to questions by number OR topic — student may have answered out of order
-• Evaluate EVERY question — unattempted = 0, do NOT skip
-• Image/PDF answers → evaluate content only, ignore handwriting
-• NCERT-accurate facts = full marks; correct concept in own words = full marks
-${overtime ? "• Student submitted after the 3-hour limit — note in remarks." : ""}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+UNIVERSAL STRICT RULES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• No negative marking — minimum per question is 0.
+• Match answers to questions by number OR topic — student may have answered out of order.
+• Evaluate EVERY single question in the paper — unattempted = 0, do NOT skip any question.
+• Image/PDF answers → evaluate content only, ignore handwriting quality.
+• NCERT-accurate facts = full marks. Correct concept in own words = full marks.
+• Partially correct answer = partial marks as specified in scheme above.
+• Vague/general answer without specific content = 0 marks.
+• Long answer that is off-topic = 0 marks even if it looks detailed.
+${overtime ? "• Student submitted after the 3-hour limit — note this in overtime field." : ""}
 
-OUTPUT FORMAT — respond ONLY with a single valid JSON object, no markdown, no explanation:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EXPLANATION REQUIREMENTS (CRITICAL — READ CAREFULLY):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+For every question where the student got PARTIAL or WRONG marks, you MUST provide ALL FOUR of:
+
+1. "marksDeductionReason": Explain EXACTLY which part of the answer was wrong or missing and WHY marks were cut. Be specific — e.g. "Missing the balanced equation — only formula written, not balanced" or "Step 2 arithmetic error: 6÷2=4 written instead of 3".
+
+2. "correctAnswer": The complete, model correct answer for this question as an official examiner would write it. Must be full and specific — not just "see NCERT". Include the complete answer a student should have written.
+
+3. "detailedExplanation": Teach the concept from scratch in 2-4 sentences. Explain the underlying concept so the student understands WHY the correct answer is what it is. Use simple, clear language. This is the most important learning part.
+
+4. "keyConceptMissed": Name the specific NCERT concept, formula, theorem, or topic the student needs to revise. Be precise — e.g. "Law of Conservation of Mass", "Sum of zeros formula: -b/a", "Rowlatt Act 1919 provisions".
+
+For questions that are fully CORRECT: set these fields to empty strings "" — no need to explain correct answers.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OUTPUT FORMAT:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Respond ONLY with a single valid JSON object. No markdown, no explanation outside JSON:
 {
   "studentName": "${name || "Student"}",
   "cls": "${cls}",
@@ -1711,34 +2066,39 @@ OUTPUT FORMAT — respond ONLY with a single valid JSON object, no markdown, no 
   "timeTaken": "${timeTaken}",
   "overtime": ${overtime},
   "totalMarks": ${totalMarks},
-  "totalObtained": <number>,
-  "percentage": <number 0-100>,
+  "totalObtained": <number — must be ≤ totalMarks>,
+  "percentage": <number 0-100, rounded to nearest integer>,
   "grade": "<A1|A2|B1|B2|C1|C2|D|E>",
   "gradeLabel": "<Outstanding|Excellent|Very Good|Good|Average|Satisfactory|Pass|Needs Improvement>",
   "sections": [
     {
-      "name": "<Section name>",
+      "name": "<Section name e.g. Section A – MCQ>",
       "maxMarks": <number>,
       "obtained": <number>,
       "questions": [
         {
-          "qNum": "<e.g. Q1>",
-          "topic": "<brief topic>",
+          "qNum": "<e.g. Q1, Q2a, Q3(i)>",
+          "topic": "<specific topic tested e.g. Euclid's Division Lemma>",
           "maxMarks": <number>,
-          "obtained": <number>,
+          "obtained": <number 0 to maxMarks>,
           "status": "<correct|partial|wrong|unattempted>",
-          "feedback": "<one sentence>",
-          "correctAnswer": "<correct answer if wrong/partial, else empty>"
+          "feedback": "<one precise sentence about this specific answer>",
+          "marksDeductionReason": "<for partial/wrong: exactly what was wrong and why marks cut. For correct: empty string>",
+          "correctAnswer": "<for partial/wrong: complete model answer. For correct: empty string>",
+          "detailedExplanation": "<for partial/wrong: 2-4 sentence concept explanation for learning. For correct: empty string>",
+          "keyConceptMissed": "<for partial/wrong: specific NCERT concept/formula/theorem to revise. For correct: empty string>"
         }
       ]
     }
   ],
-  "strengths": "<specific sections/topics where student did well>",
-  "weaknesses": "<specific sections/topics to improve>",
-  "studyTip": "<one concrete, actionable improvement suggestion>"
+  "strengths": "<specific sections and question types where student did well — be concrete>",
+  "weaknesses": "<specific sections and topics where student lost marks — name the exact concepts>",
+  "studyTip": "<one concrete, actionable improvement — name the specific NCERT chapter/exercise/concept to practise>"
 }
 
 Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very Good | 61-70% = B2 Good | 51-60% = C1 Average | 41-50% = C2 Satisfactory | 33-40% = D Pass | <33% = E Needs Improvement
+
+IMPORTANT: totalObtained must equal the sum of all "obtained" values across all questions. Double-check this before outputting.
         `.trim();
 
         await saveSession({ ...session, status: "FAILED" });
@@ -1785,7 +2145,7 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
           `✅ **Evaluation complete${callName}!**\n\n` +
           `📊 **${obtained2} / ${total2}** &nbsp;(${percentage}%) &nbsp;— Grade **${grade}** ${gradeLabel}\n\n` +
           `⏱️ Time taken: ${timeTaken}${overtime ? " ⚠️ Over limit" : ""}\n\n` +
-          `_Detailed report below_ 👇`;
+          `_Detailed report with explanations for every wrong answer is below_ 👇`;
 
         try {
           await supabase.from("exam_attempts").insert({
@@ -1810,7 +2170,7 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
           reply:           plainSummary,
           evaluationHtml,
           examEnded:       true,
-          evalJson,                    // ← structured eval data for mistake extraction
+          evalJson,
           subject:         session.subject,
           marksObtained:   obtained2,
           totalMarks:      total2,
@@ -1838,8 +2198,7 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
             return NextResponse.json({
               reply:
                 `⚠️ That looks like a **syllabus upload** but your exam is already in progress.\n\n` +
-                `If you meant to upload an **answer**, please re-attach the file.\n` +
-                `If you want to submit your answer sheet, re-upload it — your exam is still running.\n\n` +
+                `If you meant to upload an **answer**, please re-attach the file.\n\n` +
                 `⏱️ Timer is still running. Type **submit** when done.`,
             });
           }
@@ -1946,10 +2305,10 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
             return NextResponse.json({
               reply:
                 `⚠️ It looks like you typed **"${message.trim()}"** — but there's no active exam session${callName}.\n\n` +
-                `To get started, please tell me the **subject** you want to be tested on:\n` +
+                `To get started, tell me the **subject** you want to be tested on:\n` +
                 `Science | Mathematics | SST | History | Geography | Civics | Economics | English | Hindi\n\n` +
                 `📎 Or **upload your syllabus** as a PDF or image for a custom paper.\n\n` +
-                `Once a subject is set, type **start** to begin — the timer starts immediately.`,
+                `Once a subject is set, type **start** to begin.`,
             });
           }
         }
@@ -1967,7 +2326,6 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
         const coreSubject = messageReqs.isCustom ? extractSubjectFromInstruction(message) : message;
 
         const { subjectName } = getChaptersForSubject(coreSubject, cls);
-
         const displaySubject = subjectName.replace(/\s*[–-]\s*Class\s*\d+$/i, "");
 
         const newSession: ExamSession = {
@@ -1994,7 +2352,6 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
               `**${displaySubject} — Class ${cls}**\n\n` +
               `📝 **Paper format:**\n` +
               `   Marks: ${totalDesc}${timeDesc}${typeDesc}${chapterDesc}\n\n` +
-              `The paper will be generated **exactly** as you described — no extra sections added.\n\n` +
               `Type **start** when you're ready to begin.\n` +
               `⏱️ Timer starts the moment you type start.`,
           });
@@ -2062,7 +2419,7 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
 
         const paperSeed = makeSeed();
 
-        // ── CUSTOM / UPLOADED SYLLABUS PAPER GENERATION ────────
+        // ── CUSTOM / UPLOADED SYLLABUS PAPER GENERATION ──
         if (hasCustomInstr || hasUploadedSyllabus) {
 
           const cleanTopicList = chapterList
@@ -2100,18 +2457,14 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
                 .filter(n => n > 0 && n <= allTopicLines.length)
                 .map(n => allTopicLines[n - 1])
                 .filter(Boolean);
-              if (filtered.length > 0) {
-                topicLines = filtered;
-              }
+              if (filtered.length > 0) topicLines = filtered;
             }
             if (topicLines === allTopicLines && reqs.chapterFilter) {
               const filterLower = reqs.chapterFilter.toLowerCase();
               const keywordFiltered = allTopicLines.filter(t =>
                 t.toLowerCase().split(/\s+/).some(word => word.length > 3 && filterLower.includes(word))
               );
-              if (keywordFiltered.length > 0) {
-                topicLines = keywordFiltered;
-              }
+              if (keywordFiltered.length > 0) topicLines = keywordFiltered;
             }
           }
 
@@ -2120,9 +2473,7 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
             const kwFiltered = allTopicLines.filter(t =>
               t.toLowerCase().includes(kw) || kw.includes(t.toLowerCase().split(" ")[0])
             );
-            if (kwFiltered.length > 0) {
-              topicLines = kwFiltered;
-            }
+            if (kwFiltered.length > 0) topicLines = kwFiltered;
           }
 
           if (topicLines.length === 0) topicLines = allTopicLines;
@@ -2158,14 +2509,14 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
               "long answer (8–10 lines)";
 
             const angles = [
-              `Ask about a definition or concept`,
-              `Ask for an example or application`,
-              `Ask to compare or contrast two things`,
-              `Ask to explain cause-and-effect`,
-              `Ask a fill-in-the-blank or one-word type`,
-              `Ask a short analytical question`,
-              `Ask for a real-life connection`,
-              `Ask about a process or sequence of steps`,
+              "Ask about a definition or concept",
+              "Ask for an example or application",
+              "Ask to compare or contrast two things",
+              "Ask to explain cause-and-effect",
+              "Ask a fill-in-the-blank or one-word type",
+              "Ask a short analytical question",
+              "Ask for a real-life connection",
+              "Ask about a process or sequence of steps",
             ];
             const angle = pick(angles);
 
@@ -2180,7 +2531,6 @@ RULES:
 - Question type MUST match: ${qTypeHint}
 - Test ONLY the grammar concept "${slot.topic}"
 - Do NOT repeat question patterns used previously
-- Do NOT include any prose passage, poem, letter writing, or essay
 - Output ONLY the question text in Hindi. No numbering, no marks label.`
               : `You are a ${subjectName} examiner (Class ${cls} CBSE). ${paperSeed}
 Topic: "${slot.topic}" | Marks: ${slot.marks} | Type: ${qTypeHint} | Difficulty: ${difficulty}
@@ -2193,7 +2543,6 @@ RULES:
 - Question complexity MUST match a ${slot.marks}-mark CBSE question (${qTypeHint})
 - Do NOT repeat the same question stem used in any previous question
 - Do NOT add topics outside "${slot.topic}"
-- Vary the question type — use the Approach and Style hint as inspiration
 - Output ONLY the question text. No numbering, no marks label, no explanation.`;
 
             const qText = await callAI(singleQPrompt, [
@@ -2219,8 +2568,8 @@ Maximum Marks : ${finalMarks}`;
             .join("\n\n");
 
           const paper = `${paperHeader}\n\n${generalInstructions}\n\n${questionBody}`;
-          const totalMarksOnPaper = parseTotalMarksFromPaper(paper, finalMarks);
-          const startTime         = Date.now();
+          const { verified: totalMarksOnPaper } = verifyPaperMarks(paper, finalMarks);
+          const startTime = Date.now();
 
           const activeSession: ExamSession = {
             session_key:          session.session_key || key,
@@ -2231,7 +2580,7 @@ Maximum Marks : ${finalMarks}`;
             question_paper:       paper,
             answer_log:           [],
             started_at:           startTime,
-            total_marks:          totalMarksOnPaper,
+            total_marks:          finalMarks,
             syllabus_from_upload: session.syllabus_from_upload,
             student_name:         name,
             student_class:        cls,
@@ -2254,7 +2603,7 @@ Maximum Marks : ${finalMarks}`;
           });
         }
 
-        // ── Standard 80-mark CBSE paper generation ──────────────
+        // ── Standard 80-mark CBSE paper generation ──
         const englishSections = `
 ⚠️ CBSE 2026 FORMAT: 50% competency-based.
 SECTION A — READING [20 Marks]
@@ -2376,8 +2725,7 @@ Q36–Q38  [4 marks each]`.trim();
 🚨 ABSOLUTE RESTRICTION — UPLOADED SYLLABUS IS THE ONLY SOURCE 🚨
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Every single question MUST come from a topic explicitly listed in the uploaded syllabus above.
-Do NOT include any chapter, unit, or concept absent from the uploaded list.
-Do NOT use NCERT or CBSE default chapter lists — the uploaded list replaces them entirely.`.trim() : "";
+Do NOT include any chapter, unit, or concept absent from the uploaded list.`.trim() : "";
 
         const difficultyDistrib = pick([
           "30% easy | 50% medium | 20% HOTs",
@@ -2416,22 +2764,15 @@ ${paperSeed}
 Subject: ${subjectName} | Board: ${board} | Maximum Marks: 80 | Time: 3 Hours
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-UNIQUENESS MANDATE — READ CAREFULLY:
+UNIQUENESS MANDATE:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 This paper MUST be completely different from any previously generated paper.
 The seed above is unique — use it as your creative anchor.
-
-VARIATION REQUIREMENTS:
-1. MCQs: Use fresh answer options and NEW scenarios/values — never reuse the same stem
-2. Short answers: Rotate the question verb. Preferred verbs for this paper: ${paperVerbSet}
-3. Long answers: Choose DIFFERENT events, concepts, or examples than a typical paper
-4. Case studies: Use a NOVEL real-world scenario — NOT a textbook example
-5. Passages (English): Write a FRESH unseen passage on a topic not typically used (e.g., urban farming, space tourism, community science)
-6. Numbers (Math): ALL numerical values, coordinates, dimensions must be freshly chosen
-7. Difficulty: ${difficultyDistrib}
+VARIATION: MCQs use fresh scenarios. Short answers rotate verbs: ${paperVerbSet}
+Difficulty: ${difficultyDistrib}
 
 Follow the EXACT official CBSE 2024-25 paper pattern for ${subjectName} as specified below.
-Output the complete question paper ONLY — no commentary, no preamble, no notes outside the paper.
+Output the complete question paper ONLY — no commentary, no preamble.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PAPER HEADER (reproduce exactly):
@@ -2476,8 +2817,8 @@ FINAL QUALITY CHECKS:
           },
         ]);
 
-        const totalMarksOnPaper = parseTotalMarksFromPaper(paper, 80);
-        const startTime         = Date.now();
+        const { verified: totalMarksOnPaper } = verifyPaperMarks(paper, 80);
+        const startTime = Date.now();
 
         const activeSession: ExamSession = {
           session_key:          session.session_key || key,
@@ -2488,7 +2829,7 @@ FINAL QUALITY CHECKS:
           question_paper:       paper,
           answer_log:           [],
           started_at:           startTime,
-          total_marks:          totalMarksOnPaper,
+          total_marks:          80,
           syllabus_from_upload: session.syllabus_from_upload,
           student_name:         name,
           student_class:        cls,
