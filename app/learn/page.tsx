@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import ChatInput from "../components/ChatInput";
 
 type Message = { role: "user" | "assistant"; content: string };
@@ -278,6 +279,7 @@ const QUICK_TOPICS = [
 
 // ─── Main Learn Page ──────────────────────────────────────────
 export default function LearnPage() {
+  const searchParams = useSearchParams();
   const [messages, setMessages]   = useState<Message[]>([]);
   const [isLoading, setLoading]   = useState(false);
   const [studentData, setData]    = useState<any>(null);
@@ -287,6 +289,7 @@ export default function LearnPage() {
   const sendingRef = useRef(false);
   const bottomRef  = useRef<HTMLDivElement>(null);
   const msgsRef    = useRef<Message[]>([]);
+  const autoTriggeredRef = useRef(false);
 
   useEffect(() => { msgsRef.current = messages; }, [messages]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
@@ -359,6 +362,22 @@ export default function LearnPage() {
     await callAPI(text, uploadedText, uploadType);
   }
 
+  useEffect(() => {
+    if (autoTriggeredRef.current) return;
+    const subject = (searchParams.get("subject") || "").trim();
+    const topic = (searchParams.get("topic") || "").trim();
+    const day = (searchParams.get("day") || "").trim();
+    const cycle = (searchParams.get("cycle") || "").trim();
+    if (!subject && !topic) return;
+    const key = `learn_auto_ctx_${subject}__${topic}__${day}__${cycle}`;
+    if (sessionStorage.getItem(key) === "1" || localStorage.getItem(key) === "1") return;
+    autoTriggeredRef.current = true;
+    sessionStorage.setItem(key, "1");
+    localStorage.setItem(key, "1");
+    const prompt = `Teach me ${subject || "this subject"} topic: ${topic || "as planned today"} in CBSE style with examples, then ask 3 quick check questions.`;
+    handleSend(prompt);
+  }, [searchParams]);
+
   return (
     <div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden", background: "#f8fafc" }}>
       <style>{`
@@ -375,7 +394,10 @@ export default function LearnPage() {
         height: 52, display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "0 20px", background: "#fff", borderBottom: "1px solid #e2e8f0", flexShrink: 0,
       }}>
-        <button onClick={() => window.location.href = "/modes"}
+        <button onClick={() => {
+          const fromPlanner = searchParams.get("from") === "planner";
+          window.location.href = fromPlanner ? "/planner" : "/modes";
+        }}
           style={{ padding: "7px 14px", background: "#f1f5f9", color: "#374151", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>
           ← Back
         </button>

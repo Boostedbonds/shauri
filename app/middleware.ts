@@ -8,6 +8,7 @@ export function middleware(request: NextRequest) {
     "/examiner",
     "/oral",
     "/progress",
+    "/planner",
   ];
 
   const { pathname } = request.nextUrl;
@@ -37,5 +38,6 @@ export const config = {
     "/examiner/:path*",
     "/oral/:path*",
     "/progress/:path*",
+    "/planner/:path*",
   ],
 };

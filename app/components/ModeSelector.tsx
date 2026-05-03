@@ -1169,7 +1169,7 @@ export default function ModeSelector() {
     { key: "lastYears",      label: "Last Years",     icon: "📄"  },
     { key: "checkResult",    label: "Check Result",   icon: "🏆"  },
     { key: "career",         label: "Career Guide",   icon: "🎯"  },
-    { key: "timetable",      label: "Study Planner",  icon: "📅"  },
+    { key: "timetable",      label: "Timetable",      icon: "📅"  },
     { key: "importantDates", label: "Upcoming Dates", icon: "🔔"  },
   ];
 
@@ -1215,6 +1215,9 @@ export default function ModeSelector() {
               {tab.icon} {tab.label}
             </button>
           ))}
+          <a className="tab-btn" href="/planner" style={{ textDecoration: "none" }}>
+            🗓️ Study Planner
+          </a>
         </div>
 
         {activeTab && (

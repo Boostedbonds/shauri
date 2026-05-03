@@ -180,6 +180,8 @@ export default function LearnPage() {
   const topicsRef  = useRef<string[]>([]);
   // Quiz banner shown once after 8 minutes of study
   const quizShownRef = useRef(false);
+  // Auto-trigger ref
+  const autoTriggeredRef = useRef(false);
 
   useEffect(() => { msgsRef.current = messages; }, [messages]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
@@ -232,6 +234,34 @@ export default function LearnPage() {
       evaluation_text:  `Learn session: ${topicsRef.current.join(", ")}`,
     });
   }, [subject, quizScore]);
+
+  // ── Auto-trigger: planner → learn ──────────────────────────
+  useEffect(() => {
+    if (autoTriggeredRef.current) return;
+    const params     = new URLSearchParams(window.location.search);
+    const autoSubject = (params.get("subject") || "").trim();
+    const autoTopic   = (params.get("topic")   || "").trim();
+    const day         = (params.get("day")     || "").trim();
+    if (!autoSubject && !autoTopic && !day) return;
+    autoTriggeredRef.current = true;
+    const parts: string[] = [];
+    if (autoSubject) parts.push(`Subject: ${autoSubject}`);
+    if (autoTopic)   parts.push(`Topic: ${autoTopic}`);
+    if (day)         parts.push(`(Planner Day ${day})`);
+    const prompt = [
+      `Start CBSE Learn Mode session.`,
+      parts.join(" | "),
+      `Explain clearly with examples.`,
+      `Then offer a quiz.`,
+    ].join("\n");
+    // 🔥 SAFE TRIGGER
+    setTimeout(() => {
+      if (!sendingRef.current) {
+        sendMessage(prompt, true);
+      }
+    }, 50);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Request quiz from AI ──────────────────────────────────
   async function requestQuiz() {

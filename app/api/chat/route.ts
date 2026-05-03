@@ -38,6 +38,25 @@ type ExamSession = {
 type ChapterEntry = { number: number; name: string };
 
 // ─────────────────────────────────────────────────────────────
+// SHAURI PAPER TYPE
+// ─────────────────────────────────────────────────────────────
+
+type ShauriPaperData = {
+  isRevisionDay: boolean;
+  totalMarks: number;
+  timeMinutes: number;
+  primarySubject: string;
+  primaryTopic: string;
+  secondarySubject: string;
+  secondaryTopic: string;
+  writingSubject: string;
+  weekCoverage?: string;
+  dayNum: number;
+  cycleNum: number;
+  formatBlock: string;
+};
+
+// ─────────────────────────────────────────────────────────────
 // INPUT VALIDATION
 // ─────────────────────────────────────────────────────────────
 
@@ -120,6 +139,8 @@ const SST_CONTEXTS = shuffle([
 
 // ─────────────────────────────────────────────────────────────
 // PARSE CUSTOM PAPER REQUIREMENTS
+// NOTE: This function is NEVER called for SHAURI planner papers.
+// SHAURI papers always use the shauriPaper structured object directly.
 // ─────────────────────────────────────────────────────────────
 
 interface PaperRequirements {
@@ -240,17 +261,6 @@ function formatTimeAllowed(minutes: number): string {
 
 // ─────────────────────────────────────────────────────────────
 // *** FIX: CBSE-COMPLIANT MARK DISTRIBUTION ***
-//
-// ROOT CAUSE of the "2 + 23 marks" bug:
-//   Old code: marksPerQ = Math.round(finalMarks / reqs.questionCount)
-//   When questionCount is null it defaults to 2, then the LAST question
-//   absorbs all remaining marks as a single "remainder dump" question.
-//
-// FIX STRATEGY:
-//   1. Build a marks-slot plan using CBSE-valid per-question values only
-//      (1, 2, 3, 4, or 5 marks — never more than 5 per question).
-//   2. Enforce a minimum question count so no paper has fewer than 5 Qs.
-//   3. Never allow a remainder > 5 — redistribute instead.
 // ─────────────────────────────────────────────────────────────
 
 interface QuestionSlot {
@@ -259,13 +269,6 @@ interface QuestionSlot {
   marks: number;
 }
 
-/**
- * Builds a CBSE-valid question plan where:
- * - Each question carries 1, 2, 3, 4, or 5 marks (never more)
- * - Total marks add up exactly to totalMarks
- * - Minimum 5 questions for any paper
- * - Distribution roughly follows CBSE difficulty tiers
- */
 function buildCbseQuestionPlan(
   totalMarks: number,
   topicLines: string[],
@@ -273,53 +276,40 @@ function buildCbseQuestionPlan(
   isHindi: boolean,
   isMath: boolean
 ): QuestionSlot[] {
-  const MAX_MARKS_PER_Q = 5; // CBSE hard limit per question
+  const MAX_MARKS_PER_Q = 5;
 
-  // ── Step 1: Determine target question count ──────────────────
   let targetCount: number;
 
   if (reqs.questionCount) {
     targetCount = reqs.questionCount;
   } else if (reqs.marksEach) {
-    // Explicit "X marks each" → derive count, cap per-Q at 5
     const clampedPerQ = Math.min(reqs.marksEach, MAX_MARKS_PER_Q);
     targetCount = Math.ceil(totalMarks / clampedPerQ);
   } else {
-    // Auto-derive: aim for a sensible distribution
-    // For small papers (≤20m): mostly 1m and 2m questions
-    // For medium (21–40m): mix of 2m and 3m
-    // For larger (>40m): mix of 2m, 3m, 4m, 5m
     if (totalMarks <= 10) {
-      targetCount = Math.max(5, totalMarks);          // all 1-mark
+      targetCount = Math.max(5, totalMarks);
     } else if (totalMarks <= 20) {
-      targetCount = Math.max(6, Math.ceil(totalMarks / 2)); // ~2m each
+      targetCount = Math.max(6, Math.ceil(totalMarks / 2));
     } else if (totalMarks <= 40) {
-      targetCount = Math.max(8, Math.ceil(totalMarks / 3)); // ~3m each
+      targetCount = Math.max(8, Math.ceil(totalMarks / 3));
     } else {
       targetCount = Math.max(10, Math.ceil(totalMarks / 3));
     }
   }
 
-  // Always at least 5 questions
   targetCount = Math.max(5, targetCount);
 
-  // ── Step 2: Build per-question mark slots ───────────────────
-  // Strategy: fill slots greedily with valid CBSE mark values,
-  // ensuring the last slot absorbs any remainder (capped at 5).
   const markSlots: number[] = [];
   let remaining = totalMarks;
 
-  // If user specified marksEach, honour it (clamped to 5)
   if (reqs.marksEach && !reqs.questionCount) {
     const perQ = Math.min(reqs.marksEach, MAX_MARKS_PER_Q);
     const count = Math.floor(totalMarks / perQ);
     const rem   = totalMarks - count * perQ;
     for (let i = 0; i < count; i++) markSlots.push(perQ);
-    // Distribute remainder as extra 1-mark questions
     for (let r = 0; r < rem; r++) markSlots.push(1);
     remaining = 0;
   } else if (reqs.questionCount && reqs.marksEach) {
-    // Both specified: honour count, distribute marks evenly
     const perQ = Math.min(Math.floor(totalMarks / reqs.questionCount), MAX_MARKS_PER_Q);
     let assigned = 0;
     for (let i = 0; i < reqs.questionCount; i++) {
@@ -329,7 +319,6 @@ function buildCbseQuestionPlan(
       markSlots.push(m);
       assigned += m;
     }
-    // If still short (edge case), append 1-mark questions
     let stillShort = totalMarks - markSlots.reduce((a, b) => a + b, 0);
     while (stillShort > 0) {
       markSlots.push(Math.min(stillShort, MAX_MARKS_PER_Q));
@@ -337,14 +326,8 @@ function buildCbseQuestionPlan(
     }
     remaining = 0;
   } else {
-    // Auto distribution — use a CBSE-style tier approach
-    // Tier ratios (% of questions per mark value):
-    //   1m: ~30%, 2m: ~30%, 3m: ~20%, 4m: ~10%, 5m: ~10%
-    // But adapt to paper size so marks add up cleanly.
-
     const avgMarks = totalMarks / targetCount;
 
-    // Build a weighted distribution based on avg
     let distribution: number[];
     if (avgMarks <= 1.5) {
       distribution = [1, 1, 1, 1, 2];
@@ -356,12 +339,10 @@ function buildCbseQuestionPlan(
       distribution = [2, 3, 3, 4, 5];
     }
 
-    // Fill slots by cycling distribution
     let assigned = 0;
     for (let i = 0; i < targetCount; i++) {
       const isLast = i === targetCount - 1;
       if (isLast) {
-        // Last slot: take exactly what's left, but split if > 5
         let leftover = totalMarks - assigned;
         while (leftover > MAX_MARKS_PER_Q) {
           markSlots.push(MAX_MARKS_PER_Q);
@@ -375,7 +356,6 @@ function buildCbseQuestionPlan(
         break;
       }
       const slotVal = distribution[i % distribution.length];
-      // Don't overshoot: leave at least 1 mark for each remaining slot
       const remainingSlots = targetCount - i - 1;
       const maxAllowed = Math.min(slotVal, MAX_MARKS_PER_Q, totalMarks - assigned - remainingSlots);
       const m = Math.max(1, maxAllowed);
@@ -383,7 +363,6 @@ function buildCbseQuestionPlan(
       assigned += m;
     }
 
-    // Fix any shortfall (rare edge case)
     let shortfall = totalMarks - markSlots.reduce((a, b) => a + b, 0);
     let idx = 0;
     while (shortfall > 0 && idx < markSlots.length) {
@@ -395,7 +374,6 @@ function buildCbseQuestionPlan(
       }
       idx++;
     }
-    // If still short, append extra questions
     while (shortfall > 0) {
       const m = Math.min(shortfall, MAX_MARKS_PER_Q);
       markSlots.push(m);
@@ -405,7 +383,6 @@ function buildCbseQuestionPlan(
     remaining = 0;
   }
 
-  // ── Step 3: Map slots to topics ────────────────────────────
   const shuffledTopics = shuffle([...topicLines]);
   const plan: QuestionSlot[] = markSlots.map((marks, i) => ({
     qNum:  i + 1,
@@ -474,7 +451,6 @@ async function getSessionByStudent(
       const { data, error } = await (q as any)
         .order("updated_at", { ascending: false })
         .limit(1);
-      console.log("[getSessionByStudent]", { nameVal, classVal, requiredStatus, found: data?.length, error: error?.message });
       if (error || !data || data.length === 0) return null;
       return {
         ...data[0],
@@ -668,7 +644,7 @@ function getNcertTopicHints(subject: string, classNum: number): string {
   if (/hindi/.test(s)) {
     const hintMap: Record<number, string> = {
       6:  "वह चिड़िया जो, बचपन, नादान दोस्त, चाँद से थोड़ी सी गप्पें, अक्षरों का महत्व, पार नज़र के, साथी हाथ बढ़ाना, ऐसे–ऐसे, टिकट एल्बम, झाँसी की रानी, जो देखकर भी नहीं देखते, संसार पुस्तक है",
-      7:  "हम पंछी उन्मुक्त गगन के, दादी माँ, हिमालय की बेटियाँ, कठपुतली, मिठाईवाला, रक्त और हमारा शरीर, पापा खो गए, शाम एक किसान, चिड़िया की बच्ची, अपूर्व अनुभव",
+      7:  "हम पंछी उन्मुक्त গগन के, दादी माँ, हिमालय की बेटियाँ, कठपुतली, मिठाईवाला, रक्त और हमारा शरीर, पापा खो गए, शाम एक किसान, चिड़िया की बच्ची, अपूर्व अनुभव",
       8:  "ध्वनि, लाख की चूड़ियाँ, बस की यात्रा, दीवानों की हस्ती, चिट्ठियों की अनूठी दुनिया, भगवान के डाकिए, क्या निराश हुआ जाए, यह सबसे कठिन समय नहीं, कबीर की साखियाँ, कामचोर",
       10: "पद, राम-लक्ष्मण-परशुराम संवाद, देव, आत्मकथ्य, उत्साह, यह दंतुरहित मुस्कान, फसल, संगतकार, नेताजी का चश्मा, बालगोबिन भगत, लखनवी अंदाज़, मानवीय करुणा की दिव्य चमक",
     };
@@ -698,7 +674,7 @@ function isSubmit(text: string) {
 }
 
 function isStart(text: string) {
-  return text.trim().toLowerCase() === "start";
+  return /^start\b/i.test(text.trim());
 }
 
 function formatDuration(ms: number): string {
@@ -856,11 +832,15 @@ function buildEvalHtml(evalJson: Record<string, unknown>, fallbackText: string):
   }
 }
 
-function parseTotalMarksFromPaper(paper: string): number {
+// ─────────────────────────────────────────────────────────────
+// parseTotalMarksFromPaper — reads from paper header
+// FIX: default changed from 80 to 25 (SHAURI study day default)
+// ─────────────────────────────────────────────────────────────
+function parseTotalMarksFromPaper(paper: string, fallback: number = 25): number {
   const match = paper.match(/(?:maximum\s*marks?|total\s*marks?)\s*[:\-]\s*(\d+)/i);
   if (!match) {
-    console.warn("[parseTotalMarksFromPaper] Could not extract total marks — defaulting to 80.");
-    return 80;
+    console.warn(`[parseTotalMarksFromPaper] Could not extract total marks — defaulting to ${fallback}.`);
+    return fallback;
   }
   return parseInt(match[1]);
 }
@@ -978,10 +958,6 @@ async function handleSyllabusUpload(
   };
   await saveSession(updatedSession);
 
-  console.log("[SYLLABUS UPLOAD] Saved session:", key, "subject:", subjectName,
-    "syllabusLength:", chapterList.length,
-    "customInstructions:", updatedSession.custom_instructions || "none");
-
   const isOverride = currentStatus === "READY";
 
   let formatConfirmation = "";
@@ -1089,6 +1065,132 @@ function isOverTime(startedAt?: number): boolean {
 }
 
 // ─────────────────────────────────────────────────────────────
+// SHAURI PLANNER PAPER GENERATOR
+//
+// CRITICAL FIXES applied here:
+// 1. Subject label uses ALL subjects (primary + secondary + writing), not just primary
+// 2. totalMarks comes directly from shauriPaper.totalMarks — never from parsePaperRequirements
+// 3. formatBlock is passed as system prompt instructions, not in the user message
+// 4. parseTotalMarksFromPaper called with correct fallback
+// ─────────────────────────────────────────────────────────────
+
+async function generateShauriPaper(
+  shauriPaper: ShauriPaperData,
+  cls: string,
+  board: string,
+  name: string,
+  key: string,
+  callName: string
+): Promise<NextResponse> {
+  const {
+    isRevisionDay,
+    totalMarks,      // Always use this directly — never re-parse from text
+    timeMinutes,
+    primarySubject,
+    primaryTopic,
+    secondarySubject,
+    secondaryTopic,
+    writingSubject,
+    weekCoverage,
+    formatBlock,
+  } = shauriPaper;
+
+  const timeAllowed = formatTimeAllowed(timeMinutes);
+  const seed = makeSeed();
+
+  // Build the multi-subject label for the paper header
+  const paperSubjectLabel = isRevisionDay
+    ? `Multi-Subject Revision (${writingSubject} Writing)`
+    : secondarySubject
+      ? `${primarySubject} + ${secondarySubject} (${writingSubject} Writing)`
+      : primarySubject;
+
+  // System prompt contains the format instructions — keeps paper header clean
+  const paperSystemPrompt = `
+You are an official CBSE-aligned question paper setter for Class ${cls}.
+${seed}
+
+${formatBlock}
+
+CRITICAL RULES — READ BEFORE GENERATING:
+1. Total marks MUST equal exactly ${totalMarks}. Count all marks before finalising.
+2. Generate ALL sections (A through E) completely — never stop early or skip a section.
+3. Every section must have EXACTLY the number of questions specified in the format above.
+4. Show marks for every question in [brackets].
+5. The paper header must show Maximum Marks: ${totalMarks} and Time Allowed: ${timeAllowed}.
+6. Output ONLY the question paper — no commentary, no preamble, no notes after the paper.
+`.trim();
+
+  // User message is clean — no format block details, no marks confusion
+  const userMessage = isRevisionDay
+    ? `Generate the complete SHAURI Revision Day test paper for Week covering: ${weekCoverage || "all week topics"}. Maximum Marks: ${totalMarks}. Writing section in ${writingSubject}.`
+    : `Generate the complete SHAURI Study Day test paper. Primary subject: ${primarySubject} — ${primaryTopic}. Secondary: ${secondarySubject} — ${secondaryTopic}. Writing section in ${writingSubject}. Maximum Marks: ${totalMarks}.`;
+
+  // Paper header is injected via system prompt context
+  const paperHeaderContext = `
+PAPER HEADER — output this EXACTLY at the top of the paper:
+Subject       : ${paperSubjectLabel}
+Class         : ${cls}
+Board         : ${board}
+Time Allowed  : ${timeAllowed}
+Maximum Marks : ${totalMarks}
+`.trim();
+
+  const fullSystemPrompt = paperSystemPrompt + "\n\n" + paperHeaderContext;
+
+  const paper = await callAI(
+    fullSystemPrompt,
+    [{ role: "user", content: userMessage }],
+    60_000
+  );
+
+  const startTime = Date.now();
+
+  // Use totalMarks directly from shauriPaper — don't re-parse from paper text
+  // parseTotalMarksFromPaper is only used as a sanity check with correct fallback
+  const verifiedMarks = parseTotalMarksFromPaper(paper, totalMarks);
+
+  const activeSession: ExamSession = {
+    session_key:     key,
+    status:          "IN_EXAM",
+    subject_request: primarySubject,
+    subject:         paperSubjectLabel,
+    question_paper:  paper,
+    answer_log:      [],
+    started_at:      startTime,
+    total_marks:     verifiedMarks,
+    student_name:    name,
+    student_class:   cls,
+    student_board:   board,
+  };
+  await saveSession(activeSession);
+
+  console.log("[SHAURI PAPER] Generated:", {
+    subject: paperSubjectLabel,
+    totalMarks,
+    verifiedMarks,
+    isRevision: isRevisionDay,
+    timeMinutes,
+  });
+
+  return NextResponse.json({
+    reply:
+      `⏱️ **Exam started! Timer is running.**\n\n` +
+      `📌 How to answer:\n` +
+      `• Answer questions in **any order** you prefer\n` +
+      `• Type answers directly in chat, OR\n` +
+      `• Upload **photos / PDFs** of your handwritten answers\n` +
+      `• You can send multiple messages — all will be collected\n` +
+      `• When fully done, type **submit** (or **done** / **finish**)\n\n` +
+      `Good luck${callName}! 💪 Give it your best.`,
+    paper,
+    startTime,
+    isRevisionDay,
+    subject: paperSubjectLabel,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
 // MAIN POST HANDLER
 // ─────────────────────────────────────────────────────────────
 
@@ -1119,6 +1221,10 @@ export async function POST(req: NextRequest) {
 
     const bodySubject: string = body?.subject || "";
     const bodyLang: string    = body?.lang    || "";
+
+    // ── SHAURI planner paper structured data ──
+    // This is the complete structured object from the frontend — never parsed from text
+    const shauriPaper: ShauriPaperData | null = body?.shauriPaper || null;
 
     let uploadedText: string = sanitiseUpload(rawUploadedText);
 
@@ -1252,6 +1358,20 @@ export async function POST(req: NextRequest) {
     if (mode === "examiner") {
       const key = getKey(student, clsRaw);
 
+      // ── SHAURI PLANNER PAPER ──────────────────────────────────
+      // Triggered when frontend sends body.shauriPaper AND message is "start"
+      // This path COMPLETELY bypasses all session management and parsePaperRequirements.
+      // totalMarks comes exclusively from shauriPaper.totalMarks (25 or 50).
+      if (shauriPaper && isStart(lower)) {
+        console.log("[SHAURI] Direct paper generation triggered.", {
+          totalMarks: shauriPaper.totalMarks,
+          isRevisionDay: shauriPaper.isRevisionDay,
+          primarySubject: shauriPaper.primarySubject,
+          secondarySubject: shauriPaper.secondarySubject,
+        });
+        return generateShauriPaper(shauriPaper, cls, board, name, key, callName);
+      }
+
       let session: ExamSession = (await getSession(key)) || {
         session_key:   key,
         status:        "IDLE",
@@ -1289,7 +1409,6 @@ export async function POST(req: NextRequest) {
           }
         }
         if (recovered && recovered.status !== "IDLE") {
-          console.log("[KEY-MISMATCH] recovered session:", recovered.session_key, recovered.status, "syllabus:", !!recovered.syllabus_from_upload);
           session = recovered;
         }
       }
@@ -1384,7 +1503,6 @@ export async function POST(req: NextRequest) {
             }
           }
         }
-        console.log("[isStart+IDLE] readySession found:", readySession?.session_key, readySession?.subject, "hasSyllabus:", !!readySession?.syllabus_from_upload);
         if (readySession) {
           session.status               = "READY";
           session.subject              = readySession.subject;
@@ -1417,7 +1535,6 @@ export async function POST(req: NextRequest) {
             session.custom_instructions  = directLookup.custom_instructions;
             session.syllabus_from_upload = directLookup.syllabus_from_upload;
             session.session_key          = directLookup.session_key;
-            console.log("[isStart+IDLE] direct key re-lookup found READY session:", directLookup.session_key);
           } else {
             return NextResponse.json({
               reply:
@@ -1456,7 +1573,7 @@ export async function POST(req: NextRequest) {
           .map((entry, i) => `[Answer Entry ${i + 1}]\n${entry}`)
           .join("\n\n────────────────────────────────\n\n");
 
-        const totalMarks = session.total_marks || 80;
+        const totalMarks = session.total_marks || 25;
 
         const evalSubj      = (session.subject || "").toLowerCase();
         const evalIsEnglish = /english/i.test(evalSubj);
@@ -1693,6 +1810,7 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
           reply:           plainSummary,
           evaluationHtml,
           examEnded:       true,
+          evalJson,                    // ← structured eval data for mistake extraction
           subject:         session.subject,
           marksObtained:   obtained2,
           totalMarks:      total2,
@@ -1796,7 +1914,6 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
           if (!activeSession && name) activeSession = await getSessionByStudent(name, cls);
           if (activeSession && activeSession.status === "IN_EXAM") {
             session = activeSession;
-            console.log("[IDLE-GUARD] Recovered IN_EXAM session for answer:", activeSession.session_key);
             if (message.trim()) {
               const answerParts: string[] = [message.trim()];
               if (uploadedText) answerParts.push(`[UPLOADED ANSWER]\n${uploadedText}`);
@@ -1825,7 +1942,6 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
           if (!rescuedSession && name) rescuedSession = await getSessionByStudent(name, "", "READY");
           if (rescuedSession && rescuedSession.status !== "IDLE") {
             session = rescuedSession;
-            console.log("[EXAM-CMD RESCUE] recovered by name-only:", rescuedSession.session_key, rescuedSession.status);
           } else {
             return NextResponse.json({
               reply:
@@ -1912,29 +2028,16 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
             const r = parsePaperRequirements(msg);
             if (r.isCustom) {
               recoveredInstructions = msg;
-              console.log("[START] Recovered custom_instructions from history:", msg);
               break;
             }
           }
         }
 
-        console.log("[EXAM START DEBUG]", {
-          sessionKey: session.session_key,
-          status: session.status,
-          subject: session.subject,
-          hasSyllabusUpload: !!session.syllabus_from_upload,
-          syllabusLength: session.syllabus_from_upload?.length || 0,
-          customInstructionsFromDB: session.custom_instructions || "none",
-          customInstructionsResolved: recoveredInstructions || "none",
-        });
-
         if (session.syllabus_from_upload) {
           subjectName = session.subject || "Custom Subject";
           chapterList = session.syllabus_from_upload;
-          console.log("[START] Using UPLOADED syllabus for:", subjectName, "| length:", chapterList.length);
         } else {
           const subjectKey = session.subject_request || session.subject?.replace(/\s*[–-]\s*Class\s*\d+$/i, "") || "";
-          console.log("[START] No uploaded syllabus — using NCERT default for:", subjectKey);
           const resolved = getChaptersForSubject(subjectKey, cls);
           subjectName = resolved.subjectName;
           chapterList = resolved.chapterList;
@@ -1962,7 +2065,6 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
         // ── CUSTOM / UPLOADED SYLLABUS PAPER GENERATION ────────
         if (hasCustomInstr || hasUploadedSyllabus) {
 
-          // ── Clean topic list (strip meta-directive lines) ──
           const cleanTopicList = chapterList
             .replace(/.*UPLOADED SYLLABUS.*\n/g, "")
             .replace(/.*ABSOLUTE RULE.*\n/g, "")
@@ -1983,7 +2085,6 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
 
           let topicLines = allTopicLines;
 
-          // ── Chapter / keyword filtering ──
           if (!hasUploadedSyllabus && reqs.chapterFilter) {
             const chapterNums: number[] = [];
             const rangeMatch = reqs.chapterFilter.match(/(\d+)\s*[-–to]+\s*(\d+)/i);
@@ -2001,7 +2102,6 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
                 .filter(Boolean);
               if (filtered.length > 0) {
                 topicLines = filtered;
-                console.log("[CHAPTER FILTER] Narrowed to:", topicLines);
               }
             }
             if (topicLines === allTopicLines && reqs.chapterFilter) {
@@ -2011,7 +2111,6 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
               );
               if (keywordFiltered.length > 0) {
                 topicLines = keywordFiltered;
-                console.log("[KEYWORD FILTER] Narrowed to:", topicLines);
               }
             }
           }
@@ -2023,16 +2122,12 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
             );
             if (kwFiltered.length > 0) {
               topicLines = kwFiltered;
-              console.log("[KEYWORD TOPIC FILTER] Narrowed to:", topicLines);
             }
           }
 
           if (topicLines.length === 0) topicLines = allTopicLines;
-          if (topicLines.length === 0) topicLines = [subjectName]; // absolute fallback
+          if (topicLines.length === 0) topicLines = [subjectName];
 
-          // ── *** FIX: Use CBSE-valid question plan *** ────────
-          // Replace the old broken plan that produced "2 + 23 marks" questions.
-          // buildCbseQuestionPlan ensures every slot is 1–5 marks and totals exactly.
           const questionPlan = buildCbseQuestionPlan(
             finalMarks,
             topicLines,
@@ -2041,14 +2136,6 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
             isMath
           );
 
-          console.log(
-            "[QUESTION PLAN] marks per question:",
-            questionPlan.map(q => q.marks),
-            "| total:", questionPlan.reduce((s, q) => s + q.marks, 0),
-            "| expected:", finalMarks
-          );
-
-          // ── Verb / style banks ──
           const verbBank = isHindi ? shuffle([...HINDI_VERBS])
             : isEnglish ? shuffle([...ENGLISH_VERBS])
             : isMath ? shuffle([...MATH_CONTEXTS])
@@ -2058,13 +2145,11 @@ Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very
 
           const difficultyRota = ["easy", "medium", "medium", "hard", "medium", "easy"];
 
-          // ── Generate one question per slot ──────────────────
           const questionTexts: string[] = [];
           for (const slot of questionPlan) {
             const verbStyle  = verbBank[slot.qNum % verbBank.length];
             const difficulty = difficultyRota[slot.qNum % difficultyRota.length];
 
-            // Map marks to appropriate question type label for the prompt
             const qTypeHint =
               slot.marks === 1 ? "MCQ or fill-in-the-blank or one-word" :
               slot.marks === 2 ? "very short answer (2–3 lines)" :
@@ -2118,7 +2203,6 @@ RULES:
             questionTexts.push(cleanQ);
           }
 
-          // ── Assemble the paper ──────────────────────────────
           const paperHeader = `Subject       : ${subjectName}
 Class         : ${cls}
 Board         : ${board}
@@ -2135,7 +2219,7 @@ Maximum Marks : ${finalMarks}`;
             .join("\n\n");
 
           const paper = `${paperHeader}\n\n${generalInstructions}\n\n${questionBody}`;
-          const totalMarksOnPaper = parseTotalMarksFromPaper(paper);
+          const totalMarksOnPaper = parseTotalMarksFromPaper(paper, finalMarks);
           const startTime         = Date.now();
 
           const activeSession: ExamSession = {
@@ -2392,7 +2476,7 @@ FINAL QUALITY CHECKS:
           },
         ]);
 
-        const totalMarksOnPaper = parseTotalMarksFromPaper(paper);
+        const totalMarksOnPaper = parseTotalMarksFromPaper(paper, 80);
         const startTime         = Date.now();
 
         const activeSession: ExamSession = {
