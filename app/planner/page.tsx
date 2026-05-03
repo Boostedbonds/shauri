@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import Header from "../components/Header";
+import ManualMarksModal from "../components/ManualMarksModal";
 import {
   THIRTY_DAY_PLAN,
   getActivityLogs,
@@ -32,10 +33,11 @@ function getClassNum(cls: string): number {
 
 function priorityColor(priority: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW") {
   if (priority === "CRITICAL") return { bg: "#fee2e2", fg: "#b91c1c" };
-  if (priority === "HIGH") return { bg: "#ffedd5", fg: "#c2410c" };
-  if (priority === "MEDIUM") return { bg: "#fef9c3", fg: "#a16207" };
+  if (priority === "HIGH")     return { bg: "#ffedd5", fg: "#c2410c" };
+  if (priority === "MEDIUM")   return { bg: "#fef9c3", fg: "#a16207" };
   return { bg: "#dcfce7", fg: "#166534" };
 }
+
 function mapDayType(type: string, isRev?: boolean, isMock?: boolean): string {
   if (isMock) return "Test";
   if (isRev || type === "rev") return "Revision";
@@ -43,16 +45,17 @@ function mapDayType(type: string, isRev?: boolean, isMock?: boolean): string {
 }
 
 export default function PlannerPage() {
-  const [plannerState, setPlannerState] = useState<PlannerState | null>(null);
-  const [modeView, setModeView] = useState<ModeView>("guided");
-  const [openedDay, setOpenedDay] = useState<number | null>(null);
-  const [scoreInput, setScoreInput] = useState("");
-  const [totalInput, setTotalInput] = useState("");
+  const [plannerState,   setPlannerState]   = useState<PlannerState | null>(null);
+  const [modeView,       setModeView]       = useState<ModeView>("guided");
+  const [openedDay,      setOpenedDay]      = useState<number | null>(null);
   const [resultsVersion, setResultsVersion] = useState(0);
-  const [feedback, setFeedback] = useState("");
+  const [feedback,       setFeedback]       = useState("");
+
+  // ManualMarksModal state
+  const [showMarksModal, setShowMarksModal] = useState(false);
+  const [modalDay,       setModalDay]       = useState<number | null>(null);
 
   useEffect(() => {
-    // ── CLASS GUARD: Planner is only for Class 10 students ──
     try {
       const s = JSON.parse(localStorage.getItem("shauri_student") || "null");
       if (!s || getClassNum(s.class) !== 10) {
@@ -63,7 +66,6 @@ export default function PlannerPage() {
       window.location.href = "/modes";
       return;
     }
-
     const state = getCurrentDay(getPlannerState(), getActivityLogs());
     setPlannerState(state);
     setOpenedDay(state.current_day);
@@ -77,56 +79,80 @@ export default function PlannerPage() {
 
   const planner = useMemo(() => {
     if (!plannerState || !openedDay) return null;
-    const currentPlan = THIRTY_DAY_PLAN.find((d) => d.day === openedDay) || THIRTY_DAY_PLAN[0];
-    const pendingDays = handleCarryForward(plannerState);
-    const pendingPlans = pendingDays
+    const currentPlan   = THIRTY_DAY_PLAN.find((d) => d.day === openedDay) || THIRTY_DAY_PLAN[0];
+    const pendingDays   = handleCarryForward(plannerState);
+    const pendingPlans  = pendingDays
       .map((d) => THIRTY_DAY_PLAN.find((p) => p.day === d))
       .filter((p): p is (typeof THIRTY_DAY_PLAN)[number] => Boolean(p));
-    const cycleResults = getResultsForCycle(plannerState.cycle);
-    const progress = analyzeProgress(cycleResults);
+    const cycleResults  = getResultsForCycle(plannerState.cycle);
+    const progress      = analyzeProgress(cycleResults);
     const revisionQueue = buildRevisionQueue(cycleResults);
     return { currentPlan, pendingPlans, progress, revisionQueue, allResultsCount: getAllResults().length };
   }, [plannerState, openedDay, resultsVersion]);
 
   if (!plannerState || !planner || !openedDay) return null;
 
-  const parsedScore = Number(scoreInput);
-  const parsedTotal = Number(totalInput);
-  const isMarksValid =
-    Number.isFinite(parsedScore) &&
-    Number.isFinite(parsedTotal) &&
-    parsedTotal > 0 &&
-    parsedScore >= 0 &&
-    parsedScore <= parsedTotal;
   const hasSubmittedMarks = hasResultForDayCycle(openedDay, plannerState.cycle);
+  const currentSubject    = planner.currentPlan.topics[0]?.subject || "General";
+  const currentTopic      = planner.currentPlan.topics[0]?.topic   || "General";
 
   function goToLearn(subject: string, topic: string) {
     if (!plannerState || !openedDay) return;
     const q = new URLSearchParams({
-      subject,
-      topic,
-      day: String(openedDay),
+      subject, topic,
+      day:   String(openedDay),
       cycle: String(plannerState.cycle),
-      from: "planner",
+      from:  "planner",
     });
     window.location.href = `/learn?${q.toString()}`;
   }
+
   function goToExam(subject: string, topic: string) {
     if (!plannerState || !openedDay) return;
     const q = new URLSearchParams({
-      subject,
-      topic,
-      day: String(openedDay),
+      subject, topic,
+      day:   String(openedDay),
       cycle: String(plannerState.cycle),
-      from: "planner",
+      from:  "planner",
     });
     window.location.href = `/examiner?${q.toString()}`;
+  }
+
+  function openMarksModal(day: number) {
+    setModalDay(day);
+    setShowMarksModal(true);
+  }
+
+  // Called by ManualMarksModal after AI verification + save
+  function handleMarksSaved(result: {
+    marks: number; total: number; pct: number; errorTopics: string[];
+  }) {
+    const day = modalDay ?? openedDay;
+    const plan = THIRTY_DAY_PLAN.find((d) => d.day === day) || planner.currentPlan;
+
+    saveResult({
+      day,
+      cycle:   plannerState!.cycle,
+      subject: plan.topics[0]?.subject || currentSubject,
+      topic:   plan.topics[0]?.topic   || currentTopic,
+      score:   result.marks,
+      total:   result.total,
+      source:  "manual_verified",
+    });
+
+    setResultsVersion((v) => v + 1);
+    setShowMarksModal(false);
+    setModalDay(null);
+    setFeedback(`✅ Result saved — ${result.pct}%${result.errorTopics.length ? ` · ${result.errorTopics.length} errors logged` : ""}`);
   }
 
   return (
     <div style={{ minHeight: "100vh", background: "#f8fafc", display: "flex", flexDirection: "column" }}>
       <Header onLogout={() => (window.location.href = "/")} />
+
       <main style={{ width: "100%", maxWidth: 1100, margin: "0 auto", padding: "24px 20px 54px" }}>
+
+        {/* ── Top nav ── */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
           <button
             onClick={() => (window.location.href = "/modes")}
@@ -152,16 +178,19 @@ export default function PlannerPage() {
 
         <h1 style={{ margin: 0, fontSize: 30, color: "#0f172a" }}>Study Planner</h1>
         <p style={{ marginTop: 6, color: "#64748b" }}>Parallel guidance system for consistent daily progress.</p>
-        {feedback && <p style={{ marginTop: 6, color: "#166534", fontSize: 13, fontWeight: 600 }}>{feedback}</p>}
+        {feedback && (
+          <p style={{ marginTop: 6, color: "#166534", fontSize: 13, fontWeight: 600 }}>{feedback}</p>
+        )}
 
+        {/* ── Day grid ── */}
         <section style={{ marginTop: 16, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: 14 }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(10, minmax(0, 1fr))", gap: 8 }}>
             {THIRTY_DAY_PLAN.map((d) => {
-              const isCurrent = plannerState.current_day === d.day;
+              const isCurrent   = plannerState.current_day === d.day;
               const isCompleted = plannerState.completed_days.includes(d.day);
-              const isSkipped = plannerState.skipped_days.includes(d.day);
-              const bg = isCurrent ? "#dbeafe" : isCompleted ? "#dcfce7" : isSkipped ? "#fef9c3" : "#ffffff";
-              const border = openedDay === d.day ? "2px solid #2563eb" : "1px solid #e2e8f0";
+              const isSkipped   = plannerState.skipped_days.includes(d.day);
+              const bg          = isCurrent ? "#dbeafe" : isCompleted ? "#dcfce7" : isSkipped ? "#fef9c3" : "#ffffff";
+              const border      = openedDay === d.day ? "2px solid #2563eb" : "1px solid #e2e8f0";
               return (
                 <button
                   key={d.day}
@@ -175,6 +204,7 @@ export default function PlannerPage() {
           </div>
         </section>
 
+        {/* ── Today's plan ── */}
         <section style={{ marginTop: 22, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: 18 }}>
           <h2 style={{ margin: "0 0 10px", fontSize: 19, color: "#0f172a" }}>Today</h2>
           <div style={{ fontWeight: 700, color: "#1d4ed8", marginBottom: 10 }}>
@@ -183,6 +213,7 @@ export default function PlannerPage() {
           <p style={{ margin: "0 0 10px", color: "#64748b", fontSize: 13 }}>
             {planner.currentPlan.meta.dow} • {mapDayType(planner.currentPlan.meta.type, planner.currentPlan.meta.isRev, planner.currentPlan.meta.isMock)}
           </p>
+
           <ul style={{ margin: 0, paddingLeft: 18, color: "#334155", lineHeight: 1.7 }}>
             {planner.currentPlan.topics.map((t, idx) => (
               <li key={`${t.subject}-${idx}`}>
@@ -193,61 +224,49 @@ export default function PlannerPage() {
               </li>
             ))}
           </ul>
+
+          {/* Subject action buttons */}
           <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
             {planner.currentPlan.topics.map((t, idx) => (
-              <div key={`actions-${idx}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "8px 10px" }}>
+              <div
+                key={`actions-${idx}`}
+                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "8px 10px" }}
+              >
                 <span style={{ fontSize: 12, color: "#334155", fontWeight: 600 }}>{t.subject}</span>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button onClick={() => goToLearn(t.subject, t.topic)} style={btnPrimary}>Start Study</button>
-                  <button onClick={() => goToExam(t.subject, t.topic)} style={btnSecondary}>Take Daily Test</button>
+                  <button onClick={() => goToExam(t.subject, t.topic)}  style={btnSecondary}>Take Daily Test</button>
                 </div>
               </div>
             ))}
           </div>
-          <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <input
-              value={scoreInput}
-              onChange={(e) => setScoreInput(e.target.value)}
-              placeholder="score"
-              inputMode="numeric"
-              style={marksInput}
-            />
-            <span style={{ color: "#64748b", fontWeight: 600 }}>/</span>
-            <input
-              value={totalInput}
-              onChange={(e) => setTotalInput(e.target.value)}
-              placeholder="total"
-              inputMode="numeric"
-              style={marksInput}
-            />
-            <button
-              onClick={() => {
-                if (!isMarksValid) return;
-                saveResult({
-                  day: openedDay,
-                  cycle: plannerState.cycle,
-                  subject: planner.currentPlan.topics[0]?.subject || "General",
-                  topic: planner.currentPlan.topics[0]?.topic || "General",
-                  score: parsedScore,
-                  total: parsedTotal,
-                  source: "manual",
-                });
-                setResultsVersion((v) => v + 1);
-                setScoreInput("");
-                setTotalInput("");
-                setFeedback("Result saved");
-              }}
-              disabled={!isMarksValid}
-              style={{ ...btnGhost, opacity: isMarksValid ? 1 : 0.5, cursor: isMarksValid ? "pointer" : "not-allowed" }}
-            >
-              Submit Marks
-            </button>
-            {hasSubmittedMarks && (
-              <span style={{ fontSize: 12, color: "#166534", fontWeight: 600 }}>
-                Result submitted
-              </span>
+
+          {/* ── Submit Marks — now opens ManualMarksModal ── */}
+          <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            {hasSubmittedMarks ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 10 }}>
+                <span style={{ fontSize: 13, color: "#166534", fontWeight: 700 }}>✅ Result submitted</span>
+                <button
+                  onClick={() => openMarksModal(openedDay)}
+                  style={{ fontSize: 11, color: "#64748b", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
+                >
+                  Update
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => openMarksModal(openedDay)}
+                style={btnSubmitMarks}
+              >
+                📝 Submit Marks
+              </button>
             )}
+            <span style={{ fontSize: 12, color: "#94a3b8" }}>
+              AI will verify your score against uploaded question paper & answer sheet
+            </span>
           </div>
+
+          {/* ── Day actions ── */}
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
             <button
               onClick={() => {
@@ -284,6 +303,7 @@ export default function PlannerPage() {
           </div>
         </section>
 
+        {/* ── Pending days ── */}
         {planner.pendingPlans.length > 0 && (
           <section style={{ marginTop: 18, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: 18 }}>
             <h2 style={{ margin: "0 0 10px", fontSize: 19, color: "#0f172a" }}>Pending</h2>
@@ -302,24 +322,33 @@ export default function PlannerPage() {
                       >
                         Reopen
                       </button>
-                      <button
-                        onClick={() => {
-                          setPlannerState(markComplete(plannerState, day.day));
-                          setFeedback(`Day ${day.day} completed`);
-                        }}
-                        disabled={!hasResultForDayCycle(day.day, plannerState.cycle)}
-                        title={!hasResultForDayCycle(day.day, plannerState.cycle) ? "Submit marks for this day before marking done." : ""}
-                        style={{ ...btnGhost, borderColor: "#16a34a", color: "#166534", opacity: hasResultForDayCycle(day.day, plannerState.cycle) ? 1 : 0.5, cursor: hasResultForDayCycle(day.day, plannerState.cycle) ? "pointer" : "not-allowed" }}
-                      >
-                        Mark Done
-                      </button>
+                      {!hasResultForDayCycle(day.day, plannerState.cycle) ? (
+                        <button
+                          onClick={() => openMarksModal(day.day)}
+                          style={{ ...btnGhost, borderColor: "#f59e0b", color: "#92400e" }}
+                        >
+                          Submit Marks
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setPlannerState(markComplete(plannerState, day.day));
+                            setFeedback(`Day ${day.day} completed`);
+                          }}
+                          style={{ ...btnGhost, borderColor: "#16a34a", color: "#166534" }}
+                        >
+                          Mark Done
+                        </button>
+                      )}
                     </div>
                   </div>
                   <p style={{ margin: "0 0 8px", color: "#64748b", fontSize: 12 }}>
                     {day.meta.dow} • {mapDayType(day.meta.type, day.meta.isRev, day.meta.isMock)}
                   </p>
                   <ul style={{ margin: 0, paddingLeft: 18, color: "#334155" }}>
-                    {day.topics.map((t, i) => <li key={`${t.subject}-${i}`}>{t.subject}: {t.topic}</li>)}
+                    {day.topics.map((t, i) => (
+                      <li key={`${t.subject}-${i}`}>{t.subject}: {t.topic}</li>
+                    ))}
                   </ul>
                 </div>
               ))}
@@ -327,6 +356,7 @@ export default function PlannerPage() {
           </section>
         )}
 
+        {/* ── Progress Summary ── */}
         <section style={{ marginTop: 18, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: 18 }}>
           <h2 style={{ margin: "0 0 10px", fontSize: 19, color: "#0f172a" }}>Progress Summary</h2>
           <p style={{ margin: "0 0 10px", color: "#64748b", fontSize: 12 }}>Results tracked: {planner.allResultsCount}</p>
@@ -352,6 +382,7 @@ export default function PlannerPage() {
           </div>
         </section>
 
+        {/* ── Smart Focus ── */}
         <section style={{ marginTop: 18, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: 18 }}>
           <h2 style={{ margin: "0 0 10px", fontSize: 19, color: "#0f172a" }}>Smart Focus</h2>
           {planner.revisionQueue.length === 0 ? (
@@ -359,7 +390,10 @@ export default function PlannerPage() {
           ) : (
             <div style={{ display: "grid", gap: 8 }}>
               {planner.revisionQueue.map((q, i) => (
-                <div key={`${q.subject}-${q.topic}-${i}`} style={{ border: "1px solid #e2e8f0", borderRadius: 10, padding: "8px 10px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                <div
+                  key={`${q.subject}-${q.topic}-${i}`}
+                  style={{ border: "1px solid #e2e8f0", borderRadius: 10, padding: "8px 10px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}
+                >
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{q.subject}</div>
                     <div style={{ fontSize: 12, color: "#475569", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{q.topic}</div>
@@ -379,6 +413,7 @@ export default function PlannerPage() {
           )}
         </section>
 
+        {/* ── Suggestions ── */}
         <section style={{ marginTop: 18, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: 18 }}>
           <h2 style={{ margin: "0 0 10px", fontSize: 19, color: "#0f172a" }}>Suggestions</h2>
           <ul style={{ margin: 0, paddingLeft: 18, color: "#334155", lineHeight: 1.7 }}>
@@ -386,73 +421,51 @@ export default function PlannerPage() {
           </ul>
         </section>
       </main>
+
+      {/* ── ManualMarksModal ── */}
+      {showMarksModal && plannerState && (
+        <ManualMarksModal
+          subject={
+            modalDay
+              ? (THIRTY_DAY_PLAN.find(d => d.day === modalDay)?.topics[0]?.subject || currentSubject)
+              : currentSubject
+          }
+          chapter={
+            modalDay
+              ? (THIRTY_DAY_PLAN.find(d => d.day === modalDay)?.topics[0]?.topic || currentTopic)
+              : currentTopic
+          }
+          day={modalDay ?? openedDay}
+          onSaved={handleMarksSaved}
+          onClose={() => { setShowMarksModal(false); setModalDay(null); }}
+        />
+      )}
     </div>
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────
 const btnPrimary: CSSProperties = {
-  padding: "10px 14px",
-  borderRadius: 10,
-  border: "none",
-  cursor: "pointer",
-  background: "#2563eb",
-  color: "#fff",
-  fontWeight: 600,
+  padding: "10px 14px", borderRadius: 10, border: "none",
+  cursor: "pointer", background: "#2563eb", color: "#fff", fontWeight: 600,
 };
-
-const btnSecondary: CSSProperties = {
-  ...btnPrimary,
-  background: "#0d9488",
-};
-
-const btnDone: CSSProperties = {
-  ...btnPrimary,
-  background: "#16a34a",
-};
-
-const btnSkip: CSSProperties = {
-  ...btnPrimary,
-  background: "#f59e0b",
-  color: "#111827",
-};
-
+const btnSecondary: CSSProperties = { ...btnPrimary, background: "#0d9488" };
+const btnDone:      CSSProperties = { ...btnPrimary, background: "#16a34a" };
+const btnSkip:      CSSProperties = { ...btnPrimary, background: "#f59e0b", color: "#111827" };
 const btnGhost: CSSProperties = {
-  padding: "8px 12px",
-  borderRadius: 10,
-  border: "1px solid #cbd5e1",
-  background: "#fff",
-  color: "#334155",
-  cursor: "pointer",
-  fontWeight: 600,
+  padding: "8px 12px", borderRadius: 10, border: "1px solid #cbd5e1",
+  background: "#fff", color: "#334155", cursor: "pointer", fontWeight: 600,
 };
-
-const marksInput: CSSProperties = {
-  width: 82,
-  padding: "8px 10px",
-  borderRadius: 10,
-  border: "1px solid #cbd5e1",
-  fontSize: 13,
-  color: "#1f2937",
+const btnSubmitMarks: CSSProperties = {
+  padding: "10px 18px", borderRadius: 10, border: "none",
+  cursor: "pointer", background: "#7c3aed", color: "#fff", fontWeight: 700, fontSize: 14,
 };
-
 const priorityPill: CSSProperties = {
-  borderRadius: 999,
-  padding: "3px 8px",
-  fontSize: 10,
-  fontWeight: 700,
-  letterSpacing: "0.04em",
+  borderRadius: 999, padding: "3px 8px", fontSize: 10,
+  fontWeight: 700, letterSpacing: "0.04em",
 };
-
 const metaTitle: CSSProperties = {
-  margin: "0 0 8px",
-  fontSize: 12,
-  textTransform: "uppercase",
-  letterSpacing: "0.08em",
-  color: "#64748b",
-  fontWeight: 700,
+  margin: "0 0 8px", fontSize: 12, textTransform: "uppercase",
+  letterSpacing: "0.08em", color: "#64748b", fontWeight: 700,
 };
-
-const muted: CSSProperties = {
-  margin: 0,
-  color: "#64748b",
-};
+const muted: CSSProperties = { margin: 0, color: "#64748b" };
