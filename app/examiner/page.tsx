@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import ChatInput from "../components/ChatInput";
 import { getPlannerState, THIRTY_DAY_PLAN } from "@/lib/plannerState";
@@ -359,7 +359,6 @@ function extractConfirmedSubject(reply: string): string {
 function PaperRenderer({ content }: { content: string }) {
   const lines = content.split("\n");
 
-  // Parse header block (Subject / Class / Board / Time / Marks lines)
   const headerLines: string[] = [];
   const bodyLines:   string[] = [];
   let headerDone = false;
@@ -375,13 +374,11 @@ function PaperRenderer({ content }: { content: string }) {
     bodyLines.push(line);
   }
 
-  // Render header key-value pairs
   const headerPairs = headerLines.map(l => {
     const idx = l.indexOf(":");
     return idx > -1 ? { key: l.slice(0, idx).trim(), val: l.slice(idx + 1).trim() } : null;
   }).filter(Boolean) as { key: string; val: string }[];
 
-  // Find max marks for the badge
   const maxMarksPair = headerPairs.find(p => /maximum marks?/i.test(p.key));
   const timePair     = headerPairs.find(p => /time/i.test(p.key));
   const subjectPair  = headerPairs.find(p => /subject/i.test(p.key));
@@ -404,15 +401,12 @@ function PaperRenderer({ content }: { content: string }) {
     const raw  = body[i];
     const line = raw.trim();
 
-    // Blank
     if (!line) { blocks.push({ type: "blank" }); i++; continue; }
 
-    // SECTION header — "SECTION A" or "SECTION A — ..."
     if (/^SECTION\s+[A-E]\b/i.test(line)) {
       const dashIdx = line.search(/[–—-]/);
       const text = dashIdx > -1 ? line.slice(0, dashIdx).trim() : line;
       const sub  = dashIdx > -1 ? line.slice(dashIdx + 1).trim() : "";
-      // look ahead for sub-description line (marks summary)
       let subLine = sub;
       if (!subLine && i + 1 < body.length) {
         const next = body[i + 1].trim();
@@ -425,7 +419,6 @@ function PaperRenderer({ content }: { content: string }) {
       i++; continue;
     }
 
-    // General Instructions block
     if (/^general instructions?/i.test(line)) {
       const instrLines: string[] = [];
       i++;
@@ -437,7 +430,6 @@ function PaperRenderer({ content }: { content: string }) {
       continue;
     }
 
-    // Instruction / note line (italic) — starts with "All questions", "Answer in", "Application-based", etc.
     if (/^(all questions?|answer in|note:|application.based|only |show all|write your)/i.test(line)) {
       const instrLines = [line];
       i++;
@@ -449,7 +441,6 @@ function PaperRenderer({ content }: { content: string }) {
       continue;
     }
 
-    // Question line — "Q1." or "1." or "Q1 " at start
     const qMatch = line.match(/^(Q\.?\s*(\d+)|(\d+)\.)\s+(.+)/i);
     if (qMatch) {
       const num     = qMatch[2] || qMatch[3];
@@ -460,7 +451,6 @@ function PaperRenderer({ content }: { content: string }) {
       const options: string[] = [];
       const subparts: string[] = [];
       i++;
-      // Collect options (A/B/C/D) and sub-parts (i/ii/iii or (a)(b)(c))
       while (i < body.length) {
         const opt = body[i].trim();
         if (!opt) break;
@@ -474,9 +464,7 @@ function PaperRenderer({ content }: { content: string }) {
           subparts.push(opt);
           i++; continue;
         }
-        // continuation of question text
         if (options.length === 0 && subparts.length === 0) {
-          // append to text — handled as subpart
           subparts.push(opt);
           i++; continue;
         }
@@ -492,8 +480,6 @@ function PaperRenderer({ content }: { content: string }) {
 
   return (
     <div style={{ fontFamily: "'Segoe UI', Arial, sans-serif", color: "#0f172a" }}>
-
-      {/* ── Paper Header ── */}
       <div style={{ background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)", borderRadius: 12, padding: "20px 24px", marginBottom: 20, color: "#fff" }}>
         <div style={{ textAlign: "center", borderBottom: "1px solid rgba(255,255,255,0.15)", paddingBottom: 14, marginBottom: 14 }}>
           <div style={{ fontSize: 10, letterSpacing: "0.2em", color: "#94a3b8", textTransform: "uppercase", marginBottom: 4 }}>
@@ -523,7 +509,6 @@ function PaperRenderer({ content }: { content: string }) {
         </div>
       </div>
 
-      {/* ── Blocks ── */}
       {blocks.map((block, idx) => {
         if (block.type === "blank") return <div key={idx} style={{ height: 8 }} />;
 
@@ -569,7 +554,6 @@ function PaperRenderer({ content }: { content: string }) {
 
           return (
             <div key={idx} style={{ marginBottom: 14, borderRadius: 8, border: "1px solid #e2e8f0", overflow: "hidden" }}>
-              {/* Question header row */}
               <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 14px", background: "#fff" }}>
                 <span style={{ fontWeight: 800, fontSize: 13, color: "#1e293b", flexShrink: 0, minWidth: 28 }}>Q{block.num}.</span>
                 <span style={{ fontSize: 13, color: "#0f172a", lineHeight: 1.75, flex: 1 }}>{block.text}</span>
@@ -580,7 +564,6 @@ function PaperRenderer({ content }: { content: string }) {
                 )}
               </div>
 
-              {/* Sub-parts (before options) */}
               {hasSubparts && !hasOptions && (
                 <div style={{ padding: "0 14px 10px 42px", background: "#fff" }}>
                   {block.subparts.map((sp, j) => (
@@ -589,7 +572,6 @@ function PaperRenderer({ content }: { content: string }) {
                 </div>
               )}
 
-              {/* MCQ options */}
               {hasOptions && (
                 <div style={{ background: "#f8fafc", borderTop: "1px solid #f1f5f9", padding: "8px 14px 10px 42px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 16px" }}>
                   {block.options.map((opt, j) => (
@@ -611,7 +593,6 @@ function PaperRenderer({ content }: { content: string }) {
         return null;
       })}
 
-      {/* Footer */}
       <div style={{ marginTop: 24, borderTop: "2px solid #e2e8f0", paddingTop: 12, textAlign: "center" }}>
         <span style={{ fontSize: 10, color: "#94a3b8", letterSpacing: "0.08em" }}>✦ END OF PAPER ✦</span>
       </div>
@@ -620,7 +601,9 @@ function PaperRenderer({ content }: { content: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────
-export default function ExaminerPage() {
+// INNER COMPONENT — uses useSearchParams (must be inside Suspense)
+// ─────────────────────────────────────────────────────────────
+function ExaminerContent() {
   const searchParams = useSearchParams();
 
   function buildGreeting(name: string): string {
@@ -654,7 +637,6 @@ export default function ExaminerPage() {
   const sessionIdRef     = useRef<string>("");
   const autoTriggeredRef = useRef(false);
 
-  // Store shauriPaper data separately — never put in chat message
   const shauriPaperRef = useRef<object | null>(null);
 
   useEffect(() => { msgsRef.current = messages; }, [messages]);
@@ -708,7 +690,6 @@ export default function ExaminerPage() {
     return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m ${s % 60}s`;
   }
 
-  // ── Core API caller — shauriPaper is passed as structured data, never as text ──
   async function callAPI(
     text: string,
     uploadedText?: string,
@@ -740,13 +721,11 @@ export default function ExaminerPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode:             "examiner",
-          // For SHAURI auto-trigger, send clean "start" — format data goes in shauriPaper
           message:          shauriPaperData ? "start" : text,
           uploadedText:     uploadedText || "",
           uploadType:       uploadType || "",
           history,
           confirmedSubject: resolvedSubject || undefined,
-          // Structured SHAURI paper data — parsed by backend, never shown in UI
           shauriPaper:      shauriPaperData || undefined,
           student: {
             name:      student?.name  || "",
@@ -760,7 +739,6 @@ export default function ExaminerPage() {
       const data = await res.json();
       const reply: string = data?.reply ?? "";
 
-      // ── resumeExam ──
       if (data?.resumeExam === true) {
         const ts = typeof data.startTime === "number"
           ? data.startTime
@@ -775,7 +753,6 @@ export default function ExaminerPage() {
         return;
       }
 
-      // ── Exam started ──
       if (typeof data?.startTime === "number" && data?.paper) {
         startTimer(data.startTime);
         const paper = data.paper;
@@ -802,7 +779,6 @@ export default function ExaminerPage() {
         return;
       }
 
-      // ── Exam ended ──
       if (data?.examEnded === true) {
         stopTimer();
         const taken = elapsedRef.current;
@@ -866,7 +842,6 @@ export default function ExaminerPage() {
           }
         } catch {}
 
-        // ── Auto-save mistakes from evaluation JSON ──
         try {
           if (data?.evalJson && typeof data.evalJson === "object") {
             const pState = getPlannerState();
@@ -886,7 +861,6 @@ export default function ExaminerPage() {
         return;
       }
 
-      // ── Regular reply ──
       if (reply) {
         const isUploadConfirmation =
           reply.includes("Syllabus") && reply.includes("uploaded successfully");
@@ -936,9 +910,6 @@ export default function ExaminerPage() {
     await callAPI(text, uploadedText, uploadType);
   }
 
-  // ── Auto-trigger: planner → examiner ──────────────────────────
-  // KEY FIX: format block and subject data go into shauriPaper object (backend only)
-  // The chat only shows a clean "Starting your daily test..." message
   useEffect(() => {
     if (autoTriggeredRef.current) return;
     const subject = (searchParams.get("subject") || "").trim();
@@ -970,17 +941,14 @@ export default function ExaminerPage() {
       .flatMap((d) => d.topics.map((t) => `Day ${d.day}: ${t.subject} – ${t.topic}`))
       .join(" | ");
 
-    // Build format block string (backend instruction only — never shown in chat)
     const formatBlock = getSharuiPaperFormat(isRevisionDay, writingSubject);
 
-    // Determine display subject label for UI
     const displaySubject = isRevisionDay
       ? `Week ${Math.ceil(dayNum / 7)} Revision`
       : primary
         ? `${primary.subject}${secondary ? ` + ${secondary.subject}` : ""}`
         : (subject || "General");
 
-    // Build the structured shauriPaper object (sent to backend, not shown in chat)
     const shauriPaperData = {
       isRevisionDay,
       totalMarks:      isRevisionDay ? 50 : 25,
@@ -993,29 +961,24 @@ export default function ExaminerPage() {
       weekCoverage:    isRevisionDay ? weekCoverage : undefined,
       dayNum,
       cycleNum,
-      formatBlock,     // Backend uses this for paper generation instructions
+      formatBlock,
     };
 
     shauriPaperRef.current = shauriPaperData;
 
-    // Store for exam meta display
     setMeta(p => ({
       ...p,
       subject: displaySubject,
       isRevisionDay,
     }));
 
-    // Clean user-visible message — no format block, no marks/sections detail
     const cleanUserMessage = from === "planner" && plannerDay
       ? `Starting Day ${dayNum} ${isRevisionDay ? "Revision" : "Study"} test — ${displaySubject}`
       : `Starting test — ${displaySubject}`;
 
-    // Show clean message in chat, then trigger API with structured data
     setTimeout(() => {
       if (!sendingRef.current) {
-        // Add clean user message to chat
         setMessages(p => [...p, { role: "user", content: cleanUserMessage }]);
-        // Call API with shauriPaper data (message will be "start" internally)
         callAPI("start", undefined, undefined, shauriPaperData);
       }
     }, 50);
@@ -1169,7 +1132,6 @@ export default function ExaminerPage() {
         <div className="ex-paper">
           {paperContent ? (
             <>
-              {/* Sticky toolbar */}
               <div style={{
                 position: "sticky", top: 0, zIndex: 5,
                 background: "#fff", borderBottom: "1px solid #e2e8f0",
@@ -1207,7 +1169,6 @@ export default function ExaminerPage() {
                 </button>
               </div>
 
-              {/* Styled paper renderer */}
               <PaperRenderer content={paperContent} />
             </>
           ) : (
@@ -1220,5 +1181,25 @@ export default function ExaminerPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// DEFAULT EXPORT — wraps ExaminerContent in Suspense
+// This fixes the Next.js build error:
+// "useSearchParams() should be wrapped in a suspense boundary"
+// ─────────────────────────────────────────────────────────────
+export default function ExaminerPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f8fafc" }}>
+        <div style={{ textAlign: "center", color: "#94a3b8" }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
+          <div style={{ fontSize: 15, fontWeight: 600 }}>Loading Examiner...</div>
+        </div>
+      </div>
+    }>
+      <ExaminerContent />
+    </Suspense>
   );
 }
