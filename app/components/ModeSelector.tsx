@@ -567,12 +567,10 @@ async function generateTimetable(exam: string, weeks: number, hoursPerDay: numbe
   }
 }
 
-// ─── SHARED PDF OPEN ──────────────────────────────────────────
 function openPdf(url: string) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
-// ─── LAST YEARS TAB — CLASS 10 ────────────────────────────────
 function LastYearsTab10() {
   const [expanded, setExpanded] = useState<string | null>(YEAR_DATA_10[0].year);
   const sqpYears   = YEAR_DATA_10.filter(y => y.type === "sqp");
@@ -639,7 +637,6 @@ function LastYearsTab10() {
   );
 }
 
-// ─── LAST YEARS TAB — CLASS 12 ────────────────────────────────
 function LastYearsTab12() {
   const [expanded, setExpanded]         = useState<string | null>(YEAR_DATA_12[0].year);
   const [activeStream, setActiveStream] = useState<Record<string, number>>({});
@@ -666,7 +663,6 @@ function LastYearsTab12() {
               ? <p style={{ fontSize: 12, color: "#5c6f82", marginBottom: 10 }}>📌 <strong>Sample Question Paper</strong> — select your stream, then click any subject. ✅ MS opens the Marking Scheme.</p>
               : <p style={{ fontSize: 12, color: "#2563EB", marginBottom: 10, background: "rgba(37,99,235,0.06)", padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(37,99,235,0.2)" }}>🏫 <strong>Actual Board Exam Paper</strong> — real paper from CBSE Question Bank.</p>
             }
-            {/* Stream picker */}
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
               {yd.streams.map((s, i) => (
                 <button key={s.name} onClick={() => setActiveStream(prev => ({ ...prev, [yd.year]: i }))}
@@ -675,7 +671,6 @@ function LastYearsTab12() {
                 </button>
               ))}
             </div>
-            {/* Subject buttons */}
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
               {Object.entries(stream.subjects).map(([sub, links]) => (
                 <div key={sub} style={{ display: "flex", gap: 4 }}>
@@ -719,12 +714,10 @@ function LastYearsTab12() {
   );
 }
 
-// ─── SMART LAST YEARS TAB (auto-switches by class) ────────────
 function LastYearsTab({ student }: { student: StudentContext }) {
   const cls = getClassNum(student.class);
   return (
     <div>
-      {/* Class pill indicator */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
         <span style={{ fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 20, background: cls >= 11 ? "rgba(37,99,235,0.12)" : "rgba(212,175,55,0.15)", color: cls >= 11 ? "#2563EB" : "#92400e", border: `1.5px solid ${cls >= 11 ? "rgba(37,99,235,0.3)" : "rgba(212,175,55,0.4)"}` }}>
           📚 Showing Class {cls >= 11 ? "12" : "10"} Papers
@@ -736,7 +729,6 @@ function LastYearsTab({ student }: { student: StudentContext }) {
   );
 }
 
-// ─── SMALL SHARED UI BITS ─────────────────────────────────────
 function SectionHeader({ label, dividerColor }: { label: string; dividerColor: string }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
@@ -754,7 +746,6 @@ function NoticeBanner({ text, link, linkText }: { text: string; link: string; li
   );
 }
 
-// ─── TAB: ABOUT ───────────────────────────────────────────────
 function AboutTab() {
   return (
     <div>
@@ -783,7 +774,6 @@ function AboutTab() {
   );
 }
 
-// ─── TAB: CHECK RESULT ────────────────────────────────────────
 function CheckResultTab({ student }: { student: StudentContext }) {
   const [rollNo, setRollNo]    = useState("");
   const [dob, setDob]          = useState("");
@@ -854,7 +844,6 @@ function CheckResultTab({ student }: { student: StudentContext }) {
   );
 }
 
-// ─── TAB: CAREER ──────────────────────────────────────────────
 function CareerTab({ studentName }: { studentName: string }) {
   const [activeStream, setActiveStream]     = useState(0);
   const [section, setSection]               = useState<"streams" | "upsc">("streams");
@@ -1030,7 +1019,6 @@ function CareerTab({ studentName }: { studentName: string }) {
   );
 }
 
-// ─── TAB: TIMETABLE ───────────────────────────────────────────
 function TimetableTab({ student }: { student: StudentContext }) {
   const cls = getClassNum(student.class);
   const EXAMS_10 = ["Science", "Mathematics", "Social Science", "English", "Hindi"];
@@ -1125,7 +1113,6 @@ function TimetableTab({ student }: { student: StudentContext }) {
   );
 }
 
-// ─── TAB: IMPORTANT DATES ─────────────────────────────────────
 function ImportantDatesTab() {
   return (
     <div>
@@ -1164,12 +1151,15 @@ export default function ModeSelector() {
 
   if (!student) return null;
 
+  // ── Only show Study Planner tab for Class 10 students ──
+  const isClass10 = getClassNum(student.class) === 10;
+
   const TABS: { key: Tab; label: string; icon: string }[] = [
     { key: "about",          label: "About Shauri",   icon: "ℹ️"  },
     { key: "lastYears",      label: "Last Years",     icon: "📄"  },
     { key: "checkResult",    label: "Check Result",   icon: "🏆"  },
     { key: "career",         label: "Career Guide",   icon: "🎯"  },
-    { key: "timetable",      label: "Timetable",      icon: "📅"  },
+    { key: "timetable",      label: "Study Planner",  icon: "📅"  },
     { key: "importantDates", label: "Upcoming Dates", icon: "🔔"  },
   ];
 
@@ -1215,9 +1205,12 @@ export default function ModeSelector() {
               {tab.icon} {tab.label}
             </button>
           ))}
-          <a className="tab-btn" href="/planner" style={{ textDecoration: "none" }}>
-            🗓️ Study Planner
-          </a>
+          {/* ── Study Planner link: only shown to Class 10 students ── */}
+          {isClass10 && (
+            <a className="tab-btn" href="/planner" style={{ textDecoration: "none" }}>
+              🗓️ 30-Day Planner
+            </a>
+          )}
         </div>
 
         {activeTab && (

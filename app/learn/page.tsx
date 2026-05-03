@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import ChatInput from "../components/ChatInput";
 
@@ -277,8 +277,8 @@ const QUICK_TOPICS = [
   "Periodic Table", "Democracy in India", "Trigonometry basics",
 ];
 
-// ─── Main Learn Page ──────────────────────────────────────────
-export default function LearnPage() {
+// ─── Inner component that uses useSearchParams ────────────────
+function LearnPageInner() {
   const searchParams = useSearchParams();
   const [messages, setMessages]   = useState<Message[]>([]);
   const [isLoading, setLoading]   = useState(false);
@@ -448,5 +448,18 @@ export default function LearnPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── Main export wrapped in Suspense ──────────────────────────
+export default function LearnPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f8fafc" }}>
+        <div style={{ fontSize: 15, color: "#64748b" }}>Loading…</div>
+      </div>
+    }>
+      <LearnPageInner />
+    </Suspense>
   );
 }

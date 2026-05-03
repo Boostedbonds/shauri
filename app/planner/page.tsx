@@ -24,6 +24,12 @@ import {
 } from "@/lib/plannerResults";
 
 type ModeView = "independent" | "guided";
+
+function getClassNum(cls: string): number {
+  const n = parseInt(cls.replace(/\D/g, ""));
+  return isNaN(n) ? 0 : n;
+}
+
 function priorityColor(priority: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW") {
   if (priority === "CRITICAL") return { bg: "#fee2e2", fg: "#b91c1c" };
   if (priority === "HIGH") return { bg: "#ffedd5", fg: "#c2410c" };
@@ -46,6 +52,18 @@ export default function PlannerPage() {
   const [feedback, setFeedback] = useState("");
 
   useEffect(() => {
+    // ── CLASS GUARD: Planner is only for Class 10 students ──
+    try {
+      const s = JSON.parse(localStorage.getItem("shauri_student") || "null");
+      if (!s || getClassNum(s.class) !== 10) {
+        window.location.href = "/modes";
+        return;
+      }
+    } catch {
+      window.location.href = "/modes";
+      return;
+    }
+
     const state = getCurrentDay(getPlannerState(), getActivityLogs());
     setPlannerState(state);
     setOpenedDay(state.current_day);
@@ -81,6 +99,7 @@ export default function PlannerPage() {
     parsedScore >= 0 &&
     parsedScore <= parsedTotal;
   const hasSubmittedMarks = hasResultForDayCycle(openedDay, plannerState.cycle);
+
   function goToLearn(subject: string, topic: string) {
     if (!plannerState || !openedDay) return;
     const q = new URLSearchParams({
@@ -355,7 +374,7 @@ export default function PlannerPage() {
           )}
           {planner.currentPlan.meta.isRev && planner.revisionQueue.length > 0 && (
             <p style={{ margin: "10px 0 0", color: "#7c2d12", fontSize: 13, fontWeight: 600 }}>
-              Revision Day Priority: {planner.revisionQueue.map((q) => `${q.subject} (${q.priority})`).join(" â€¢ ")}
+              Revision Day Priority: {planner.revisionQueue.map((q) => `${q.subject} (${q.priority})`).join(" • ")}
             </p>
           )}
         </section>
