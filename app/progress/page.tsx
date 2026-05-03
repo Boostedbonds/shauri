@@ -28,23 +28,21 @@ type ActivityRecord = {
 
 type SubjectStat = {
   subject: string;
-  scores: number[];        // from examiner + learn (scored) only
+  scores: number[];
   latest: number;
   best: number;
   band: { label: string; color: string };
   trend: { label: string; color: string; delta: number | null };
   color: string;
   gapToNext: { marks: number; grade: string } | null;
-  learnMinutes: number;    // time spent in learn mode
-  oralMinutes: number;     // time spent in oral mode
+  learnMinutes: number;
+  oralMinutes: number;
   examCount: number;
   learnCount: number;
   oralCount: number;
 };
 
 type SyncState = "idle" | "loading" | "success" | "error";
-
-// OSM types
 type OSMStatus = "idle" | "uploading" | "evaluating" | "done" | "error";
 type OSMResult = { studentName: string; subject: string; score: number; total: number; percentage: number; grade: string; breakdown: any[]; remarks: string };
 
@@ -87,13 +85,24 @@ function fmtTime(secs: number): string {
 }
 
 function normaliseRecord(raw: any): ActivityRecord {
-  const scorePercent =
-    typeof raw.scorePercent === "number" ? raw.scorePercent :
-    typeof raw.percentage   === "number" ? raw.percentage   : undefined;
+  // Derive scorePercent from any possible field
+  let scorePercent: number | undefined = undefined;
+  if (typeof raw.scorePercent === "number") scorePercent = raw.scorePercent;
+  else if (typeof raw.percentage === "number") scorePercent = raw.percentage;
+  else if (typeof raw.marks_obtained === "number" && typeof raw.total_marks === "number" && raw.total_marks > 0) {
+    scorePercent = Math.round((raw.marks_obtained / raw.total_marks) * 100);
+  }
+
+  // Normalise mode — planner may save as "exam" instead of "examiner"
+  let mode: ActivityMode = "examiner";
+  if (raw.mode === "learn") mode = "learn";
+  else if (raw.mode === "oral") mode = "oral";
+  else if (raw.mode === "examiner" || raw.mode === "exam") mode = "examiner";
+
   return {
     id:               raw.id ?? raw.created_at ?? String(Math.random()),
     date:             raw.date ?? raw.created_at ?? new Date().toISOString(),
-    mode:             (raw.mode as ActivityMode) || "examiner",
+    mode,
     subject:          raw.subject ?? "Unknown",
     chapters:         Array.isArray(raw.chapters) ? raw.chapters : [],
     topics:           Array.isArray(raw.topics)   ? raw.topics   : [],
@@ -110,6 +119,61 @@ function normaliseRecord(raw: any): ActivityRecord {
   };
 }
 
+// ─── ALL POSSIBLE localStorage keys that any part of the app might use ────
+const LS_KEYS = [
+  "shauri_exam_attempts",
+  "shauri_activities",
+  "shauri_activity_log",
+  "shauri_progress",
+  "shauri_sessions",
+  "shauri_learn_sessions",
+  "shauri_oral_sessions",
+  "shauri_results",
+];
+
+function loadLocalRecords(): ActivityRecord[] {
+  if (typeof window === "undefined") return [];
+  const seen = new Set<string>();
+  const all: ActivityRecord[] = [];
+
+  // 1. Try all known keys
+  for (const key of LS_KEYS) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      const items: any[] = Array.isArray(parsed) ? parsed : [];
+      for (const item of items) {
+        const rec = normaliseRecord(item);
+        if (!seen.has(rec.id)) { seen.add(rec.id); all.push(rec); }
+      }
+    } catch {}
+  }
+
+  // 2. Scan ALL localStorage keys for anything that looks like activity arrays
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || LS_KEYS.includes(key)) continue;
+      // Only scan keys that look relevant
+      if (!/shauri|activity|session|learn|exam|oral|progress|attempt/i.test(key)) continue;
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        const parsed = JSON.parse(raw);
+        const items: any[] = Array.isArray(parsed) ? parsed : [];
+        for (const item of items) {
+          if (!item?.subject && !item?.mode) continue; // doesn't look like an activity
+          const rec = normaliseRecord(item);
+          if (!seen.has(rec.id)) { seen.add(rec.id); all.push(rec); }
+        }
+      } catch {}
+    }
+  } catch {}
+
+  return all.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+}
+
 const SUBJECT_COLORS = ["#2563eb","#0d9488","#7c3aed","#ea580c","#4f46e5","#059669"];
 
 const MODE_META: Record<ActivityMode, { icon: string; label: string; color: string; bg: string }> = {
@@ -120,18 +184,6 @@ const MODE_META: Record<ActivityMode, { icon: string; label: string; color: stri
 
 const btnBase: React.CSSProperties  = { padding: "10px 18px", background: "#2563eb", color: "#ffffff", borderRadius: 12, border: "none", fontSize: 14, fontWeight: 600, cursor: "pointer" };
 const btnGhost: React.CSSProperties = { ...btnBase, background: "transparent", color: "#2563eb", border: "1.5px solid #2563eb" };
-
-function loadLocalRecords(): ActivityRecord[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem("shauri_exam_attempts");
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed.map(normaliseRecord);
-    }
-  } catch {}
-  return [];
-}
 
 function Sparkline({ scores, color }: { scores: number[]; color: string }) {
   if (scores.length < 2) return null;
@@ -162,7 +214,6 @@ function StatCard({ icon, label, value, sub, subColor, accent }: { icon: string;
   );
 }
 
-// ─── Mode Activity Feed ────────────────────────────────────────
 function ActivityFeed({ records }: { records: ActivityRecord[] }) {
   const sorted = [...records].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 20);
   if (!sorted.length) return null;
@@ -201,7 +252,6 @@ function ActivityFeed({ records }: { records: ActivityRecord[] }) {
   );
 }
 
-// ─── OSM Modal (unchanged) ────────────────────────────────────
 function OSMModal({ onClose }: { onClose: () => void }) {
   const [studentName, setStudentName] = useState("");
   const [subject,     setSubject]     = useState("Science");
@@ -312,7 +362,6 @@ function OSMModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ─── Tools Section ────────────────────────────────────────────
 function ToolsSection({ onOpenOSM }: { onOpenOSM: () => void }) {
   return (
     <div>
@@ -339,6 +388,43 @@ function ToolsSection({ onOpenOSM }: { onOpenOSM: () => void }) {
   );
 }
 
+// ─── Debug panel — shows in dev to reveal what keys exist ─────
+function DebugPanel({ onClose }: { onClose: () => void }) {
+  const [keys, setKeys] = useState<{ key: string; count: number; sample: string }[]>([]);
+  useEffect(() => {
+    const found: { key: string; count: number; sample: string }[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k) continue;
+      try {
+        const raw = localStorage.getItem(k)!;
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          found.push({ key: k, count: parsed.length, sample: JSON.stringify(parsed[0]).slice(0, 80) });
+        }
+      } catch {}
+    }
+    setKeys(found);
+  }, []);
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ background: "#0f172a", borderRadius: 16, padding: 24, maxWidth: 640, width: "100%", maxHeight: "80vh", overflow: "auto", color: "#e2e8f0", fontFamily: "monospace" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
+          <span style={{ fontWeight: 700, fontSize: 14 }}>🔍 localStorage Arrays</span>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "#94a3b8", fontSize: 18, cursor: "pointer" }}>✕</button>
+        </div>
+        {keys.length === 0 && <div style={{ color: "#94a3b8" }}>No array keys found in localStorage.</div>}
+        {keys.map(k => (
+          <div key={k.key} style={{ marginBottom: 14, padding: "10px 12px", background: "#1e293b", borderRadius: 10 }}>
+            <div style={{ color: "#38bdf8", fontWeight: 700, marginBottom: 4 }}>{k.key} <span style={{ color: "#94a3b8", fontWeight: 400 }}>({k.count} items)</span></div>
+            <div style={{ fontSize: 11, color: "#64748b", wordBreak: "break-all" }}>{k.sample}…</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────
 export default function ProgressPage() {
   const [records,    setRecords]    = useState<ActivityRecord[]>([]);
@@ -348,16 +434,28 @@ export default function ProgressPage() {
   const [errorMsg,   setErrorMsg]   = useState("");
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
   const [showOSM,    setShowOSM]    = useState(false);
+  const [showDebug,  setShowDebug]  = useState(false);
   const [activeMode, setActiveMode] = useState<ActivityMode | "all">("all");
+  const [localCount, setLocalCount] = useState(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const fetchRecords = useCallback(async () => {
     setSyncState("loading"); setErrorMsg("");
+
+    // Always load local first (broad scan across all possible keys)
     const local = loadLocalRecords();
+    setLocalCount(local.length);
     if (local.length > 0) setRecords(local);
+
     let name = "", cls = "";
     try { const s = JSON.parse(localStorage.getItem("shauri_student") || "null"); name = s?.name?.trim() || ""; cls = s?.class?.trim() || ""; } catch {}
-    if (!name && !cls) { setSyncState(local.length > 0 ? "success" : "idle"); if (local.length > 0) setLastSynced(new Date()); return; }
+
+    if (!name && !cls) {
+      setSyncState(local.length > 0 ? "success" : "idle");
+      if (local.length > 0) setLastSynced(new Date());
+      return;
+    }
+
     try {
       const params = new URLSearchParams();
       if (name) params.set("name", name);
@@ -368,30 +466,34 @@ export default function ProgressPage() {
       if (data.error) throw new Error(data.error);
       const rawRemote: any[] = data.attempts ?? data.data ?? data ?? [];
       const remote: ActivityRecord[] = Array.isArray(rawRemote) ? rawRemote.map(normaliseRecord) : [];
-      if (remote.length > 0) {
-        const remoteIds = new Set(remote.map(a => a.id));
-        const localOnly = local.filter(a => !remoteIds.has(a.id));
-        const merged = [...remote, ...localOnly].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        setRecords(merged);
-      } else if (local.length > 0) { setRecords(local); }
+
+      // Merge: remote takes priority, append local-only records
+      const remoteIds = new Set(remote.map(a => a.id));
+      const localOnly = local.filter(a => !remoteIds.has(a.id));
+      const merged = [...remote, ...localOnly].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      setRecords(merged.length > 0 ? merged : local);
+
       setSyncState("success"); setLastSynced(new Date());
-    } catch (err: any) { setErrorMsg(err?.message || "Could not sync."); setSyncState("error"); }
+    } catch (err: any) {
+      // On API failure, still show local data
+      setErrorMsg(err?.message || "Could not sync with server.");
+      setSyncState(local.length > 0 ? "success" : "error");
+      if (local.length > 0) setLastSynced(new Date());
+    }
   }, []);
 
   useEffect(() => { fetchRecords(); }, [fetchRecords]);
 
-  // ── Filtered records by mode tab ──────────────────────────
   const filteredRecords = useMemo(() =>
     activeMode === "all" ? records : records.filter(r => r.mode === activeMode),
   [records, activeMode]);
 
-  // ── Subject stats (from filtered) ────────────────────────
   const subjects: SubjectStat[] = useMemo(() => {
     const map: Record<string, { scores: number[]; learn: number; oral: number; examCount: number; learnCount: number; oralCount: number }> = {};
-    records.forEach(r => { // always compute from ALL records for subject cards
+    records.forEach(r => {
       const key = r.subject;
       if (!map[key]) map[key] = { scores: [], learn: 0, oral: 0, examCount: 0, learnCount: 0, oralCount: 0 };
-      const score = typeof r.scorePercent === "number" ? r.scorePercent : typeof r.percentage === "number" ? r.percentage : NaN;
+      const score = typeof r.scorePercent === "number" ? r.scorePercent : NaN;
       if (!isNaN(score) && (r.mode === "examiner" || r.mode === "learn")) map[key].scores.push(score);
       if (r.mode === "learn")    { map[key].learn += r.timeTakenSeconds; map[key].learnCount++; }
       if (r.mode === "oral")     { map[key].oral  += r.timeTakenSeconds; map[key].oralCount++;  }
@@ -412,13 +514,11 @@ export default function ProgressPage() {
     });
   }, [records]);
 
-  // ── Overall stats ─────────────────────────────────────────
   const scoredSubjects  = subjects.filter(s => s.scores.length > 0);
   const overallAvg      = scoredSubjects.length ? Math.round(scoredSubjects.reduce((s, x) => s + x.latest, 0) / scoredSubjects.length) : null;
   const bestSubject     = scoredSubjects.length ? scoredSubjects.reduce((a, b) => a.latest >= b.latest ? a : b) : null;
   const totalLearnMins  = subjects.reduce((s, x) => s + x.learnMinutes, 0);
   const totalOralMins   = subjects.reduce((s, x) => s + x.oralMinutes, 0);
-  const totalStudyMins  = totalLearnMins + totalOralMins;
   const totalExams      = records.filter(r => r.mode === "examiner").length;
   const totalLearnSess  = records.filter(r => r.mode === "learn").length;
   const totalOralSess   = records.filter(r => r.mode === "oral").length;
@@ -470,6 +570,8 @@ export default function ProgressPage() {
           <button style={btnGhost} onClick={fetchRecords}>🔄 Refresh</button>
           <button style={btnGhost} onClick={exportProgress}>Export</button>
           <button style={btnGhost} onClick={() => fileInputRef.current?.click()}>Import</button>
+          {/* Debug button — remove in prod if desired */}
+          <button style={{ ...btnGhost, fontSize: 12, padding: "6px 12px", opacity: 0.5 }} onClick={() => setShowDebug(true)}>🔍 Debug LS</button>
         </div>
       </div>
       <input ref={fileInputRef} type="file" accept="application/json" hidden onChange={e => e.target.files && handleImportFile(e.target.files[0])} />
@@ -482,7 +584,13 @@ export default function ProgressPage() {
         <div style={{ marginBottom: 24 }}>
           {syncState === "loading" && <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 10, padding: "10px 16px", fontSize: 13, color: "#1d4ed8" }}><span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>🔄</span>Syncing your activity…</div>}
           {syncState === "error"   && <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "10px 16px", fontSize: 13, color: "#b91c1c" }}><span>⚠️ {errorMsg || "Could not sync."}</span><button onClick={fetchRecords} style={{ ...btnBase, background: "#dc2626", padding: "6px 14px", fontSize: 12 }}>Retry</button></div>}
-          {syncState === "success" && lastSynced && <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: "8px 14px", fontSize: 12, color: "#15803d" }}>✅ Synced at {lastSynced.toLocaleTimeString()}{records.length > 0 && <span style={{ color: "#64748b", marginLeft: 8 }}>· {records.length} activities</span>}</div>}
+          {syncState === "success" && lastSynced && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: "8px 14px", fontSize: 12, color: "#15803d", flexWrap: "wrap" }}>
+              ✅ Synced at {lastSynced.toLocaleTimeString()}
+              {records.length > 0 && <span style={{ color: "#64748b", marginLeft: 8 }}>· {records.length} activities ({localCount} local)</span>}
+              {errorMsg && <span style={{ color: "#d97706", marginLeft: 8 }}>· ⚠️ {errorMsg}</span>}
+            </div>
+          )}
         </div>
 
         {/* Tools */}
@@ -497,16 +605,21 @@ export default function ProgressPage() {
         {!isLoading && subjects.length === 0 && (
           <div style={{ textAlign: "center", padding: "64px 24px", background: "#fff", borderRadius: 20, border: "1.5px dashed #cbd5e1" }}>
             <div style={{ fontSize: 52, marginBottom: 16 }}>📊</div>
-            <p style={{ fontSize: 17, fontWeight: 700, color: "#0f172a", marginBottom: 8 }}>{syncState === "error" ? "Could not load results" : "No activity yet"}</p>
-            <p style={{ fontSize: 14, color: "#64748b", marginBottom: 24 }}>Complete a Learn, Oral, or Exam session to see your progress here.</p>
-            <button style={btnBase} onClick={() => (window.location.href = "/modes")}>Go to Modes</button>
+            <p style={{ fontSize: 17, fontWeight: 700, color: "#0f172a", marginBottom: 8 }}>No activity yet</p>
+            <p style={{ fontSize: 14, color: "#64748b", marginBottom: 8 }}>Complete a Learn, Oral, or Exam session to see your progress here.</p>
+            <p style={{ fontSize: 12, color: "#94a3b8", marginBottom: 24 }}>
+              Found {localCount} items in localStorage. If you've completed sessions, click "🔍 Debug LS" to find the correct storage key.
+            </p>
+            <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+              <button style={btnBase} onClick={() => (window.location.href = "/modes")}>Go to Modes</button>
+              <button style={btnGhost} onClick={() => setShowDebug(true)}>🔍 Debug Storage</button>
+            </div>
           </div>
         )}
 
         {subjects.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
 
-            {/* ── STAT STRIP ── */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16 }}>
               <StatCard icon="📊" label="Exam Average" value={overallAvg !== null ? `${overallAvg}%` : "—"} sub={overallAvg !== null ? getGrade(overallAvg).label : "No exams yet"} subColor={overallAvg !== null ? getGrade(overallAvg).color : "#94a3b8"} accent="#2563eb" />
               <StatCard icon="🧠" label="Learn Sessions" value={String(totalLearnSess)} sub={totalLearnMins > 0 ? `${totalLearnMins}m total` : "Start learning!"} subColor="#16a34a" accent="#16a34a" />
@@ -514,7 +627,6 @@ export default function ProgressPage() {
               <StatCard icon="📝" label="Exams Taken" value={String(totalExams)} sub={bestSubject ? `Best: ${bestSubject.subject}` : "No exams yet"} subColor="#0d9488" accent="#0d9488" />
             </div>
 
-            {/* ── MODE FILTER TABS ── */}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {(["all","examiner","learn","oral"] as const).map(m => {
                 const meta = m === "all" ? { icon: "📋", label: "All Activity", color: "#0f172a", bg: "#f8fafc" } : MODE_META[m];
@@ -528,7 +640,6 @@ export default function ProgressPage() {
               })}
             </div>
 
-            {/* ── BAR CHART + AI INSIGHT ── */}
             {scoredSubjects.length > 0 && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 24, alignItems: "start" }}>
                 <div style={{ background: "#fff", borderRadius: 20, padding: "28px 32px", border: "1px solid #e2e8f0" }}>
@@ -565,7 +676,6 @@ export default function ProgressPage() {
                   </div>
                 </div>
 
-                {/* AI Insight */}
                 <div style={{ background: "#fff", borderRadius: 20, padding: 24, border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: 16 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <div style={{ width: 34, height: 34, borderRadius: "50%", background: "#eff6ff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>🤖</div>
@@ -588,7 +698,6 @@ export default function ProgressPage() {
               </div>
             )}
 
-            {/* ── SUBJECT CARDS ── */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 16 }}>
               {subjects.map(s => (
                 <div key={s.subject} style={{ background: "#fff", borderRadius: 16, padding: "20px 20px 16px", border: "1px solid #e2e8f0", borderTop: `3px solid ${s.color}`, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -596,21 +705,16 @@ export default function ProgressPage() {
                     <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", wordBreak: "break-word", flex: 1 }}>{s.subject}</span>
                     {s.scores.length > 0 && <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", background: s.band.color, color: "#fff", borderRadius: 6, flexShrink: 0 }}>{s.band.label}</span>}
                   </div>
-
-                  {/* Score OR "study only" */}
                   {s.scores.length > 0 ? (
                     <div style={{ fontSize: 32, fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.latest}%</div>
                   ) : (
                     <div style={{ fontSize: 13, color: "#64748b", fontStyle: "italic" }}>No test scores yet</div>
                   )}
-
-                  {/* Activity breakdown */}
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     {s.examCount  > 0 && <span style={{ fontSize: 10, padding: "2px 7px", background: "#eff6ff", color: "#2563eb", borderRadius: 6, fontWeight: 600 }}>🧪 {s.examCount} exam{s.examCount !== 1 ? "s" : ""}</span>}
                     {s.learnMinutes > 0 && <span style={{ fontSize: 10, padding: "2px 7px", background: "#f0fdf4", color: "#16a34a", borderRadius: 6, fontWeight: 600 }}>🧠 {s.learnMinutes}m learn</span>}
                     {s.oralMinutes > 0  && <span style={{ fontSize: 10, padding: "2px 7px", background: "#f5f3ff", color: "#7c3aed", borderRadius: 6, fontWeight: 600 }}>🗣️ {s.oralMinutes}m oral</span>}
                   </div>
-
                   {s.scores.length >= 2 && <div><div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 4 }}>Score history</div><Sparkline scores={s.scores} color={s.color} /></div>}
                   {s.scores.length > 0 && <span style={{ display: "inline-block", fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 50, background: s.trend.color + "18", color: s.trend.color, alignSelf: "flex-start" }}>{s.trend.label}</span>}
                   {s.gapToNext && s.scores.length > 0 ? (
@@ -622,13 +726,12 @@ export default function ProgressPage() {
               ))}
             </div>
 
-            {/* ── RECENT ACTIVITY FEED ── */}
             <ActivityFeed records={filteredRecords} />
-
           </div>
         )}
       </main>
-      {showOSM && <OSMModal onClose={() => setShowOSM(false)} />}
+      {showOSM   && <OSMModal    onClose={() => setShowOSM(false)} />}
+      {showDebug && <DebugPanel  onClose={() => setShowDebug(false)} />}
     </div>
   );
 }
