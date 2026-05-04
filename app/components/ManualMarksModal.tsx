@@ -18,7 +18,7 @@ interface Props {
 }
 
 type Step = "entry" | "upload" | "verifying" | "result";
-const MAX_UPLOAD_BYTES = 1.8 * 1024 * 1024; // keep base64 payload under server body limits
+const MAX_UPLOAD_BYTES = 12 * 1024 * 1024; // 12MB
 
 export default function ManualMarksModal({ subject, chapter, day, onSaved, onClose }: Props) {
   const [step,        setStep]       = useState<Step>("entry");
