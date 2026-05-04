@@ -1,41 +1,45 @@
-/**
- * app/api/verify-marks/route.ts
- *
- * CLEAN + UPDATED VERSION
- * - Groq = primary
- * - 12MB file limit
- * - Stable parsing
- * - Clear user errors
- */
-
 import { NextRequest, NextResponse } from "next/server";
+import { put, del } from "@vercel/blob";
 
 export const maxDuration = 30;
 export const runtime = "nodejs";
 
-// ---------- CONFIG ----------
 const MAX_SIZE = 12 * 1024 * 1024; // 12MB
 
-// Basic extraction (safe fallback)
-function extractText(file: File, buffer: Buffer): string {
+/* -----------------------------
+   TEXT EXTRACTION
+----------------------------- */
+async function extractPdfText(buffer: Buffer): Promise<string> {
+  try {
+    const pdfModule = await import("pdf-parse");
+    const pdfParse = (pdfModule as any).default || pdfModule;
+    const parsed = await pdfParse(buffer);
+    return parsed?.text?.slice(0, 15000) || "";
+  } catch {
+    return "[PDF parsing failed]";
+  }
+}
+
+async function extractText(file: File, buffer: Buffer): Promise<string> {
   const mimeType = (file.type || "").toLowerCase();
   const fileName = (file.name || "").toLowerCase();
 
   try {
     if (mimeType.includes("pdf") || fileName.endsWith(".pdf")) {
-      return buffer.toString("utf-8").slice(0, 15000);
+      return extractPdfText(buffer);
     }
-
     if (mimeType.startsWith("image/")) {
       return "[Image uploaded – interpret visually]";
     }
-
     return buffer.toString("utf-8").slice(0, 15000);
   } catch {
     return "[Could not extract text]";
   }
 }
 
+/* -----------------------------
+   AI CALLERS
+----------------------------- */
 async function callGroq(prompt: string): Promise<string | null> {
   if (!process.env.GROQ_API_KEY) return null;
 
@@ -99,9 +103,12 @@ async function callGemini(prompt: string): Promise<string | null> {
   }
 }
 
-// ---------- MAIN API ----------
-
+/* -----------------------------
+   MAIN API HANDLER
+----------------------------- */
 export async function POST(req: NextRequest) {
+  const uploadedBlobs: string[] = [];
+
   try {
     const form = await req.formData();
     const marks = Number(form.get("marks"));
@@ -119,10 +126,7 @@ export async function POST(req: NextRequest) {
       !(qpFile instanceof File) ||
       !(asFile instanceof File)
     ) {
-      return NextResponse.json(
-        { reply: "Missing required fields." },
-        { status: 400 }
-      );
+      return NextResponse.json({ reply: "Missing required fields." }, { status: 400 });
     }
 
     if (!process.env.GROQ_API_KEY && !process.env.GEMINI_API_KEY && !process.env.GOOGLE_API_KEY) {
@@ -136,7 +140,6 @@ export async function POST(req: NextRequest) {
     if (qpFile.size > MAX_SIZE || asFile.size > MAX_SIZE) {
       const qpSize = (qpFile.size / (1024 * 1024)).toFixed(2);
       const asSize = (asFile.size / (1024 * 1024)).toFixed(2);
-
       return NextResponse.json(
         {
           reply: `File too large.\n\nQuestion Paper: ${qpSize} MB\nAnswer Sheet: ${asSize} MB\n\nMax allowed: 12 MB each.\n\nTip: Upload images (JPG/PNG) or compress PDF.`,
@@ -145,11 +148,31 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const qpBuffer = Buffer.from(await qpFile.arrayBuffer());
-    const asBuffer = Buffer.from(await asFile.arrayBuffer());
-    const qpText = extractText(qpFile, qpBuffer);
-    const asText = extractText(asFile, asBuffer);
+    // ---------- UPLOAD TO VERCEL BLOB (bypass 4.5MB serverless limit) ----------
+    const [qpBlob, asBlob] = await Promise.all([
+      put(`qp-${crypto.randomUUID()}-${qpFile.name}`, qpFile, { access: "public", addRandomSuffix: false }),
+      put(`as-${crypto.randomUUID()}-${asFile.name}`, asFile, { access: "public", addRandomSuffix: false }),
+    ]);
 
+    uploadedBlobs.push(qpBlob.url, asBlob.url);
+
+    // ---------- FETCH BACK FROM BLOB & EXTRACT TEXT ----------
+    const [qpBlobRes, asBlobRes] = await Promise.all([
+      fetch(qpBlob.url),
+      fetch(asBlob.url),
+    ]);
+
+    const [qpBuffer, asBuffer] = await Promise.all([
+      qpBlobRes.arrayBuffer().then(Buffer.from),
+      asBlobRes.arrayBuffer().then(Buffer.from),
+    ]);
+
+    const [qpText, asText] = await Promise.all([
+      extractText(qpFile, qpBuffer),
+      extractText(asFile, asBuffer),
+    ]);
+
+    // ---------- BUILD PROMPT ----------
     const prompt = `
 You are a strict CBSE examiner.
 
@@ -178,6 +201,7 @@ ERRORS: topic1, topic2
 FEEDBACK: text
 `;
 
+    // ---------- CALL AI ----------
     let reply = await callGroq(prompt);
     if (!reply) {
       console.log("[verify-marks] Groq unavailable, trying Gemini fallback.");
@@ -195,10 +219,14 @@ FEEDBACK: text
 
   } catch (err: any) {
     console.error("[verify-marks ERROR]:", err.message);
+    return NextResponse.json({ reply: "Server error. Please try again." }, { status: 500 });
 
-    return NextResponse.json(
-      { reply: "Server error. Please try again." },
-      { status: 500 }
-    );
+  } finally {
+    // ---------- CLEANUP BLOBS ----------
+    if (uploadedBlobs.length > 0) {
+      await Promise.all(uploadedBlobs.map((url) => del(url))).catch((e) =>
+        console.warn("[verify-marks] Blob cleanup failed:", e)
+      );
+    }
   }
 }

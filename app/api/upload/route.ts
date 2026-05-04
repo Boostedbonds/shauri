@@ -1,13 +1,14 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
 import { addKnowledge } from "@/app/lib/hawkeyeStore";
+import { put } from "@vercel/blob";
 
-export const runtime = "nodejs"; // REQUIRED for pdf-parse
+export const runtime = "nodejs";
 export const maxDuration = 30;
 
 const MAX_UPLOAD_BYTES = 12 * 1024 * 1024; // 12MB
 
 /* -----------------------------
-TEXT CHUNKING
+   TEXT CHUNKING
 ----------------------------- */
 function chunkText(text: string): string[] {
   const cleaned = text.replace(/\s+/g, " ").trim();
@@ -24,13 +25,11 @@ function chunkText(text: string): string[] {
 }
 
 /* -----------------------------
-SAFE PDF PARSER (NO BUILD CRASH)
+   SAFE PDF PARSER
 ----------------------------- */
 async function extractPdfText(buffer: Buffer): Promise<string> {
   try {
     const pdfModule = await import("pdf-parse");
-
-    // Handle both default and named export cases.
     const pdfParse = (pdfModule as any).default || pdfModule;
     const parsed = await pdfParse(buffer);
     return parsed?.text || "";
@@ -41,7 +40,7 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
 }
 
 /* -----------------------------
-DOCX (basic fallback)
+   DOCX
 ----------------------------- */
 async function extractDocxText(buffer: Buffer): Promise<string> {
   try {
@@ -53,7 +52,7 @@ async function extractDocxText(buffer: Buffer): Promise<string> {
 }
 
 /* -----------------------------
-XLSX (basic fallback)
+   XLSX
 ----------------------------- */
 async function extractXlsxText(buffer: Buffer): Promise<string> {
   try {
@@ -68,44 +67,30 @@ async function extractXlsxText(buffer: Buffer): Promise<string> {
 }
 
 /* -----------------------------
-IMAGE (placeholder)
+   IMAGE
 ----------------------------- */
 async function extractImageText(): Promise<string> {
   return "[OCR not enabled yet]";
 }
 
 /* -----------------------------
-MAIN TEXT ROUTER
+   MAIN TEXT ROUTER
 ----------------------------- */
 async function extractText(file: File, buffer: Buffer): Promise<string> {
   const type = (file.type || "").toLowerCase();
   const name = (file.name || "").toLowerCase();
 
-  if (type.includes("pdf") || name.endsWith(".pdf")) {
-    return extractPdfText(buffer);
-  }
-
-  if (type.includes("word") || name.endsWith(".docx")) {
-    return extractDocxText(buffer);
-  }
-
-  if (type.includes("text") || name.endsWith(".txt") || name.endsWith(".csv")) {
-    return buffer.toString("utf8");
-  }
-
-  if (name.endsWith(".xlsx") || type.includes("sheet")) {
-    return extractXlsxText(buffer);
-  }
-
-  if (type.startsWith("image/")) {
-    return extractImageText();
-  }
+  if (type.includes("pdf") || name.endsWith(".pdf")) return extractPdfText(buffer);
+  if (type.includes("word") || name.endsWith(".docx")) return extractDocxText(buffer);
+  if (type.includes("text") || name.endsWith(".txt") || name.endsWith(".csv")) return buffer.toString("utf8");
+  if (name.endsWith(".xlsx") || type.includes("sheet")) return extractXlsxText(buffer);
+  if (type.startsWith("image/")) return extractImageText();
 
   return buffer.toString("utf8");
 }
 
 /* -----------------------------
-API HANDLER
+   API HANDLER
 ----------------------------- */
 export async function POST(req: NextRequest) {
   try {
@@ -124,7 +109,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
+    // Upload to Vercel Blob first to bypass payload limits
+    const blob = await put(file.name, file, {
+      access: "public",
+      addRandomSuffix: true,
+    });
+
+    // Fetch back the file from blob URL to process it
+    const blobRes = await fetch(blob.url);
+    const arrayBuffer = await blobRes.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
     const text = await extractText(file, buffer);
 
     if (!text || text.trim().length < 10) {
@@ -146,6 +141,7 @@ export async function POST(req: NextRequest) {
       ok: true,
       fileName: file.name,
       chunks: chunks.length,
+      blobUrl: blob.url,
     });
   } catch (error: any) {
     console.error("[UPLOAD ERROR]:", error);
