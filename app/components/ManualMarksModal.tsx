@@ -18,6 +18,7 @@ interface Props {
 }
 
 type Step = "entry" | "upload" | "verifying" | "result";
+const MAX_UPLOAD_BYTES = 1.8 * 1024 * 1024; // keep base64 payload under server body limits
 
 export default function ManualMarksModal({ subject, chapter, day, onSaved, onClose }: Props) {
   const [step,        setStep]       = useState<Step>("entry");
@@ -45,12 +46,38 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
     });
   }
 
+  function isAllowedSize(file: File): boolean {
+    return file.size <= MAX_UPLOAD_BYTES;
+  }
+
+  function sizeMb(bytes: number): string {
+    return (bytes / (1024 * 1024)).toFixed(2);
+  }
+
   async function handleQP(file: File) {
+    if (!isAllowedSize(file)) {
+      setError(
+        `Question paper is ${sizeMb(file.size)} MB. Please upload a file below ${sizeMb(
+          MAX_UPLOAD_BYTES
+        )} MB.`
+      );
+      return;
+    }
+    setError("");
     setQpName(file.name);
     setQpFile(await readFile(file));
   }
 
   async function handleAS(file: File) {
+    if (!isAllowedSize(file)) {
+      setError(
+        `Answer sheet is ${sizeMb(file.size)} MB. Please upload a file below ${sizeMb(
+          MAX_UPLOAD_BYTES
+        )} MB.`
+      );
+      return;
+    }
+    setError("");
     setAsName(file.name);
     setAsFile(await readFile(file));
   }
@@ -85,11 +112,17 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
       });
 
       // ── Safe JSON parse — shows friendly error instead of crashing ──
-      let data: any;
+      const raw = await res.text();
+      let data: any = null;
       try {
-        data = await res.json();
+        data = raw ? JSON.parse(raw) : null;
       } catch {
-        throw new Error("Server returned an invalid response. Please try again.");
+        const compact = raw.replace(/\s+/g, " ").slice(0, 180);
+        throw new Error(
+          compact
+            ? `Server returned an invalid response: ${compact}`
+            : "Server returned an invalid response. Please try again."
+        );
       }
 
       if (!res.ok) {
