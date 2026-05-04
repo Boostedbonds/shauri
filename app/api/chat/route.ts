@@ -70,8 +70,9 @@ async function callAI(
   messages: ChatMessage[],
   timeoutMs = 30000
 ): Promise<string> {
-  const key = process.env.GROQ_API_KEY;
-  if (!key) return "⚠️ Missing GROQ_API_KEY.";
+  const groqKey = process.env.GROQ_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  if (!groqKey && !geminiKey) return "⚠️ Missing AI keys (GROQ_API_KEY/GEMINI_API_KEY).";
 
   async function tryModel(model: string): Promise<string | null> {
     const controller = new AbortController();
@@ -84,7 +85,7 @@ async function callAI(
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${key}`,
+            Authorization: `Bearer ${groqKey}`,
           },
           signal: controller.signal,
           body: JSON.stringify({
@@ -129,6 +130,37 @@ async function callAI(
   if (!result) {
     console.log("🔁 fallback triggered");
     result = await tryModel("llama3-8b-8192");
+  }
+
+  // PROVIDER FALLBACK (Gemini)
+  if (!result && geminiKey) {
+    try {
+      const transcript = messages
+        .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
+        .join("\n\n");
+      const geminiPrompt = `${sysPrompt}\n\n${transcript}`;
+
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${geminiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: geminiPrompt }] }],
+            generationConfig: { temperature: 0.2 },
+          }),
+        }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        result = data?.candidates?.[0]?.content?.parts?.[0]?.text || null;
+      } else {
+        const t = await res.text();
+        console.error("❌ gemini fallback failed:", t.slice(0, 250));
+      }
+    } catch (e) {
+      console.error("❌ gemini fallback error:", e);
+    }
   }
 
   return result || "⚠️ AI unavailable. Try again.";

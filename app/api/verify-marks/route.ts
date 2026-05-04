@@ -11,30 +11,18 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export const maxDuration = 30;
+export const runtime = "nodejs";
 
 // ---------- CONFIG ----------
 const MAX_SIZE = 12 * 1024 * 1024; // 12MB
 
-// ---------- HELPERS ----------
-
-function parseDataUrl(dataUrl: string): { mimeType: string; data: Buffer } | null {
-  try {
-    const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/s);
-    if (!match) return null;
-
-    return {
-      mimeType: match[1],
-      data: Buffer.from(match[2], "base64"),
-    };
-  } catch {
-    return null;
-  }
-}
-
 // Basic extraction (safe fallback)
-function extractText(buffer: Buffer, mimeType: string): string {
+function extractText(file: File, buffer: Buffer): string {
+  const mimeType = (file.type || "").toLowerCase();
+  const fileName = (file.name || "").toLowerCase();
+
   try {
-    if (mimeType === "application/pdf") {
+    if (mimeType.includes("pdf") || fileName.endsWith(".pdf")) {
       return buffer.toString("utf-8").slice(0, 15000);
     }
 
@@ -48,35 +36,106 @@ function extractText(buffer: Buffer, mimeType: string): string {
   }
 }
 
+async function callGroq(prompt: string): Promise<string | null> {
+  if (!process.env.GROQ_API_KEY) return null;
+
+  const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        { role: "system", content: "You are a strict CBSE board examiner." },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.2,
+    }),
+  });
+
+  const groqText = await groqRes.text();
+  if (!groqRes.ok) {
+    console.error("[verify-marks] Groq error:", groqText.slice(0, 300));
+    return null;
+  }
+
+  try {
+    const data = JSON.parse(groqText);
+    return data?.choices?.[0]?.message?.content || null;
+  } catch {
+    return groqText || null;
+  }
+}
+
+async function callGemini(prompt: string): Promise<string | null> {
+  const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  if (!geminiKey) return null;
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${geminiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.2 },
+      }),
+    }
+  );
+
+  const text = await res.text();
+  if (!res.ok) {
+    console.error("[verify-marks] Gemini error:", text.slice(0, 300));
+    return null;
+  }
+
+  try {
+    const data = JSON.parse(text);
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text || null;
+  } catch {
+    return null;
+  }
+}
+
 // ---------- MAIN API ----------
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const form = await req.formData();
+    const marks = Number(form.get("marks"));
+    const total = Number(form.get("total"));
+    const subject = String(form.get("subject") || "");
+    const chapter = String(form.get("chapter") || "");
+    const day = String(form.get("day") || "");
+    const qpFile = form.get("qpFile");
+    const asFile = form.get("asFile");
 
-    const { marks, total, subject, chapter, day, qpFile, asFile } = body;
-
-    if (!marks || !total || !qpFile || !asFile) {
+    if (
+      !Number.isFinite(marks) ||
+      !Number.isFinite(total) ||
+      total <= 0 ||
+      !(qpFile instanceof File) ||
+      !(asFile instanceof File)
+    ) {
       return NextResponse.json(
         { reply: "Missing required fields." },
         { status: 400 }
       );
     }
 
-    const qpParsed = parseDataUrl(qpFile);
-    const asParsed = parseDataUrl(asFile);
-
-    if (!qpParsed || !asParsed) {
+    if (!process.env.GROQ_API_KEY && !process.env.GEMINI_API_KEY && !process.env.GOOGLE_API_KEY) {
       return NextResponse.json(
-        { reply: "Invalid file format. Please re-upload." },
-        { status: 400 }
+        { reply: "Missing AI keys. Configure GROQ_API_KEY or GEMINI_API_KEY." },
+        { status: 500 }
       );
     }
 
     // ---------- SIZE CHECK ----------
-    if (qpParsed.data.length > MAX_SIZE || asParsed.data.length > MAX_SIZE) {
-      const qpSize = (qpParsed.data.length / (1024 * 1024)).toFixed(2);
-      const asSize = (asParsed.data.length / (1024 * 1024)).toFixed(2);
+    if (qpFile.size > MAX_SIZE || asFile.size > MAX_SIZE) {
+      const qpSize = (qpFile.size / (1024 * 1024)).toFixed(2);
+      const asSize = (asFile.size / (1024 * 1024)).toFixed(2);
 
       return NextResponse.json(
         {
@@ -86,8 +145,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const qpText = extractText(qpParsed.data, qpParsed.mimeType);
-    const asText = extractText(asParsed.data, asParsed.mimeType);
+    const qpBuffer = Buffer.from(await qpFile.arrayBuffer());
+    const asBuffer = Buffer.from(await asFile.arrayBuffer());
+    const qpText = extractText(qpFile, qpBuffer);
+    const asText = extractText(asFile, asBuffer);
 
     const prompt = `
 You are a strict CBSE examiner.
@@ -117,51 +178,15 @@ ERRORS: topic1, topic2
 FEEDBACK: text
 `;
 
-    // ---------- GROQ CALL ----------
-
-    const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages: [
-          {
-            role: "system",
-            content: "You are a strict CBSE board examiner.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        temperature: 0.2,
-      }),
-    });
-
-    const groqText = await groqRes.text();
-
-    if (!groqRes.ok) {
-      return NextResponse.json(
-        { reply: `Groq error: ${groqText.slice(0, 200)}` },
-        { status: 500 }
-      );
-    }
-
-    let reply = "";
-
-    try {
-      const data = JSON.parse(groqText);
-      reply = data?.choices?.[0]?.message?.content || "";
-    } catch {
-      reply = groqText;
+    let reply = await callGroq(prompt);
+    if (!reply) {
+      console.log("[verify-marks] Groq unavailable, trying Gemini fallback.");
+      reply = await callGemini(prompt);
     }
 
     if (!reply) {
       return NextResponse.json(
-        { reply: "AI returned empty response. Try again." },
+        { reply: "AI unavailable (Groq + Gemini). Try again shortly." },
         { status: 500 }
       );
     }

@@ -25,6 +25,7 @@ import {
 } from "@/lib/plannerResults";
 
 type ModeView = "independent" | "guided";
+type MonthId = "may" | "june" | "july";
 
 function getClassNum(cls?: string | number): number {
   if (typeof cls === "number") return cls;
@@ -46,10 +47,23 @@ function mapDayType(type: string, isRev?: boolean, isMock?: boolean): string {
   return "Study";
 }
 
+function getMonthForDay(day: number): MonthId {
+  if (day <= 30) return "may";
+  if (day <= 60) return "june";
+  return "july";
+}
+
+function getDaysForMonth(month: MonthId): number[] {
+  if (month === "may") return Array.from({ length: 30 }, (_, i) => i + 1);
+  if (month === "june") return Array.from({ length: 30 }, (_, i) => i + 31);
+  return Array.from({ length: 30 }, (_, i) => i + 61);
+}
+
 export default function PlannerPage() {
   const [plannerState,   setPlannerState]   = useState<PlannerState | null>(null);
   const [modeView,       setModeView]       = useState<ModeView>("guided");
   const [openedDay,      setOpenedDay]      = useState<number | null>(null);
+  const [activeMonth,    setActiveMonth]    = useState<MonthId>("may");
   const [resultsVersion, setResultsVersion] = useState(0);
   const [feedback,       setFeedback]       = useState("");
 
@@ -71,7 +85,13 @@ export default function PlannerPage() {
     const state = getCurrentDay(getPlannerState(), getActivityLogs());
     setPlannerState(state);
     setOpenedDay(state.current_day);
+    setActiveMonth(getMonthForDay(state.current_day));
   }, []);
+
+  useEffect(() => {
+    if (!openedDay) return;
+    setActiveMonth(getMonthForDay(openedDay));
+  }, [openedDay]);
 
   useEffect(() => {
     if (!feedback) return;
@@ -97,6 +117,7 @@ export default function PlannerPage() {
   const hasSubmittedMarks = hasResultForDayCycle(openedDay, plannerState.cycle);
   const currentSubject    = planner.currentPlan.topics[0]?.subject || "General";
   const currentTopic      = planner.currentPlan.topics[0]?.topic   || "General";
+  const visibleDays = getDaysForMonth(activeMonth);
 
   function goToLearn(subject: string, topic: string) {
     if (!plannerState || !openedDay) return;
@@ -149,10 +170,10 @@ export default function PlannerPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f8fafc", display: "flex", flexDirection: "column" }}>
+    <div style={{ minHeight: "100vh", background: "#06080f", color: "#dde4f0", display: "flex", flexDirection: "column" }}>
       <Header onLogout={() => (window.location.href = "/")} />
 
-      <main style={{ width: "100%", maxWidth: 1100, margin: "0 auto", padding: "24px 20px 54px" }}>
+      <main style={{ width: "100%", maxWidth: 1240, margin: "0 auto", padding: "24px 20px 54px" }}>
 
         {/* ── Top nav ── */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
@@ -178,28 +199,78 @@ export default function PlannerPage() {
           </div>
         </div>
 
-        <h1 style={{ margin: 0, fontSize: 30, color: "#0f172a" }}>Study Planner</h1>
-        <p style={{ marginTop: 6, color: "#64748b" }}>Parallel guidance system for consistent daily progress.</p>
+        <h1 style={{ margin: 0, fontSize: 30, color: "#f5c842", letterSpacing: 1 }}>CBSE Class X — 90-Day Planner</h1>
+        <p style={{ marginTop: 6, color: "#7f8ba3" }}>NCERT full syllabus • Foundation, Building, Mastery</p>
         {feedback && (
           <p style={{ marginTop: 6, color: "#166534", fontSize: 13, fontWeight: 600 }}>{feedback}</p>
         )}
 
-        {/* ── Day grid ── */}
-        <section style={{ marginTop: 16, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: 14 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(10, minmax(0, 1fr))", gap: 8 }}>
-            {THIRTY_DAY_PLAN.map((d) => {
-              const isCurrent   = plannerState.current_day === d.day;
+        {/* ── Month tabs + day cards ── */}
+        <section style={{ marginTop: 16, background: "#0c0f1e", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, overflow: "hidden" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+            {([
+              { id: "may" as MonthId, label: "MAY", sub: "Days 1-30", col: "#4dc9ff", icon: "🌸" },
+              { id: "june" as MonthId, label: "JUNE", sub: "Days 31-60", col: "#57e89f", icon: "⚡" },
+              { id: "july" as MonthId, label: "JULY", sub: "Days 61-90", col: "#ff8c4b", icon: "🏆" },
+            ]).map((m) => (
+              <button
+                key={m.id}
+                onClick={() => setActiveMonth(m.id)}
+                style={{
+                  padding: "12px 10px",
+                  border: "none",
+                  borderBottom: activeMonth === m.id ? `2px solid ${m.col}` : "2px solid transparent",
+                  background: activeMonth === m.id ? "rgba(255,255,255,0.03)" : "transparent",
+                  color: activeMonth === m.id ? m.col : "#7f8ba3",
+                  cursor: "pointer",
+                  fontWeight: 700,
+                }}
+              >
+                <div style={{ fontSize: 18 }}>{m.icon}</div>
+                <div style={{ fontSize: 16, letterSpacing: 1 }}>{m.label}</div>
+                <div style={{ fontSize: 10, opacity: 0.8 }}>{m.sub}</div>
+              </button>
+            ))}
+          </div>
+
+          <div style={{ padding: 12, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: 8 }}>
+            {visibleDays.map((dayNum) => {
+              const d = THIRTY_DAY_PLAN.find((x) => x.day === dayNum);
+              if (!d) return null;
+              const isCurrent = plannerState.current_day === d.day;
               const isCompleted = plannerState.completed_days.includes(d.day);
-              const isSkipped   = plannerState.skipped_days.includes(d.day);
-              const bg          = isCurrent ? "#dbeafe" : isCompleted ? "#dcfce7" : isSkipped ? "#fef9c3" : "#ffffff";
-              const border      = openedDay === d.day ? "2px solid #2563eb" : "1px solid #e2e8f0";
+              const isSkipped = plannerState.skipped_days.includes(d.day);
+              const isSelected = openedDay === d.day;
+              const topCol = d.meta.isMock ? "#ff6060" : d.meta.isRev || d.meta.type === "rev" ? "#f5c842" : "#4dc9ff";
+
               return (
                 <button
                   key={d.day}
                   onClick={() => setOpenedDay(d.day)}
-                  style={{ height: 34, borderRadius: 8, border, background: bg, color: "#1f2937", cursor: "pointer", fontWeight: 700, fontSize: 12 }}
+                  style={{
+                    border: isSelected ? `1px solid ${topCol}` : "1px solid rgba(255,255,255,0.08)",
+                    borderTop: `3px solid ${topCol}`,
+                    borderRadius: 10,
+                    background: isCurrent
+                      ? "rgba(77,201,255,0.12)"
+                      : isCompleted
+                      ? "rgba(87,232,159,0.10)"
+                      : isSkipped
+                      ? "rgba(245,200,66,0.10)"
+                      : "#111526",
+                    color: "#dde4f0",
+                    cursor: "pointer",
+                    padding: "8px 6px",
+                    textAlign: "left",
+                  }}
                 >
-                  {d.day}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 16, fontWeight: 800 }}>{d.day}</span>
+                    <span style={{ fontSize: 9, color: "#8ea0bd" }}>{d.meta.dow.slice(0, 3)}</span>
+                  </div>
+                  <div style={{ marginTop: 5, fontSize: 9, color: "#8ea0bd", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {mapDayType(d.meta.type, d.meta.isRev, d.meta.isMock)}
+                  </div>
                 </button>
               );
             })}
@@ -207,8 +278,8 @@ export default function PlannerPage() {
         </section>
 
         {/* ── Today's plan ── */}
-        <section style={{ marginTop: 22, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: 18 }}>
-          <h2 style={{ margin: "0 0 10px", fontSize: 19, color: "#0f172a" }}>Today</h2>
+        <section style={{ marginTop: 22, background: "#0c0f1e", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, padding: 18 }}>
+          <h2 style={{ margin: "0 0 10px", fontSize: 19, color: "#dde4f0" }}>Today</h2>
           <div style={{ fontWeight: 700, color: "#1d4ed8", marginBottom: 10 }}>
             Day {openedDay} (Cycle {plannerState.cycle})
           </div>

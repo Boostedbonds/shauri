@@ -24,8 +24,8 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
   const [step,        setStep]       = useState<Step>("entry");
   const [marks,       setMarks]      = useState("");
   const [total,       setTotal]      = useState("");
-  const [qpFile,      setQpFile]     = useState<string | null>(null);   // base64 data URL
-  const [asFile,      setAsFile]     = useState<string | null>(null);   // base64 data URL
+  const [qpFile,      setQpFile]     = useState<File | null>(null);
+  const [asFile,      setAsFile]     = useState<File | null>(null);
   const [qpName,      setQpName]     = useState("");
   const [asName,      setAsName]     = useState("");
   const [aiResult,    setAiResult]   = useState<{
@@ -37,13 +37,32 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
   const qpRef = useRef<HTMLInputElement>(null);
   const asRef = useRef<HTMLInputElement>(null);
 
-  function readFile(file: File): Promise<string> {
-    return new Promise((res, rej) => {
-      const reader = new FileReader();
-      reader.onload  = e => res(e.target?.result as string);
-      reader.onerror = () => rej(new Error("File read failed"));
-      reader.readAsDataURL(file);
+  async function maybeCompressImage(file: File): Promise<File> {
+    if (!file.type.startsWith("image/")) return file;
+
+    const bitmap = await createImageBitmap(file);
+    const maxW = 1800;
+    const scale = bitmap.width > maxW ? maxW / bitmap.width : 1;
+    const w = Math.max(1, Math.round(bitmap.width * scale));
+    const h = Math.max(1, Math.round(bitmap.height * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, w, h);
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.82)
+    );
+    if (!blob) return file;
+
+    const compressed = new File([blob], file.name.replace(/\.\w+$/, ".jpg"), {
+      type: "image/jpeg",
+      lastModified: Date.now(),
     });
+    return compressed.size < file.size ? compressed : file;
   }
 
   function isAllowedSize(file: File): boolean {
@@ -55,31 +74,33 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
   }
 
   async function handleQP(file: File) {
-    if (!isAllowedSize(file)) {
+    const processed = await maybeCompressImage(file);
+    if (!isAllowedSize(processed)) {
       setError(
-        `Question paper is ${sizeMb(file.size)} MB. Please upload a file below ${sizeMb(
+        `Question paper is ${sizeMb(processed.size)} MB. Please upload a file below ${sizeMb(
           MAX_UPLOAD_BYTES
         )} MB.`
       );
       return;
     }
     setError("");
-    setQpName(file.name);
-    setQpFile(await readFile(file));
+    setQpName(processed.name);
+    setQpFile(processed);
   }
 
   async function handleAS(file: File) {
-    if (!isAllowedSize(file)) {
+    const processed = await maybeCompressImage(file);
+    if (!isAllowedSize(processed)) {
       setError(
-        `Answer sheet is ${sizeMb(file.size)} MB. Please upload a file below ${sizeMb(
+        `Answer sheet is ${sizeMb(processed.size)} MB. Please upload a file below ${sizeMb(
           MAX_UPLOAD_BYTES
         )} MB.`
       );
       return;
     }
     setError("");
-    setAsName(file.name);
-    setAsFile(await readFile(file));
+    setAsName(processed.name);
+    setAsFile(processed);
   }
 
   function canVerify() {
@@ -93,22 +114,18 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
     const t = parseInt(total);
 
     try {
-      // ── FIX: Call dedicated /api/verify-marks instead of /api/chat ──
-      // /api/chat was rejecting large base64 PDF payloads with
-      // "Request Entity Too Large" → "Unexpected token 'R'" JSON parse crash.
-      // /api/verify-marks is purpose-built for this and handles large files.
+      const form = new FormData();
+      form.append("marks", String(m));
+      form.append("total", String(t));
+      form.append("subject", subject);
+      form.append("chapter", chapter);
+      form.append("day", String(day));
+      if (qpFile) form.append("qpFile", qpFile);
+      if (asFile) form.append("asFile", asFile);
+
       const res = await fetch("/api/verify-marks", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          marks:   m,
-          total:   t,
-          subject,
-          chapter,
-          day,
-          qpFile,   // base64 data URL
-          asFile,   // base64 data URL
-        }),
+        body: form,
       });
 
       // ── Safe JSON parse — shows friendly error instead of crashing ──
