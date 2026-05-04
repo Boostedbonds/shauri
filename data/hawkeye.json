@@ -1,0 +1,33 @@
+{
+  "users": [
+    {
+      "id": "71b733ba-8769-4da0-a93d-b7f2cae041d8",
+      "name": "test",
+      "class": "10",
+      "activity": "Exam attempted",
+      "testsTaken": 2,
+      "lastActive": "2026-05-04T08:59:56.989Z",
+      "usageCount": 2
+    },
+    {
+      "id": "9dfdc1e3-0f5b-4a27-bacb-2270351bea41",
+      "name": "Student",
+      "class": "10",
+      "activity": "Active",
+      "testsTaken": 0,
+      "lastActive": "2026-05-04T09:00:28.572Z",
+      "usageCount": 1
+    }
+  ],
+  "knowledge": [],
+  "activity": [
+    {
+      "id": "87b438c5-5e50-4e13-8bc8-981c09238510",
+      "createdAt": "2026-05-04T09:00:29.169Z",
+      "userQuery": "",
+      "aiResponse": "ðŸ’ª Strongest: Mathematics — 84% (A2) — high score in the first attempt\nâš ï¸ Weakest: REVISION – Week 1 (Part A) — 76% — needs improvement in overall performance\nðŸ“ˆ Trend: No improvement data yet\nðŸŽ¯ Next target: Mathematics — 6 more marks → A1",
+      "mode": "progress",
+      "user": "Student"
+    }
+  ]
+}

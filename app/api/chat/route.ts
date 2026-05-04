@@ -1,11 +1,13 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "../../lib/supabase";
 import { systemPrompt } from "../../lib/prompts";
 import { syllabus } from "../../lib/syllabus";
+import { addActivity, upsertUser } from "../../lib/hawkeyeStore";
+import { searchKnowledge } from "../../lib/knowledgeBase";
 
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // TYPES
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type ChatMessage = {
   role: "user" | "assistant" | "system";
@@ -37,28 +39,29 @@ type ExamSession = {
 
 type ChapterEntry = { number: number; name: string };
 
-// ─────────────────────────────────────────────────────────────
-// SHAURI PAPER TYPE
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// SHAURI PAPER TYPE â€” FIX 6: added writingSubjects array
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type ShauriPaperData = {
-  isRevisionDay: boolean;
-  totalMarks: number;
-  timeMinutes: number;
-  primarySubject: string;
-  primaryTopic: string;
+  isRevisionDay:    boolean;
+  totalMarks:       number;
+  timeMinutes:      number;
+  primarySubject:   string;
+  primaryTopic:     string;
   secondarySubject: string;
-  secondaryTopic: string;
-  writingSubject: string;
-  weekCoverage?: string;
-  dayNum: number;
-  cycleNum: number;
-  formatBlock: string;
+  secondaryTopic:   string;
+  writingSubject:   string;
+  writingSubjects?: string[];          // FIX 6: dual-language support
+  weekCoverage?:    string;
+  dayNum:           number;
+  cycleNum:         number;
+  formatBlock:      string;
 };
 
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // INPUT VALIDATION
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const VALID_BOARDS = ["CBSE", "ICSE", "IB"];
 const MIN_CLASS    = 6;
@@ -76,9 +79,9 @@ function sanitiseClass(raw: string): string {
   return String(Math.min(Math.max(n, MIN_CLASS), MAX_CLASS));
 }
 
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // STRONG RANDOMISATION HELPERS
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function makeSeed(): string {
   const ts  = Date.now();
@@ -100,9 +103,9 @@ function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // VARIETY BANKS
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const ENGLISH_VERBS = shuffle([
   "Explain", "Describe", "Analyse", "Compare", "Discuss",
@@ -111,9 +114,9 @@ const ENGLISH_VERBS = shuffle([
 ]);
 
 const HINDI_VERBS = shuffle([
-  "परिभाषित कीजिए", "उदाहरण दीजिए", "अंतर स्पष्ट कीजिए", "व्याख्या कीजिए",
-  "उचित उदाहरण सहित समझाइए", "पहचान कीजिए", "रिक्त स्थान भरिए",
-  "शुद्ध कीजिए", "वाक्य में प्रयोग कीजिए", "सही विकल्प चुनिए",
+  "à¤ªà¤°à¤¿à¤­à¤¾à¤·à¤¿à¤¤ à¤•à¥€à¤œà¤¿à¤", "à¤‰à¤¦à¤¾à¤¹à¤°à¤£ à¤¦à¥€à¤œà¤¿à¤", "à¤…à¤‚à¤¤à¤° à¤¸à¥à¤ªà¤·à¥à¤Ÿ à¤•à¥€à¤œà¤¿à¤", "à¤µà¥à¤¯à¤¾à¤–à¥à¤¯à¤¾ à¤•à¥€à¤œà¤¿à¤",
+  "à¤‰à¤šà¤¿à¤¤ à¤‰à¤¦à¤¾à¤¹à¤°à¤£ à¤¸à¤¹à¤¿à¤¤ à¤¸à¤®à¤à¤¾à¤‡à¤", "à¤ªà¤¹à¤šà¤¾à¤¨ à¤•à¥€à¤œà¤¿à¤", "à¤°à¤¿à¤•à¥à¤¤ à¤¸à¥à¤¥à¤¾à¤¨ à¤­à¤°à¤¿à¤",
+  "à¤¶à¥à¤¦à¥à¤§ à¤•à¥€à¤œà¤¿à¤", "à¤µà¤¾à¤•à¥à¤¯ à¤®à¥‡à¤‚ à¤ªà¥à¤°à¤¯à¥‹à¤— à¤•à¥€à¤œà¤¿à¤", "à¤¸à¤¹à¥€ à¤µà¤¿à¤•à¤²à¥à¤ª à¤šà¥à¤¨à¤¿à¤",
 ]);
 
 const SCIENCE_CONTEXTS = shuffle([
@@ -137,11 +140,9 @@ const SST_CONTEXTS = shuffle([
   "explaining the significance of the event/concept",
 ]);
 
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // PARSE CUSTOM PAPER REQUIREMENTS
-// NOTE: This function is NEVER called for SHAURI planner papers.
-// SHAURI papers always use the shauriPaper structured object directly.
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface PaperRequirements {
   totalMarks: number | null;
@@ -194,9 +195,9 @@ function parsePaperRequirements(text: string): PaperRequirements {
   }
 
   const chapterMatch =
-    t.match(/chapters?\s*([\d,\-–\s]+(?:and\s*\d+)?)/) ||
-    t.match(/(?:from|only|on)\s*ch(?:apter)?s?\s*([\d,\-–\s]+(?:and\s*\d+)?)/) ||
-    t.match(/(?:unit|topic)s?\s*([\d,\-–\s]+(?:and\s*\d+)?)/);
+    t.match(/chapters?\s*([\d,\-â€“\s]+(?:and\s*\d+)?)/) ||
+    t.match(/(?:from|only|on)\s*ch(?:apter)?s?\s*([\d,\-â€“\s]+(?:and\s*\d+)?)/) ||
+    t.match(/(?:unit|topic)s?\s*([\d,\-â€“\s]+(?:and\s*\d+)?)/);
   const chapterFilter = chapterMatch ? `chapters ${chapterMatch[1].trim()}` : null;
 
   const topicKeywordMatch = !chapterFilter
@@ -259,9 +260,9 @@ function formatTimeAllowed(minutes: number): string {
   return `${minutes} Minutes`;
 }
 
-// ─────────────────────────────────────────────────────────────
-// *** FIX: CBSE-COMPLIANT MARK DISTRIBUTION ***
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// CBSE-COMPLIANT MARK DISTRIBUTION
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface QuestionSlot {
   qNum: number;
@@ -393,10 +394,9 @@ function buildCbseQuestionPlan(
   return plan;
 }
 
-// ─────────────────────────────────────────────────────────────
-// *** FIX 1: COMPLETE CLASS 10 CHAPTER DATABASE ***
-// Class 9 was hardcoded but Class 10 was missing — patched below
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// CLASS 10 CHAPTER DATABASE
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const CLASS10_CHAPTERS: Record<string, { subjectName: string; chapterList: string }> = {
   mathematics: {
@@ -429,7 +429,7 @@ const CLASS10_CHAPTERS: Record<string, { subjectName: string; chapterList: strin
       "Chapter 6: Control and Coordination (Nervous System, Neuron, Reflex Arc, Brain Parts, Hormones: Endocrine Glands)",
       "Chapter 7: How do Organisms Reproduce? (Asexual: Binary Fission/Budding/Spore/Vegetative, Sexual: Pollination/Fertilisation/Seeds, Human Reproductive System)",
       "Chapter 8: Heredity (Mendel's Laws, Dominant/Recessive, Sex Determination, Evolution)",
-      "Chapter 9: Light – Reflection and Refraction (Laws of Reflection, Spherical Mirrors, Mirror Formula, Refraction, Snell's Law, Lens Formula, Power)",
+      "Chapter 9: Light â€“ Reflection and Refraction (Laws of Reflection, Spherical Mirrors, Mirror Formula, Refraction, Snell's Law, Lens Formula, Power)",
       "Chapter 10: Human Eye and Colourful World (Structure of Eye, Defects: Myopia/Hypermetropia/Presbyopia, Dispersion, Scattering)",
       "Chapter 11: Electricity (Ohm's Law, Resistance, Series/Parallel Circuits, Heating Effect, Electric Power)",
       "Chapter 12: Magnetic Effects of Electric Current (Magnetic Field, Fleming's Rules, Electric Motor, Electromagnetic Induction, AC/DC, Generator)",
@@ -437,7 +437,7 @@ const CLASS10_CHAPTERS: Record<string, { subjectName: string; chapterList: strin
     ].join("\n"),
   },
   history: {
-    subjectName: "Social Science – History (India and the Contemporary World II)",
+    subjectName: "Social Science â€“ History (India and the Contemporary World II)",
     chapterList: [
       "Chapter 1: The Rise of Nationalism in Europe (French Revolution, Napoleon, Romanticism, Grimm Brothers, Zollverein, Unification of Germany & Italy, Balkan Crisis)",
       "Chapter 2: Nationalism in India (Rowlatt Act, Jallianwala Bagh, Khilafat Movement, Non-Cooperation Movement, Civil Disobedience Movement, Salt March, Round Table Conferences, Sense of Collective Belonging)",
@@ -447,7 +447,7 @@ const CLASS10_CHAPTERS: Record<string, { subjectName: string; chapterList: strin
     ].join("\n"),
   },
   geography: {
-    subjectName: "Social Science – Geography (Contemporary India II)",
+    subjectName: "Social Science â€“ Geography (Contemporary India II)",
     chapterList: [
       "Chapter 1: Resources and Development (Types of Resources, Development of Resources, Land Use Pattern, Soil Types, Soil Erosion & Conservation)",
       "Chapter 2: Forest and Wildlife Resources (Types of Forests, Flora & Fauna, Causes of Depletion, Conservation, Project Tiger, Biosphere Reserves)",
@@ -459,7 +459,7 @@ const CLASS10_CHAPTERS: Record<string, { subjectName: string; chapterList: strin
     ].join("\n"),
   },
   civics: {
-    subjectName: "Social Science – Political Science / Civics (Democratic Politics II)",
+    subjectName: "Social Science â€“ Political Science / Civics (Democratic Politics II)",
     chapterList: [
       "Chapter 1: Power Sharing (Belgian & Sri Lankan Models, Forms of Power Sharing, Majoritarianism vs Accommodation)",
       "Chapter 2: Federalism (What is Federalism, India as a Federal Country, Decentralisation, Panchayati Raj)",
@@ -469,7 +469,7 @@ const CLASS10_CHAPTERS: Record<string, { subjectName: string; chapterList: strin
     ].join("\n"),
   },
   economics: {
-    subjectName: "Social Science – Economics (Understanding Economic Development)",
+    subjectName: "Social Science â€“ Economics (Understanding Economic Development)",
     chapterList: [
       "Chapter 1: Development (What is Development, Income and Other Goals, National Development, Sustainable Development)",
       "Chapter 2: Sectors of the Indian Economy (Primary/Secondary/Tertiary, GDP, Organised/Unorganised, MNREGA)",
@@ -479,20 +479,20 @@ const CLASS10_CHAPTERS: Record<string, { subjectName: string; chapterList: strin
     ].join("\n"),
   },
   english: {
-    subjectName: "English – First Flight & Footprints Without Feet",
+    subjectName: "English â€“ First Flight & Footprints Without Feet",
     chapterList: [
-      "First Flight – Prose: A Letter to God, Nelson Mandela Long Walk to Freedom, Two Stories About Flying, From the Diary of Anne Frank, Glimpses of India, Mijbil the Otter, Madam Rides the Bus, The Sermon at Benares, The Proposal (Drama)",
-      "First Flight – Poetry: Dust of Snow, Fire and Ice, A Tiger in the Zoo, How to Tell Wild Animals, The Ball Poem, Amanda, Animals, The Trees, Fog, The Tale of Custard the Dragon, For Anne Gregory",
+      "First Flight â€“ Prose: A Letter to God, Nelson Mandela Long Walk to Freedom, Two Stories About Flying, From the Diary of Anne Frank, Glimpses of India, Mijbil the Otter, Madam Rides the Bus, The Sermon at Benares, The Proposal (Drama)",
+      "First Flight â€“ Poetry: Dust of Snow, Fire and Ice, A Tiger in the Zoo, How to Tell Wild Animals, The Ball Poem, Amanda, Animals, The Trees, Fog, The Tale of Custard the Dragon, For Anne Gregory",
       "Footprints Without Feet: A Triumph of Surgery, The Thief's Story, The Midnight Visitor, A Question of Trust, Footprints Without Feet, The Making of a Scientist, The Necklace, Bholi, The Book That Saved the Earth",
       "Grammar: Determiners, Tenses, Modals, Active-Passive Voice, Reported Speech, Subject-Verb Agreement, Clauses",
       "Writing Skills: Formal Letter, Informal Letter, Notice, Article, Story Completion, Paragraph",
     ].join("\n"),
   },
   hindi: {
-    subjectName: "Hindi – Sparsh, Sanchayan, Kshitij, Kritika",
+    subjectName: "Hindi â€“ Sparsh, Sanchayan, Kshitij, Kritika",
     chapterList: [
-      "Kshitij (Prose): Surdas ke Pad, Tulsidas ke Pad, Dev ke Savaiye/Kavitt, Jaishankar Prasad – Aatmakathya, Suryakant Tripathi Nirala – Utsah/At nahi rahi, Nagarjuna – Yeh Danturit Muskaan, Mangu Bai – Fasal",
-      "Kshitij (Prose): Premchand – Netaji ka Chashma, Sarveshwar Dayal Saxena – Balgobin Bhagat, Anu Sinha – Lakhnavii Andaz, Mannu Bhandari – Manaviya Karuna ki Divya Chamak, Mahadevi Verma – Mera Chhota sa Niji Pustakalaya",
+      "Kshitij (Prose): Surdas ke Pad, Tulsidas ke Pad, Dev ke Savaiye/Kavitt, Jaishankar Prasad â€“ Aatmakathya, Suryakant Tripathi Nirala â€“ Utsah/At nahi rahi, Nagarjuna â€“ Yeh Danturit Muskaan, Mangu Bai â€“ Fasal",
+      "Kshitij (Prose): Premchand â€“ Netaji ka Chashma, Sarveshwar Dayal Saxena â€“ Balgobin Bhagat, Anu Sinha â€“ Lakhnavii Andaz, Mannu Bhandari â€“ Manaviya Karuna ki Divya Chamak, Mahadevi Verma â€“ Mera Chhota sa Niji Pustakalaya",
       "Kritika: Maa ka Anchu, George Pancham ki Naak, Saana Saana Haath Jodi, Aye Aariz Nahi, Main Kyon Likhta Hoon",
       "Grammar: Shabd-Bhed (Sangya/Sarvanaam/Visheshan/Kriya/Avyay), Sandhi-Viched, Samas, Alankar (Anupras/Rupak/Upma/Utpreksha), Vakya-Bhed, Muhavare, Lokoktiyan",
       "Writing: Patra Lekhan (Aupcharik/Anaupcharik), Anuched Lekhan, Suchna Lekhan, Sandesh Lekhan, Vigyapan",
@@ -500,9 +500,9 @@ const CLASS10_CHAPTERS: Record<string, { subjectName: string; chapterList: strin
   },
 };
 
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // SUPABASE SESSION HELPERS
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function getSession(key: string): Promise<ExamSession | null> {
   try {
@@ -578,9 +578,9 @@ async function getSessionByStudent(
   return null;
 }
 
-// ─────────────────────────────────────────────────────────────
-// SYLLABUS HELPERS — now with complete Class 10 database
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// SYLLABUS HELPERS
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function getChaptersForSubject(
   subjectRequest: string,
@@ -589,7 +589,6 @@ function getChaptersForSubject(
   const req      = subjectRequest.toLowerCase();
   const classNum = parseInt(studentClass) || 9;
 
-  // ── FIX: Class 10 now has its own full chapter database ──
   if (classNum === 10) {
     if (/science|physics|chemistry|biology/.test(req))
       return CLASS10_CHAPTERS.science;
@@ -617,14 +616,12 @@ function getChaptersForSubject(
       return CLASS10_CHAPTERS.english;
     if (/hindi/.test(req))
       return CLASS10_CHAPTERS.hindi;
-    // fallback for unknown subjects at Class 10
     return {
       subjectName: subjectRequest,
       chapterList: `Use the complete official NCERT Class 10 ${subjectRequest} syllabus.`,
     };
   }
 
-  // ── Class 9 (unchanged) ──
   if (classNum === 9) {
     const s = syllabus.subjects;
 
@@ -644,28 +641,28 @@ function getChaptersForSubject(
     }
     if (/history/.test(req)) {
       return {
-        subjectName: "Social Science – History",
+        subjectName: "Social Science â€“ History",
         chapterList: (s.social_science.history.chapters as ChapterEntry[])
           .map((c) => `Chapter ${c.number}: ${c.name}`).join("\n"),
       };
     }
     if (/geo|geography/.test(req)) {
       return {
-        subjectName: "Social Science – Geography (Contemporary India I)",
+        subjectName: "Social Science â€“ Geography (Contemporary India I)",
         chapterList: (s.social_science.geography.chapters as ChapterEntry[])
           .map((c) => `Chapter ${c.number}: ${c.name}`).join("\n"),
       };
     }
     if (/civic|politic|democracy/.test(req)) {
       return {
-        subjectName: "Social Science – Civics (Democratic Politics I)",
+        subjectName: "Social Science â€“ Civics (Democratic Politics I)",
         chapterList: (s.social_science.civics.chapters as ChapterEntry[])
           .map((c) => `Chapter ${c.number}: ${c.name}`).join("\n"),
       };
     }
     if (/econ/.test(req)) {
       return {
-        subjectName: "Social Science – Economics",
+        subjectName: "Social Science â€“ Economics",
         chapterList: (s.social_science.economics.chapters as ChapterEntry[])
           .map((c) => `Chapter ${c.number}: ${c.name}`).join("\n"),
       };
@@ -687,7 +684,7 @@ function getChaptersForSubject(
     if (/english/.test(req)) {
       const { fiction, poetry, drama } = s.english.sections;
       return {
-        subjectName: "English – Beehive",
+        subjectName: "English â€“ Beehive",
         chapterList:
           `FICTION:\n${fiction.map((t: string, i: number) => `${i + 1}. ${t}`).join("\n")}\n\n` +
           `POETRY:\n${poetry.map((t: string, i: number) => `${i + 1}. ${t}`).join("\n")}\n\n` +
@@ -709,22 +706,21 @@ function getChaptersForSubject(
     };
   }
 
-  // ── Other classes — use NCERT topic hints ──
   const subjectLabel =
     /science|physics|chemistry|biology/.test(req) ? "Science" :
     /math/.test(req)                               ? "Mathematics" :
-    /history/.test(req)                            ? "Social Science – History" :
-    /geo|geography/.test(req)                      ? "Social Science – Geography" :
-    /civic|politic|democracy/.test(req)            ? "Social Science – Civics/Political Science" :
+    /history/.test(req)                            ? "Social Science â€“ History" :
+    /geo|geography/.test(req)                      ? "Social Science â€“ Geography" :
+    /civic|politic|democracy/.test(req)            ? "Social Science â€“ Civics/Political Science" :
     /econ/.test(req)                               ? "Economics" :
     /sst|social/.test(req)                         ? "Social Science" :
     /english/.test(req)                            ? "English" :
     /hindi/.test(req)                              ? "Hindi" :
     subjectRequest;
 
-  const subjectName = `${subjectLabel} – Class ${classNum}`;
+  const subjectName = `${subjectLabel} â€“ Class ${classNum}`;
   const chapterList = [
-    `[NCERT SYLLABUS — CLASS ${classNum} ${subjectLabel.toUpperCase()}]`,
+    `[NCERT SYLLABUS â€” CLASS ${classNum} ${subjectLabel.toUpperCase()}]`,
     `Use the real, complete official NCERT/CBSE Class ${classNum} ${subjectLabel} syllabus.`,
     `Draw questions ONLY from genuine NCERT Class ${classNum} ${subjectLabel} chapters as prescribed by CBSE.`,
     getNcertTopicHints(subjectLabel, classNum),
@@ -738,7 +734,7 @@ function getNcertTopicHints(subject: string, classNum: number): string {
 
   if (/english/.test(s)) {
     const hintMap: Record<number, string> = {
-      6:  "A Tale of Two Birds, The Friendly Mongoose, The Shepherd's Treasure, Taro's Reward, An Indian – American Woman in Space, The Wonder Called Sleep, A Pact with the Sun",
+      6:  "A Tale of Two Birds, The Friendly Mongoose, The Shepherd's Treasure, Taro's Reward, An Indian â€“ American Woman in Space, The Wonder Called Sleep, A Pact with the Sun",
       7:  "Three Questions, A Gift of Chappals, Gopal and the Hilsa-Fish, The Ashes That Made Trees Bloom, Quality, Expert Detectives, The Invention of Vita-Wonk",
       8:  "The Best Christmas Present in the World, The Tsunami, Glimpses of the Past, Bepin Choudhury's Lapse of Memory, The Summit Within, This is Jody's Fawn, A Visit to Cambridge",
       11: "The Portrait of a Lady, We're Not Afraid to Die, Discovering Tut, The Laburnum Top, The Voice of the Rain, Silk Road, Father to Son",
@@ -780,9 +776,9 @@ function getNcertTopicHints(subject: string, classNum: number): string {
 
   if (/hindi/.test(s)) {
     const hintMap: Record<number, string> = {
-      6:  "वह चिड़िया जो, बचपन, नादान दोस्त, चाँद से थोड़ी सी गप्पें, अक्षरों का महत्व, पार नज़र के, साथी हाथ बढ़ाना, ऐसे-ऐसे, टिकट एल्बम, झाँसी की रानी, जो देखकर भी नहीं देखते, संसार पुस्तक है",
-      7:  "हम पंछी उन्मुक्त গগন के, दादी माँ, हिमालय की बेटियाँ, कठपुतली, मिठाईवाला, रक्त और हमारा शरीर, पापा खो गए, शाम एक किसान, चिड़िया की बच्ची, अपूर्व अनुभव",
-      8:  "ध्वनि, लाख की चूड़ियाँ, बस की यात्रा, दीवानों की हस्ती, चिट्ठियों की अनूठी दुनिया, भगवान के डाकिए, क्या निराश हुआ जाए, यह सबसे कठिन समय नहीं, कबीर की साखियाँ, कामचोर",
+      6:  "à¤µà¤¹ à¤šà¤¿à¤¡à¤¼à¤¿à¤¯à¤¾ à¤œà¥‹, à¤¬à¤šà¤ªà¤¨, à¤¨à¤¾à¤¦à¤¾à¤¨ à¤¦à¥‹à¤¸à¥à¤¤, à¤šà¤¾à¤à¤¦ à¤¸à¥‡ à¤¥à¥‹à¤¡à¤¼à¥€ à¤¸à¥€ à¤—à¤ªà¥à¤ªà¥‡à¤‚, à¤…à¤•à¥à¤·à¤°à¥‹à¤‚ à¤•à¤¾ à¤®à¤¹à¤¤à¥à¤µ, à¤ªà¤¾à¤° à¤¨à¤œà¤¼à¤° à¤•à¥‡, à¤¸à¤¾à¤¥à¥€ à¤¹à¤¾à¤¥ à¤¬à¤¢à¤¼à¤¾à¤¨à¤¾, à¤à¤¸à¥‡-à¤à¤¸à¥‡, à¤Ÿà¤¿à¤•à¤Ÿ à¤à¤²à¥à¤¬à¤®, à¤à¤¾à¤à¤¸à¥€ à¤•à¥€ à¤°à¤¾à¤¨à¥€, à¤œà¥‹ à¤¦à¥‡à¤–à¤•à¤° à¤­à¥€ à¤¨à¤¹à¥€à¤‚ à¤¦à¥‡à¤–à¤¤à¥‡, à¤¸à¤‚à¤¸à¤¾à¤° à¤ªà¥à¤¸à¥à¤¤à¤• à¤¹à¥ˆ",
+      7:  "à¤¹à¤® à¤ªà¤‚à¤›à¥€ à¤‰à¤¨à¥à¤®à¥à¤•à¥à¤¤ à¦—à¦—à¦¨ à¤•à¥‡, à¤¦à¤¾à¤¦à¥€ à¤®à¤¾à¤, à¤¹à¤¿à¤®à¤¾à¤²à¤¯ à¤•à¥€ à¤¬à¥‡à¤Ÿà¤¿à¤¯à¤¾à¤, à¤•à¤ à¤ªà¥à¤¤à¤²à¥€, à¤®à¤¿à¤ à¤¾à¤ˆà¤µà¤¾à¤²à¤¾, à¤°à¤•à¥à¤¤ à¤”à¤° à¤¹à¤®à¤¾à¤°à¤¾ à¤¶à¤°à¥€à¤°, à¤ªà¤¾à¤ªà¤¾ à¤–à¥‹ à¤—à¤, à¤¶à¤¾à¤® à¤à¤• à¤•à¤¿à¤¸à¤¾à¤¨, à¤šà¤¿à¤¡à¤¼à¤¿à¤¯à¤¾ à¤•à¥€ à¤¬à¤šà¥à¤šà¥€, à¤…à¤ªà¥‚à¤°à¥à¤µ à¤…à¤¨à¥à¤­à¤µ",
+      8:  "à¤§à¥à¤µà¤¨à¤¿, à¤²à¤¾à¤– à¤•à¥€ à¤šà¥‚à¤¡à¤¼à¤¿à¤¯à¤¾à¤, à¤¬à¤¸ à¤•à¥€ à¤¯à¤¾à¤¤à¥à¤°à¤¾, à¤¦à¥€à¤µà¤¾à¤¨à¥‹à¤‚ à¤•à¥€ à¤¹à¤¸à¥à¤¤à¥€, à¤šà¤¿à¤Ÿà¥à¤ à¤¿à¤¯à¥‹à¤‚ à¤•à¥€ à¤…à¤¨à¥‚à¤ à¥€ à¤¦à¥à¤¨à¤¿à¤¯à¤¾, à¤­à¤—à¤µà¤¾à¤¨ à¤•à¥‡ à¤¡à¤¾à¤•à¤¿à¤, à¤•à¥à¤¯à¤¾ à¤¨à¤¿à¤°à¤¾à¤¶ à¤¹à¥à¤† à¤œà¤¾à¤, à¤¯à¤¹ à¤¸à¤¬à¤¸à¥‡ à¤•à¤ à¤¿à¤¨ à¤¸à¤®à¤¯ à¤¨à¤¹à¥€à¤‚, à¤•à¤¬à¥€à¤° à¤•à¥€ à¤¸à¤¾à¤–à¤¿à¤¯à¤¾à¤, à¤•à¤¾à¤®à¤šà¥‹à¤°",
     };
     return hintMap[classNum] || `NCERT Class ${classNum} Hindi chapters`;
   }
@@ -790,31 +786,27 @@ function getNcertTopicHints(subject: string, classNum: number): string {
   return `NCERT Class ${classNum} ${subject} chapters as per the official CBSE curriculum`;
 }
 
-// ─────────────────────────────────────────────────────────────
-// *** FIX 2: POST-GENERATION MARKS VERIFICATION ***
-// Counts actual [X mark] patterns from generated paper and warns if off
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// POST-GENERATION MARKS VERIFICATION
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function verifyPaperMarks(paper: string, expectedTotal: number): {
   verified: number;
   isOff: boolean;
   warningMsg: string;
 } {
-  // Match all [N mark] or [N marks] patterns
   const matches = [...paper.matchAll(/\[(\d+)\s*marks?\]/gi)];
   let sum = 0;
   for (const m of matches) sum += parseInt(m[1]);
 
-  const tolerance = 2; // allow ±2 due to internal choice questions
+  const tolerance = 2;
   const isOff = Math.abs(sum - expectedTotal) > tolerance;
 
   const warningMsg = isOff
     ? `[PAPER MARKS WARNING] Expected ${expectedTotal}, counted ${sum} from question marks. Paper may be incomplete.`
     : "";
 
-  if (isOff) {
-    console.warn(warningMsg);
-  }
+  if (isOff) console.warn(warningMsg);
 
   return { verified: sum > 0 ? sum : expectedTotal, isOff, warningMsg };
 }
@@ -822,15 +814,15 @@ function verifyPaperMarks(paper: string, expectedTotal: number): {
 function parseTotalMarksFromPaper(paper: string, fallback: number = 25): number {
   const match = paper.match(/(?:maximum\s*marks?|total\s*marks?)\s*[:\-]\s*(\d+)/i);
   if (!match) {
-    console.warn(`[parseTotalMarksFromPaper] Could not extract total marks — defaulting to ${fallback}.`);
+    console.warn(`[parseTotalMarksFromPaper] Could not extract total marks â€” defaulting to ${fallback}.`);
     return fallback;
   }
   return parseInt(match[1]);
 }
 
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // GENERAL HELPERS
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function getKey(student?: StudentContext, sanitisedClass?: string): string {
   if (student?.sessionId) return student.sessionId;
@@ -892,9 +884,9 @@ function sanitiseUpload(raw: string): string {
     .trim();
 }
 
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // BUILD RICH HTML EVALUATION REPORT
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function buildEvalHtml(evalJson: Record<string, unknown>, fallbackText: string): string {
   try {
@@ -926,35 +918,26 @@ function buildEvalHtml(evalJson: Record<string, unknown>, fallbackText: string):
       const secPct = sec.maxMarks > 0 ? Math.round((sec.obtained / sec.maxMarks) * 100) : 0;
       const secColor = sec.obtained === sec.maxMarks ? "#27AE60" : sec.obtained >= sec.maxMarks * 0.6 ? "#E67E22" : "#E74C3C";
       const qRows = (sec.questions || []).map(q => {
-        const statusIcon = q.status === "correct" ? "✓" : q.status === "partial" ? "~" : q.status === "unattempted" ? "—" : "✗";
+        const statusIcon = q.status === "correct" ? "âœ“" : q.status === "partial" ? "~" : q.status === "unattempted" ? "â€”" : "âœ—";
         const rowBg = q.status === "correct" ? "#f0fff0" : q.status === "partial" ? "#fffde7" : q.status === "unattempted" ? "#f5f5f5" : "#fff0f0";
         const statusColor = q.status === "correct" ? "#27AE60" : q.status === "partial" ? "#E67E22" : q.status === "unattempted" ? "#888" : "#E74C3C";
 
-        // ── DETAILED EXPLANATION BLOCK (new) ──
         let detailBlock = "";
-
-        // Show marks deduction reason for partial/wrong answers
         if (q.marksDeductionReason && q.status !== "correct") {
           detailBlock += `<div style="margin-top:5px;padding:5px 8px;background:#fef9c3;border-left:3px solid #f59e0b;border-radius:0 4px 4px 0;font-size:11px;color:#78350f;">
             <strong>Why marks were deducted:</strong> ${q.marksDeductionReason}
           </div>`;
         }
-
-        // Show the correct answer with full explanation
         if (q.correctAnswer && q.status !== "correct") {
           detailBlock += `<div style="margin-top:5px;padding:5px 8px;background:#e0f2fe;border-left:3px solid #0284c7;border-radius:0 4px 4px 0;font-size:11px;color:#0c4a6e;">
             <strong>Correct answer:</strong> ${q.correctAnswer}
           </div>`;
         }
-
-        // Show detailed concept explanation for wrong/partial answers
         if (q.detailedExplanation && q.status !== "correct") {
           detailBlock += `<div style="margin-top:5px;padding:6px 8px;background:#f0fdf4;border-left:3px solid #16a34a;border-radius:0 4px 4px 0;font-size:11px;color:#14532d;line-height:1.6;">
             <strong>Explanation to remember:</strong> ${q.detailedExplanation}
           </div>`;
         }
-
-        // Show key concept missed
         if (q.keyConceptMissed && q.status !== "correct") {
           detailBlock += `<div style="margin-top:5px;padding:5px 8px;background:#fdf2f8;border-left:3px solid #a21caf;border-radius:0 4px 4px 0;font-size:11px;color:#701a75;">
             <strong>Key concept to revise:</strong> ${q.keyConceptMissed}
@@ -965,7 +948,7 @@ function buildEvalHtml(evalJson: Record<string, unknown>, fallbackText: string):
           <tr style="background:${rowBg};">
             <td style="padding:8px 10px;font-weight:700;color:#333;border:1px solid #ddd;white-space:nowrap;vertical-align:top;">${q.qNum}</td>
             <td style="padding:8px 10px;color:#333;border:1px solid #ddd;vertical-align:top;">
-              <div style="font-weight:600;margin-bottom:2px;">${q.topic || "—"}</div>
+              <div style="font-weight:600;margin-bottom:2px;">${q.topic || "â€”"}</div>
               <div style="font-size:12px;color:#475569;">${q.feedback || ""}</div>
               ${detailBlock}
             </td>
@@ -1004,18 +987,18 @@ function buildEvalHtml(evalJson: Record<string, unknown>, fallbackText: string):
     return `
 <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:860px;margin:0 auto;">
   <div style="background:#1F4E79;padding:20px 24px;border-radius:10px 10px 0 0;">
-    <div style="color:#fff;font-size:22px;font-weight:700;">📋 CBSE Evaluation Report</div>
+    <div style="color:#fff;font-size:22px;font-weight:700;">ðŸ“‹ CBSE Evaluation Report</div>
     <div style="color:#BDD7EE;font-size:14px;margin-top:4px;">${subject} &nbsp;|&nbsp; Class ${cls} &nbsp;|&nbsp; ${board}</div>
   </div>
   <div style="background:#EBF3FB;padding:12px 24px;display:flex;flex-wrap:wrap;gap:20px;border:1px solid #c8ddf0;border-top:none;">
-    <span style="font-size:13px;color:#333;"><b>Student:</b> ${studentName || "—"}</span>
-    <span style="font-size:13px;color:#333;"><b>Time Taken:</b> ${timeTaken}${overtime ? " ⚠️ Over limit" : ""}</span>
+    <span style="font-size:13px;color:#333;"><b>Student:</b> ${studentName || "â€”"}</span>
+    <span style="font-size:13px;color:#333;"><b>Time Taken:</b> ${timeTaken}${overtime ? " âš ï¸ Over limit" : ""}</span>
     <span style="font-size:13px;color:#333;"><b>Max Marks:</b> ${totalMarks}</span>
   </div>
   <div style="background:${gradeBg};border:2px solid ${gradeColor};border-radius:0 0 10px 10px;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:24px;">
     <div>
       <div style="font-size:36px;font-weight:800;color:${gradeColor};">${totalObtained} <span style="font-size:20px;color:#555;">/ ${totalMarks}</span></div>
-      <div style="font-size:15px;color:#555;margin-top:2px;">Marks Obtained &nbsp;•&nbsp; ${percentage}%</div>
+      <div style="font-size:15px;color:#555;margin-top:2px;">Marks Obtained &nbsp;â€¢&nbsp; ${percentage}%</div>
     </div>
     <div style="text-align:center;">
       <div style="font-size:48px;font-weight:800;color:${gradeColor};">${grade}</div>
@@ -1023,11 +1006,11 @@ function buildEvalHtml(evalJson: Record<string, unknown>, fallbackText: string):
     </div>
   </div>
   <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#92400e;">
-    <strong>📖 How to use this report:</strong> Every question where marks were deducted shows (1) why marks were cut, (2) the correct answer, (3) a detailed explanation to help you understand the concept, and (4) the key concept to revise. Use this to directly fix your weak areas.
+    <strong>ðŸ“– How to use this report:</strong> Every question where marks were deducted shows (1) why marks were cut, (2) the correct answer, (3) a detailed explanation to help you understand the concept, and (4) the key concept to revise.
   </div>
-  <div style="font-size:17px;font-weight:700;color:#1F4E79;border-bottom:3px solid #1F4E79;padding-bottom:6px;margin-bottom:16px;">📊 Question-wise Breakdown with Explanations</div>
+  <div style="font-size:17px;font-weight:700;color:#1F4E79;border-bottom:3px solid #1F4E79;padding-bottom:6px;margin-bottom:16px;">ðŸ“Š Question-wise Breakdown with Explanations</div>
   ${sectionHtml}
-  <div style="font-size:17px;font-weight:700;color:#1F4E79;border-bottom:3px solid #1F4E79;padding-bottom:6px;margin-bottom:16px;margin-top:8px;">📈 Summary</div>
+  <div style="font-size:17px;font-weight:700;color:#1F4E79;border-bottom:3px solid #1F4E79;padding-bottom:6px;margin-bottom:16px;margin-top:8px;">ðŸ“ˆ Summary</div>
   <table style="width:100%;border-collapse:collapse;margin-bottom:24px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.08);border-radius:6px;overflow:hidden;">
     <thead>
       <tr style="background:#1F4E79;">
@@ -1044,22 +1027,22 @@ function buildEvalHtml(evalJson: Record<string, unknown>, fallbackText: string):
       </tr>
     </tbody>
   </table>
-  <div style="font-size:17px;font-weight:700;color:#1F4E79;border-bottom:3px solid #1F4E79;padding-bottom:6px;margin-bottom:16px;">💬 Examiner's Remarks</div>
+  <div style="font-size:17px;font-weight:700;color:#1F4E79;border-bottom:3px solid #1F4E79;padding-bottom:6px;margin-bottom:16px;">ðŸ’¬ Examiner's Remarks</div>
   <div style="background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.08);padding:16px 20px;margin-bottom:8px;">
-    <div style="margin-bottom:10px;"><span style="color:#27AE60;font-weight:700;">✦ Strengths:</span> <span style="color:#333;">${strengths || "—"}</span></div>
-    <div style="margin-bottom:10px;"><span style="color:#E74C3C;font-weight:700;">✦ Weaknesses:</span> <span style="color:#333;">${weaknesses || "—"}</span></div>
-    <div><span style="color:#1F4E79;font-weight:700;">✦ Study Tip:</span> <span style="color:#333;">${studyTip || "—"}</span></div>
+    <div style="margin-bottom:10px;"><span style="color:#27AE60;font-weight:700;">âœ¦ Strengths:</span> <span style="color:#333;">${strengths || "â€”"}</span></div>
+    <div style="margin-bottom:10px;"><span style="color:#E74C3C;font-weight:700;">âœ¦ Weaknesses:</span> <span style="color:#333;">${weaknesses || "â€”"}</span></div>
+    <div><span style="color:#1F4E79;font-weight:700;">âœ¦ Study Tip:</span> <span style="color:#333;">${studyTip || "â€”"}</span></div>
   </div>
-  <div style="text-align:center;padding:16px 0;color:#1F4E79;font-weight:700;font-size:15px;">✦ End of Evaluation Report ✦</div>
+  <div style="text-align:center;padding:16px 0;color:#1F4E79;font-weight:700;font-size:15px;">âœ¦ End of Evaluation Report âœ¦</div>
 </div>`;
   } catch (e) {
     return `<pre style="font-family:monospace;white-space:pre-wrap;">${fallbackText}</pre>`;
   }
 }
 
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // SYLLABUS EXTRACTION FROM UPLOAD
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function parseSyllabusFromUpload(
   uploadedText: string,
@@ -1086,12 +1069,12 @@ CHAPTERS / TOPICS:
 
 Rules:
 - SUBJECT line must be ONE subject only
-- Do NOT include any commentary — output the structured list only
+- Do NOT include any commentary â€” output the structured list only
 
 RAW EXTRACTED TEXT FROM UPLOAD:
-──────────────────────────────────────────
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 ${safe}
-──────────────────────────────────────────
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 `.trim();
 
   const extracted = await callAI(extractionPrompt, [
@@ -1104,18 +1087,18 @@ ${safe}
   return {
     subjectName,
     chapterList:
-      `🚨 UPLOADED SYLLABUS — STRICT BOUNDARY 🚨\n` +
+      `ðŸš¨ UPLOADED SYLLABUS â€” STRICT BOUNDARY ðŸš¨\n` +
       `ABSOLUTE RULE: Every question on this paper must come EXCLUSIVELY from the topics listed below.\n` +
-      `A topic NOT listed below does NOT exist for this exam — do NOT include it under any circumstance.\n` +
+      `A topic NOT listed below does NOT exist for this exam â€” do NOT include it under any circumstance.\n` +
       `Do NOT use standard NCERT chapters that are absent from this list.\n\n` +
       extracted,
     raw: extracted,
   };
 }
 
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // SYLLABUS UPLOAD HANDLER
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function handleSyllabusUpload(
   uploadedText: string,
@@ -1129,11 +1112,11 @@ async function handleSyllabusUpload(
   if (!uploadedText || uploadedText.length <= 30) {
     return NextResponse.json({
       reply:
-        `⚠️ Could not extract readable text from your upload.\n\n` +
+        `âš ï¸ Could not extract readable text from your upload.\n\n` +
         `Please try:\n` +
-        `• A clearer photo with good lighting\n` +
-        `• A text-based PDF (not a scanned image)\n` +
-        `• Typing the subject name directly instead`,
+        `â€¢ A clearer photo with good lighting\n` +
+        `â€¢ A text-based PDF (not a scanned image)\n` +
+        `â€¢ Typing the subject name directly instead`,
     });
   }
 
@@ -1165,30 +1148,29 @@ async function handleSyllabusUpload(
     if (reqs.timeMinutes)          parts.push(`${formatTimeAllowed(reqs.timeMinutes)}`);
     if (reqs.questionTypes.length) parts.push(reqs.questionTypes.join(" + "));
     if (reqs.questionCount)        parts.push(`${reqs.questionCount} questions`);
-    if (reqs.chapterFilter)        parts.push(reqs.chapterFilter);
     if (parts.length > 0) {
       formatConfirmation =
-        `\n✅ **Format detected:** ${parts.join(" · ")}\n` +
+        `\nâœ… **Format detected:** ${parts.join(" Â· ")}\n` +
         `The paper will be generated with these exact specifications.\n`;
     }
   }
 
   return NextResponse.json({
     reply:
-      `📄 **Syllabus ${isOverride ? "updated" : "uploaded"} successfully!**\n\n` +
+      `ðŸ“„ **Syllabus ${isOverride ? "updated" : "uploaded"} successfully!**\n\n` +
       `**Subject detected:** ${subjectName}\n\n` +
       `**Topics / Chapters found:**\n${raw}\n\n` +
-      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”\n` +
       `The exam paper will be generated **strictly based on the above syllabus only**.\n` +
       formatConfirmation + `\n` +
-      `✅ If this looks correct, type **start** to begin your exam.\n` +
-      `✏️ If something is wrong, upload a clearer image or retype the subject name.`,
+      `âœ… If this looks correct, type **start** to begin your exam.\n` +
+      `âœï¸ If something is wrong, upload a clearer image or retype the subject name.`,
   });
 }
 
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // CORE AI CALLER
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function callAI(
   sysPrompt: string,
@@ -1246,9 +1228,9 @@ async function callAIForEvaluation(
   return callAI(sysPrompt, messages, 90_000);
 }
 
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // EXAM TIME LIMIT
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const MAX_EXAM_MS = 3 * 60 * 60 * 1000;
 
@@ -1257,15 +1239,9 @@ function isOverTime(startedAt?: number): boolean {
   return Date.now() - startedAt > MAX_EXAM_MS;
 }
 
-// ─────────────────────────────────────────────────────────────
-// *** FIX 3: SHAURI PLANNER PAPER GENERATOR — ALL THREE GAPS PATCHED ***
-//
-// Changes from original:
-// 1. TOPIC BOUNDARY injected as hard constraint in system prompt
-// 2. getChaptersForSubject() now called to inject full NCERT chapter list
-//    alongside the specific day topic — so LLM has both context AND a hard boundary
-// 3. verifyPaperMarks() runs after generation and logs a warning if marks are off
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// FIX 6: SHAURI PLANNER PAPER GENERATOR â€” ALL FIXES APPLIED
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function generateShauriPaper(
   shauriPaper: ShauriPaperData,
@@ -1284,6 +1260,7 @@ async function generateShauriPaper(
     secondarySubject,
     secondaryTopic,
     writingSubject,
+    writingSubjects,       // FIX 6: dual-language array
     weekCoverage,
     formatBlock,
   } = shauriPaper;
@@ -1291,52 +1268,80 @@ async function generateShauriPaper(
   const timeAllowed = formatTimeAllowed(timeMinutes);
   const seed = makeSeed();
 
-  // Build the multi-subject label for the paper header
   const paperSubjectLabel = isRevisionDay
-    ? `Multi-Subject Revision (${writingSubject} Writing)`
+    ? `Multi-Subject Revision (${writingSubjects && writingSubjects.length > 1
+        ? writingSubjects.join(" + ")
+        : writingSubject} Writing)`
     : secondarySubject
       ? `${primarySubject} + ${secondarySubject} (${writingSubject} Writing)`
       : primarySubject;
 
-  // ── FIX 2: Look up NCERT chapter context for the primary subject ──
-  // This injects the full chapter list alongside the specific topic boundary
   const { chapterList: primaryChapterContext } = getChaptersForSubject(primarySubject, cls);
   const { chapterList: secondaryChapterContext } = secondarySubject
     ? getChaptersForSubject(secondarySubject, cls)
     : { chapterList: "" };
 
-  // ── FIX 1: TOPIC BOUNDARY — hard constraint injected in system prompt ──
-  // This is the most critical fix. Without this, the LLM drifts to the full chapter.
+  // FIX 6: Improved topicBoundaryBlock for both revision and study days
   const topicBoundaryBlock = isRevisionDay
     ? `
-TOPIC BOUNDARY — WEEK REVISION (ABSOLUTE RULE):
-Questions must ONLY come from the following week's topics. Do NOT go outside these topics.
-Week topics covered:
-${weekCoverage || "All topics from this study week"}
+TOPIC BOUNDARY â€” REVISION DAY (ABSOLUTE RULE):
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+Questions MUST come ONLY from the following days and topics.
+Do NOT include any topic from days outside this list â€” even if it is in the same chapter.
 
-Each topic in the week must have at least 1-2 questions in the paper.
-Distribute questions evenly across ALL listed week topics.
+COVERED DAYS AND TOPICS:
+${weekCoverage || "Topics from the covered study days"}
+
+SUBJECT DISTRIBUTION RULES:
+â€“ Every subject listed above MUST have at least 1â€“2 questions.
+â€“ Do NOT add topics from days not listed above.
+â€“ Section A MUST include exactly: Q1â€“Q6 standard MCQs + Q7â€“Q8 case-based MCQs + Q9â€“Q10 Assertion-Reason MCQs
+â€“ Section C is 5 questions Ã— 3 marks = 15 marks (NOT 5 Ã— 2 = 10)
+â€“ Section D is 2 case studies Ã— 5 marks = 10 marks (NOT 3 Ã— 5 = 15)
+â€“ Section E writing task MUST be in: ${
+      writingSubjects && writingSubjects.length > 1
+        ? `${writingSubjects[0]} (3 marks) AND ${writingSubjects[1]} (2 marks) â€” both required`
+        : `${writingSubject} only`
+    }
+
+AUTHORISED CHAPTER CONTEXT for ${primarySubject} (Class ${cls}):
+${primaryChapterContext}
+${secondarySubject ? `\nAUTHORISED CHAPTER CONTEXT for ${secondarySubject} (Class ${cls}):\n${secondaryChapterContext}` : ""}
 `.trim()
     : `
-TOPIC BOUNDARY — STUDY DAY (ABSOLUTE RULE):
-PRIMARY TOPIC CONSTRAINT: Every question in Sections A, B, C, D must test ONLY:
-"${primaryTopic}"
+TOPIC BOUNDARY â€” STUDY DAY (ABSOLUTE RULE):
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+PRIMARY TOPIC CONSTRAINT:
+Every question in Sections A, B, C, D must test ONLY:
+"${primaryTopic}" (${primarySubject})
 
-Do NOT include any other concept, chapter, or topic — even if it is part of the same subject.
-Example: If topic is "Euclid's Division Lemma; Ex 1.1 Q1-4" — ask ONLY about Euclid's Division Lemma
-and Exercise 1.1. Do NOT ask about Fundamental Theorem, irrational numbers, or any other chapter.
+Do NOT include any other concept, chapter, or topic â€” even if it is in the same subject.
+Example: If topic is "Euclid's Division Lemma; Ex 1.1 Q1â€“4" â€” test ONLY that.
+Do NOT ask about Fundamental Theorem of Arithmetic, irrational numbers, or any other sub-topic.
 
-${secondarySubject ? `SECONDARY TOPIC CONSTRAINT: Section B may include 1 question on:
-"${secondaryTopic}" from ${secondarySubject}` : ""}
+${secondarySubject ? `SECONDARY TOPIC CONSTRAINT:
+Section B may include at most 1 question from:
+"${secondaryTopic}" (${secondarySubject})
+All other sections test PRIMARY topic only.` : ""}
 
-SECTION E WRITING: Must be in ${writingSubject} language only.
+SECTION A STRUCTURE (mandatory â€” no exceptions):
+â€“ Q1â€“Q3: Standard MCQs with 4 options on PRIMARY topic
+â€“ Q4:    Case-based MCQ â€” short 2-line real-life scenario, then 1 MCQ on PRIMARY topic
+â€“ Q5:    Assertionâ€“Reason MCQ on PRIMARY topic
+          Options MUST be:
+          (A) Both A and R are true, and R is the correct explanation of A
+          (B) Both A and R are true, but R is NOT the correct explanation of A
+          (C) A is true but R is false
+          (D) A is false but R is true
+
+SECTION E: Must be in ${writingSubject} language ONLY.
+Topic for Section E must connect to the primary or secondary topic studied today.
 
 AUTHORISED CHAPTER CONTEXT for ${primarySubject} (Class ${cls}):
 ${primaryChapterContext}
 ${secondarySubject ? `\nAUTHORISED CHAPTER CONTEXT for ${secondarySubject} (Class ${cls}):\n${secondaryChapterContext}` : ""}
 `.trim();
 
-  // System prompt: format block + topic boundary + paper header
   const paperSystemPrompt = `
 You are an official CBSE-aligned question paper setter for Class ${cls}.
 ${seed}
@@ -1345,19 +1350,22 @@ ${formatBlock}
 
 ${topicBoundaryBlock}
 
-CRITICAL RULES — READ BEFORE GENERATING:
+CRITICAL RULES â€” READ BEFORE GENERATING:
 1. Total marks MUST equal exactly ${totalMarks}. Count ALL question marks before finalising.
-2. Generate ALL sections (A through E) completely — never stop early or skip a section.
+   Revision day breakdown: A(10)+B(10)+C(15)+D(10)+E(5) = 50
+   Study day breakdown:    A(5)+B(6)+C(6)+D(5)+E(3) = 25
+2. Generate ALL sections (A through E) completely â€” never stop early or skip a section.
 3. Every section must have EXACTLY the number of questions specified in the format above.
 4. Show marks for every question in [brackets].
 5. Paper header must show: Maximum Marks: ${totalMarks} | Time Allowed: ${timeAllowed}
-6. Output ONLY the question paper — no commentary, no preamble, nothing after the last question.
+6. Output ONLY the question paper â€” no commentary, no preamble, nothing after the last question.
 7. Each section must be clearly labelled: SECTION A, SECTION B, etc.
 8. Every question with an internal choice must use the word "OR" on its own line.
+9. Internal choices must be within the SAME subject â€” never across different subjects.
 `.trim();
 
   const paperHeaderContext = `
-PAPER HEADER — output this EXACTLY at the top:
+PAPER HEADER â€” output this EXACTLY at the top:
 Subject       : ${paperSubjectLabel}
 Class         : ${cls}
 Board         : ${board}
@@ -1367,26 +1375,34 @@ Maximum Marks : ${totalMarks}
 
   const fullSystemPrompt = paperSystemPrompt + "\n\n" + paperHeaderContext;
 
-  // User message is clean and matches the system prompt constraints
   const userMessage = isRevisionDay
-    ? `Generate the complete SHAURI Revision Day test paper. Topics: ${weekCoverage || "all week topics"}. Maximum Marks: ${totalMarks}. Writing section in ${writingSubject}. Generate ALL sections A through E completely.`
+    ? `Generate the complete SHAURI Revision Day test paper. Topics covered:\n${weekCoverage || "all week topics"}.\nMaximum Marks: ${totalMarks}. Writing section in ${writingSubjects && writingSubjects.length > 1 ? writingSubjects.join(" AND ") : writingSubject}. Generate ALL sections A through E completely.`
     : `Generate the complete SHAURI Study Day test paper. Topic: ${primaryTopic} (${primarySubject}). ${secondarySubject ? `Secondary: ${secondaryTopic} (${secondarySubject}).` : ""} Writing in ${writingSubject}. Maximum Marks: ${totalMarks}. Generate ALL sections A through E completely.`;
 
-  const paper = await callAI(
-    fullSystemPrompt,
-    [{ role: "user", content: userMessage }],
-    60_000
-  );
+  // FIX 7: Attempt one regeneration if marks are off
+  let paper = await callAI(fullSystemPrompt, [{ role: "user", content: userMessage }], 60_000);
 
-  const startTime = Date.now();
-
-  // ── FIX 3: Verify actual marks count in generated paper ──
-  const { verified: verifiedMarks, isOff, warningMsg } = verifyPaperMarks(paper, totalMarks);
+  let { verified: verifiedMarks, isOff } = verifyPaperMarks(paper, totalMarks);
 
   if (isOff) {
-    // Log for monitoring — paper still served but with warning in console
-    console.warn(`[SHAURI PAPER MARKS OFF] Expected=${totalMarks} Verified=${verifiedMarks} Subject=${paperSubjectLabel}`);
+    console.warn(`[SHAURI PAPER MARKS OFF] Expected=${totalMarks} Got=${verifiedMarks} â€” regenerating once`);
+    const retryMessage = userMessage +
+      `\n\nCRITICAL FIX NEEDED: Your previous attempt had ${verifiedMarks} marks instead of ${totalMarks}.` +
+      ` Regenerate the COMPLETE paper. Total marks MUST equal exactly ${totalMarks}.` +
+      ` Mandatory section breakdown: ${isRevisionDay
+        ? "A(10)+B(10)+C(15)+D(10)+E(5)=50"
+        : "A(5)+B(6)+C(6)+D(5)+E(3)=25"
+      }. Recount every question before outputting.`;
+    paper = await callAI(fullSystemPrompt, [{ role: "user", content: retryMessage }], 60_000);
+    const retryVerify = verifyPaperMarks(paper, totalMarks);
+    verifiedMarks = retryVerify.verified;
+    isOff = retryVerify.isOff;
+    if (isOff) {
+      console.warn(`[SHAURI PAPER MARKS STILL OFF after retry] Expected=${totalMarks} Got=${verifiedMarks}`);
+    }
   }
+
+  const startTime = Date.now();
 
   const activeSession: ExamSession = {
     session_key:     key,
@@ -1396,7 +1412,7 @@ Maximum Marks : ${totalMarks}
     question_paper:  paper,
     answer_log:      [],
     started_at:      startTime,
-    total_marks:     totalMarks, // always trust shauriPaper.totalMarks, not parsed
+    total_marks:     totalMarks,
     student_name:    name,
     student_class:   cls,
     student_board:   board,
@@ -1410,18 +1426,19 @@ Maximum Marks : ${totalMarks}
     isRevision: isRevisionDay,
     timeMinutes,
     marksOff: isOff,
+    writingSubjects,
   });
 
   return NextResponse.json({
     reply:
-      `⏱️ **Exam started! Timer is running.**\n\n` +
-      `📌 How to answer:\n` +
-      `• Answer questions in **any order** you prefer\n` +
-      `• Type answers directly in chat, OR\n` +
-      `• Upload **photos / PDFs** of your handwritten answers\n` +
-      `• You can send multiple messages — all will be collected\n` +
-      `• When fully done, type **submit** (or **done** / **finish**)\n\n` +
-      `Good luck${callName}! 💪 Give it your best.`,
+      `â±ï¸ **Exam started! Timer is running.**\n\n` +
+      `ðŸ“Œ How to answer:\n` +
+      `â€¢ Answer questions in **any order** you prefer\n` +
+      `â€¢ Type answers directly in chat, OR\n` +
+      `â€¢ Upload **photos / PDFs** of your handwritten answers\n` +
+      `â€¢ You can send multiple messages â€” all will be collected\n` +
+      `â€¢ When fully done, type **submit** (or **done** / **finish**)\n\n` +
+      `Good luck${callName}! ðŸ’ª Give it your best.`,
     paper,
     startTime,
     isRevisionDay,
@@ -1429,10 +1446,9 @@ Maximum Marks : ${totalMarks}
   });
 }
 
-// ─────────────────────────────────────────────────────────────
-// *** STRICT SUBJECT-SPECIFIC MARKING RULES ***
-// Expanded and made much stricter with step-level detail
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// STRICT SUBJECT-SPECIFIC MARKING RULES
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function getSubjectMarkingRules(evalSubj: string): string {
   const isEnglish = /english/i.test(evalSubj);
@@ -1443,200 +1459,156 @@ function getSubjectMarkingRules(evalSubj: string): string {
 
   if (isMath) return `
 MATHEMATICS STRICT MARKING RULES:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION A — MCQ & Assertion-Reason [1 mark each]:
-• MCQ: Correct option letter = 1 mark. Wrong option or no option = 0. Absolutely no partial marks.
-• Assertion-Reason: Award 1 mark ONLY for selecting the exact correct option (a/b/c/d). No partial.
-• If student writes working for an MCQ: ignore it. Mark only on the option selected.
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+SECTION A â€” MCQ & Assertion-Reason [1 mark each]:
+â€¢ MCQ: Correct option letter = 1 mark. Wrong option or no option = 0. No partial marks.
+â€¢ Assertion-Reason: Award 1 mark ONLY for selecting the exact correct option (a/b/c/d).
+â€¢ Case-based MCQ: Correct option = 1. Wrong = 0. No partial.
+â€¢ If student writes working for an MCQ: ignore it. Mark only on the option selected.
 
-SECTION B — Very Short Answer [2 marks each]:
-• BOTH steps must be correct for 2/2.
-• Correct method + arithmetic error in final step = 1/2 (method mark).
-• Wrong formula or wrong approach from the start = 0/2.
-• Correct answer without ANY working shown = 0/2 (working is compulsory for 2-mark questions).
-• Partially correct setup with no answer = 1/2.
+SECTION B â€” Very Short Answer [2 marks each]:
+â€¢ BOTH steps must be correct for 2/2.
+â€¢ Correct method + arithmetic error in final step = 1/2 (method mark).
+â€¢ Wrong formula or wrong approach from the start = 0/2.
+â€¢ Correct answer without ANY working shown = 0/2 (working is compulsory).
+â€¢ Partially correct setup with no answer = 1/2.
 
-SECTION C — Short Answer [3 marks each]:
-• Step marking: correct setup/formula (1) + correct working/substitution (1) + correct final answer with unit (1).
-• Correct method but wrong final answer due to arithmetic = 2/3.
-• Correct answer without showing steps = 1/3 maximum.
-• For geometry: correct construction/diagram (1) + correct proof steps (1) + correct conclusion (1).
-• Unit missing in final answer: deduct 0.5 (round down to nearest integer).
+SECTION C â€” Short Answer [3 marks each]:
+â€¢ Step marking: correct setup/formula (1) + correct working/substitution (1) + correct final answer with unit (1).
+â€¢ Correct method but wrong final answer due to arithmetic = 2/3.
+â€¢ Correct answer without showing steps = 1/3 maximum.
+â€¢ Unit missing in final answer: deduct 0.5 (round down).
 
-SECTION D — Long Answer [5 marks each]:
-• Theorem: Statement (1) + Given/To Prove/Construction (1) + Proof steps with reasons (2) + Conclusion (1).
-• Numerical: Formula stated (1) + Values substituted correctly (1) + Calculation steps shown (2) + Final answer with unit (1).
-• Skipping even one step = lose that step's mark.
-• Correct answer without full working = maximum 2/5.
-• Alternate valid methods: award full marks if method is correct and complete.
-
-SECTION E — Case Study [4 marks each per case]:
-• Sub (i) [1 mark]: Exact correct numerical answer or identification = 1. Wrong = 0. No partial.
-• Sub (ii) [1 mark]: Same as above.
-• Sub (iii) [2 marks]: Method (1) + Answer (1). Correct method wrong answer = 1/2.
+SECTION D â€” Long Answer / Case Study [5 marks each]:
+â€¢ Theorem: Statement (1) + Given/To Prove/Construction (1) + Proof steps with reasons (2) + Conclusion (1).
+â€¢ Numerical: Formula stated (1) + Values substituted correctly (1) + Calculation steps shown (2) + Final answer with unit (1).
+â€¢ Case study sub-questions: mark each sub-part strictly per its allocated mark.
+â€¢ Correct answer without full working = maximum 2/5.
 
 STRICTNESS RULES:
-• No marks for vague answers. "The answer is positive" is not an answer.
-• Correct answer in wrong units (e.g., cm instead of m) = deduct 1 mark.
-• No negative marking — minimum is always 0 per question.`;
+â€¢ No marks for vague answers.
+â€¢ Correct answer in wrong units = deduct 1 mark.
+â€¢ No negative marking â€” minimum is always 0 per question.`;
 
   if (isScience) return `
 SCIENCE STRICT MARKING RULES:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION A — Objective [1 mark each]:
-• MCQ: Only the exact correct option = 1. Wrong option = 0. No partial.
-• Assertion-Reason: Only exact correct option = 1.
-• Fill in blank: ONLY exact scientific term = 1. Synonym or approximate term = 0.
-• True/False with reason: True/False (0.5) + reason (0.5). Wrong True/False = 0 even if reason is correct.
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+SECTION A â€” Objective [1 mark each]:
+â€¢ MCQ: Only the exact correct option = 1. Wrong = 0. No partial.
+â€¢ Assertion-Reason: Only exact correct option = 1.
+â€¢ Case-based MCQ: Correct option = 1. Wrong = 0.
 
-SECTION B — Very Short Answer [2 marks each]:
-• Chemical equation questions: Correct reactants+products (1) + correctly balanced (1).
-• Unbalanced equation = 1/2 maximum even if formula is correct.
-• Definition: Must include ALL key terms from NCERT definition. Missing a key term = 1/2.
-• Diagram: Must be labelled. Unlabelled diagram = 0/2. Partial labels = 1/2.
-• 2 correct points = 2/2. Only 1 correct point = 1/2. 0 correct = 0.
+SECTION B â€” Very Short Answer [2 marks each]:
+â€¢ Chemical equation: Correct reactants+products (1) + correctly balanced (1).
+â€¢ Unbalanced equation = 1/2 maximum.
+â€¢ Definition: Must include ALL key terms from NCERT definition. Missing a key term = 1/2.
+â€¢ 2 correct points = 2/2. Only 1 correct point = 1/2.
 
-SECTION C — Short Answer [3 marks each]:
-• 3 distinct NCERT-accurate points = 3/3.
-• 2 correct points = 2/3. 1 correct point = 1/3.
-• Vague/general points that could apply to any topic = 0 each.
-• Diagram: all key parts labelled correctly = full marks. Missing a key label = −0.5 per label, max −1.
-• Chemical equation questions: correct formula (1) + balanced (1) + state symbols if asked (1).
+SECTION C â€” Short Answer [3 marks each]:
+â€¢ 3 distinct NCERT-accurate points = 3/3.
+â€¢ 2 correct points = 2/3. 1 correct point = 1/3.
+â€¢ Vague/general points = 0 each.
 
-SECTION D — Long Answer [5 marks each]:
-• Introduction/definition (1) + explanation with mechanism (2) + example/diagram (1) + conclusion/significance (1).
-• Numericals in Science: Formula (1) + substitution with units (1) + calculation (2) + answer with unit (1).
-• Missing units = deduct 0.5 per instance.
-• Diagram without labels = 0 for diagram mark.
-
-SECTION E — Case Study [4 marks each]:
-• Sub (i) [1 mark]: Exact identification from case = 1. Wrong = 0.
-• Sub (ii) [1 mark]: Correct inference or connection = 1. Vague = 0.
-• Sub (iii) [2 marks]: Scientific explanation (1) + correct conclusion/application (1).
+SECTION D â€” Case Study [5 marks each]:
+â€¢ Mark each sub-part strictly per its allocated mark.
+â€¢ Scientific explanation must use NCERT terminology.
+â€¢ Missing units = deduct 0.5 per instance.
 
 STRICTNESS RULES:
-• NCERT terminology is mandatory. Using wrong scientific terms = deduct marks.
-• "It is important because it helps" type vague answers = 0.
-• Common-sense answers without scientific backing = 0.`;
+â€¢ NCERT terminology is mandatory.
+â€¢ Common-sense answers without scientific backing = 0.`;
 
   if (isSST) return `
 SOCIAL SCIENCE STRICT MARKING RULES:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION A — Objective [1 mark each]:
-• MCQ: Only exact correct option = 1. Wrong = 0.
-• Assertion-Reason: Correct option = 1. Wrong = 0.
-• Fill in blank: Exact correct term = 1. Close/approximate = 0.
-• Match the following: Each correct pair = 1. Partial matches in a row = 0.
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+SECTION A â€” Objective [1 mark each]:
+â€¢ MCQ/AR/Case-based: Only exact correct option = 1. Wrong = 0.
 
-SECTION B — Short Answer [3 marks each]:
-• Award 1 mark per distinct, NCERT-accurate, relevant point.
-• Maximum 3 points = 3 marks. Must name specific events, people, dates, places.
-• "The government did many things" = 0 (too vague).
-• Mentioning a fact that is off-topic for the question = 0 for that point.
-• Copy-paste of entire paragraph without relevance to question = 0.
+SECTION B â€” Short Answer [3 marks each]:
+â€¢ Award 1 mark per distinct, NCERT-accurate, relevant point (max 3).
+â€¢ Must name specific events, people, dates, places.
+â€¢ Vague points = 0.
 
-SECTION C — Long Answer [5 marks each]:
-• Introduction with context (1) + main body with min 3 NCERT-accurate points (2) + example/evidence (1) + conclusion (1).
-• Each point in main body must be distinct — repeating same idea in different words = counts as 1 point only.
-• Must answer the SPECIFIC question asked — answering a related but different question = max 2/5.
+SECTION C â€” Long Answer [5 marks each]:
+â€¢ Introduction (1) + 3 main NCERT-accurate points (2) + example/evidence (1) + conclusion (1).
+â€¢ Answering a related but different question = max 2/5.
 
-SECTION D — Source-Based [4 marks each]:
-• Sub (i) [1 mark]: Correct identification directly from source text = 1. Guessing = 0.
-• Sub (ii) [1 mark]: Correct inference from source = 1. Stating something not in source = 0.
-• Sub (iii) [2 marks]: Source reference (1) + own knowledge extension (1). Own knowledge only without source = 1/2.
-
-SECTION E — Map [5 marks total]:
-• Each correctly marked and labelled location = 1. Location marked in wrong region = 0.
-• No partial marks for map — exact location or nothing.
-• Illegible label = 0.
+SECTION D â€” Case Study [5 marks each]:
+â€¢ Sub-questions marked strictly per allocated mark.
+â€¢ Answer must reference the case passage + own knowledge.
 
 STRICTNESS RULES:
-• Must use NCERT chapter-specific facts. General knowledge answers = 0.
-• Dates, specific names, and places must be accurate — "around 1800s" for a known date = 0.
-• Answers must be in the context of Class 10 NCERT content only.`;
+â€¢ NCERT chapter-specific facts only.
+â€¢ Approximate dates for known events = 0.`;
 
   if (isEnglish) return `
 ENGLISH STRICT MARKING RULES:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION A — Reading Comprehension [20 marks]:
-• MCQ (1 mark each): Correct option only = 1. Wrong = 0. No partial.
-• Short answer (1 mark each): Answer must be directly from the passage. Outside inference = 0.
-• Paraphrased passage content = 1. Fabricated answer not in passage = 0.
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+SECTION A â€” MCQ/Case-based/AR [1 mark each]: Correct option only = 1. Wrong = 0.
 
-SECTION B — Writing Skills [20 marks]:
-• Format marks (1): Must include ALL required format elements (e.g., date, subject, salutation for letter). Missing even one = 0 for format.
-• Content marks (2): Award 1 per relevant content point up to maximum. Irrelevant content = 0.
-• Expression marks (2): Correct sentence structure + appropriate vocabulary = 2. Multiple grammar errors = 1. Incomprehensible writing = 0.
-• Word limit: Significantly over/under limit (>30% deviation) = deduct 1 from expression.
+SECTION B â€” Writing Skills [marks as allocated]:
+â€¢ Format (1): ALL required elements present = 1. Even one missing = 0.
+â€¢ Content (2): 1 per relevant, specific point. Irrelevant = 0.
+â€¢ Expression (2): Correct grammar + vocabulary = 2. Multiple errors = 1.
+â€¢ Word limit: >30% deviation = deduct 1 from expression.
 
-SECTION C — Grammar [20 marks — 1 mark each]:
-• Only the grammatically correct answer = 1. Almost-correct answers = 0.
-• Spelling error that changes grammar (e.g., "there" vs "their") = 0.
-• Spelling error that does NOT change grammar = deduct 0 (content accepted).
-• Two answers written: mark only the first one.
+SECTION C â€” Grammar [1 mark each]:
+â€¢ Only grammatically correct answer = 1. Almost-correct = 0.
+â€¢ Two answers written: mark only the first.
 
-SECTION D — Literature [20 marks]:
-• Extract MCQ (1 mark each): Correct option = 1. Wrong = 0.
-• Short answer (2 marks): Correct answer with textual reference = 2. Correct answer without reference = 1. Wrong answer = 0.
-• Long answer (4 marks): Relevant argument (2) + expression/clarity (1) + textual evidence (1).
-  - Answer that ignores the question = max 1/4.
-  - No textual evidence = max 2/4.
+SECTION D â€” Literature [marks as allocated]:
+â€¢ Short answer: Correct + textual reference = full marks. Correct without reference = half.
+â€¢ Long answer: Argument (2) + expression (1) + textual evidence (1) per 4-mark question.
 
 STRICTNESS RULES:
-• Grammar answers are binary — no partial marks.
-• Writing tasks: vague/off-topic content = 0 for content marks.
-• Incorrect format for formal letter/notice = always 0 for format mark.`;
+â€¢ Grammar: binary â€” no partial marks.
+â€¢ Incorrect format for formal letter/notice = 0 for format mark.`;
 
   if (isHindi) return `
 HINDI STRICT MARKING RULES:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION A — Apathit Gadyansh/Kavyansh [20 marks]:
-• MCQ (1 mark each): Only exact correct option = 1.
-• Laghuttari prashn (1 mark each): Answer must come directly from the passage. Outside content = 0.
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+SECTION A â€” MCQ/Case-based/AR [1 mark each]: Only exact correct option = 1.
 
-SECTION B — Lekhan [20 marks]:
-• Patra format (1): All required elements (bhejne wale ka pata, tarikh, vishay, sambodhan, hastakshar) must be present. Even one missing = 0 for format.
-• Vishay vastu / content (2): 1 per relevant, specific point. General/vague content = 0.
-• Bhasha / language (2): Correct Hindi grammar + appropriate vocabulary = 2. Multiple vyakaran dosha = 1. Incomprehensible = 0.
+SECTION B â€” Lekhan [marks as allocated]:
+â€¢ Format (1): All required elements present = 1. Even one missing = 0.
+â€¢ Vishay vastu (2): 1 per relevant specific point. Vague = 0.
+â€¢ Bhasha (2): Correct Hindi grammar + vocabulary = 2. Multiple errors = 1.
 
-SECTION C — Vyakaran [20 marks — 1 mark each]:
-• Only the exact grammatically correct answer = 1.
-• Close but wrong = 0. No partial marks for grammar.
-• Two answers written = mark only the first.
+SECTION C â€” Vyakaran [1 mark each]:
+â€¢ Only exact grammatically correct answer = 1. Close but wrong = 0.
+â€¢ Two answers written = mark only first.
 
-SECTION D — Pathen [20 marks]:
-• Extract MCQ (1 mark): Correct option = 1.
-• Short answer (2 marks): Correct answer with sandarbh = 2. Correct without sandarbh = 1. Wrong = 0.
-• Long answer (4 marks): Content (2) + Bhasha (1) + Sandarbh/prasang (1).
+SECTION D â€” Pathen [marks as allocated]:
+â€¢ Short answer: Correct + sandarbh = full marks. Correct without sandarbh = half.
 
 STRICTNESS RULES:
-• Grammar section: binary marking — no partial marks.
-• Vigyapan/Sandesh: missing required format elements = 0 for format marks.
-• Hindi must be grammatically correct — English words substituted unnecessarily = deduct from Bhasha.`;
+â€¢ Grammar section: binary â€” no partial marks.
+â€¢ Missing vigyapan/sandesh format elements = 0 for format marks.`;
 
-  // Default for unknown subjects
   return `
 GENERAL STRICT MARKING RULES:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION A — Objective [1 mark each]: Exact correct answer only = 1. Wrong/vague = 0. No partial.
-SECTION B — Very Short Answer [2 marks]: 2 accurate points = 2. 1 point = 1. Vague = 0.
-SECTION C — Short Answer [3 marks]: 3 accurate NCERT points = 3. Award 1 per distinct correct point.
-SECTION D — Long Answer [5 marks]: Introduction (1) + 3 main points (2) + example (1) + conclusion (1).
-SECTION E — Case Study [4 marks]: Sub(i) 1m + Sub(ii) 1m + Sub(iii) 2m. Strict — no vague answers.
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+SECTION A â€” Objective [1 mark each]: Exact correct answer = 1. Wrong/vague = 0. No partial.
+SECTION B â€” Very Short Answer [2 marks]: 2 accurate points = 2. 1 point = 1. Vague = 0.
+SECTION C â€” Short Answer [3 marks]: 3 accurate NCERT points = 3. 1 per distinct correct point.
+SECTION D â€” Case Study [5 marks]: Mark each sub-part strictly per its allocated mark.
+SECTION E â€” Writing [3â€“5 marks]: Format + content + language strictly marked.
 
 UNIVERSAL STRICTNESS:
-• Vague answers without specific content = 0.
-• "It is important/useful/helpful" without explaining HOW = 0.
-• No marks for answers that are off-topic even if they look long.`;
+â€¢ Vague answers without specific content = 0.
+â€¢ No marks for answers that are off-topic even if they look long.`;
 }
 
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // MAIN POST HANDLER
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    const nameForLog = String((body as any)?.student?.name || (body as any)?.name || "Student");
+    const classForLog = String((body as any)?.student?.class || (body as any)?.class || "10");
+    await upsertUser({ name: nameForLog, class: classForLog, usageCount: 1, activity: "Active" });
 
     const mode: string            = body?.mode || "";
     const student: StudentContext = body?.student || {};
@@ -1666,7 +1638,6 @@ export async function POST(req: NextRequest) {
 
     let uploadedText: string = sanitiseUpload(rawUploadedText);
 
-    // ── VISION/OCR ──
     if (rawUploadedText.includes("[IMAGE_BASE64]")) {
       const base64Match = rawUploadedText.match(/\[IMAGE_BASE64\]\n(data:image\/[^;]+;base64,[^\n]+)/);
       if (base64Match) {
@@ -1717,13 +1688,13 @@ export async function POST(req: NextRequest) {
       { role: "user", content: message },
     ];
 
-    // ═══════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // TEACHER MODE
-    // ═══════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     if (mode === "teacher") {
       if (isGreeting(lower) && history.length === 0) {
         return NextResponse.json({
-          reply: `Hey ${greetName}! 😊 I'm Shauri — think of me as your friendly ${board} teacher${cls ? ` for Class ${cls}` : ""}.\n\nI'm here to help you understand anything — concepts, doubts, revision, examples, you name it! What's on your mind today?`,
+          reply: `Hey ${greetName}! ðŸ˜Š I'm Shauri â€” think of me as your friendly ${board} teacher${cls ? ` for Class ${cls}` : ""}.\n\nI'm here to help you understand anything â€” concepts, doubts, revision, examples, you name it! What's on your mind today?`,
         });
       }
 
@@ -1742,16 +1713,16 @@ export async function POST(req: NextRequest) {
         const msgL = message.toLowerCase();
         let warmReply: string;
         if (/how are you|how r u/.test(msgL)) {
-          warmReply = `Doing great, thanks for asking, ${greetName}! 😄 Ready to help you with your studies. What subject are we tackling today?`;
+          warmReply = `Doing great, thanks for asking, ${greetName}! ðŸ˜„ Ready to help you with your studies. What subject are we tackling today?`;
         } else {
-          warmReply = `Appreciate you chatting, ${greetName}! 😊 I'm best when helping you learn — ask me anything from your syllabus and I'll make it super clear. What's your first question?`;
+          warmReply = `Appreciate you chatting, ${greetName}! ðŸ˜Š I'm best when helping you learn â€” ask me anything from your syllabus and I'll make it super clear. What's your first question?`;
         }
         return NextResponse.json({ reply: warmReply });
       }
 
       if (currentIsOffTopic && totalOffTopic >= 2) {
         return NextResponse.json({
-          reply: `I totally get it — sometimes you just want to chat! 😄 But I'm most useful as your study buddy, ${greetName}. Let's make the most of our time together — pick a subject and throw your toughest question at me! 💪`,
+          reply: `I totally get it â€” sometimes you just want to chat! ðŸ˜„ But I'm most useful as your study buddy, ${greetName}. Let's make the most of our time together â€” pick a subject and throw your toughest question at me! ðŸ’ª`,
         });
       }
 
@@ -1770,7 +1741,7 @@ export async function POST(req: NextRequest) {
         /hindi/i.test(bodySubject) ||
         bodyLang === "hi-IN" ||
         /[\u0900-\u097F]{5,}/.test(teacherConversationText) ||
-        /hindi|हिंदी/i.test(teacherConversationText);
+        /hindi|à¤¹à¤¿à¤‚à¤¦à¥€/i.test(teacherConversationText);
 
       const isMathTeacher =
         !isHindiTeacher && (
@@ -1782,21 +1753,21 @@ export async function POST(req: NextRequest) {
 
       const teacherSystemPrompt = name
         ? systemPrompt("teacher", subjectOverride) +
-          `\n\nSTUDENT IDENTITY: The student's name is ${name}${cls ? `, Class ${cls}` : ""}${board ? `, ${board}` : ""}. Always address them as ${name} — NEVER as "Student" or "there".` +
+          `\n\nSTUDENT IDENTITY: The student's name is ${name}${cls ? `, Class ${cls}` : ""}${board ? `, ${board}` : ""}. Always address them as ${name} â€” NEVER as "Student" or "there".` +
           `\n\nRESPONSE RULES: Be concise and natural. For greetings or small talk, reply in 1-2 sentences max. Only give longer explanations when the student asks about a concept or topic. Be warm, direct, encouraging.`
         : systemPrompt("teacher", subjectOverride);
 
       const reply = await callAI(teacherSystemPrompt, teacherConversation);
+      await addActivity({ id: crypto.randomUUID(), createdAt: new Date().toISOString(), userQuery: message || "", aiResponse: reply, mode, user: nameForLog });
       return NextResponse.json({ reply });
     }
 
-    // ═══════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // EXAMINER MODE
-    // ═══════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     if (mode === "examiner") {
       const key = getKey(student, clsRaw);
 
-      // ── SHAURI PLANNER PAPER — direct generation path ──
       if (shauriPaper && isStart(lower)) {
         console.log("[SHAURI] Direct paper generation triggered.", {
           totalMarks: shauriPaper.totalMarks,
@@ -1804,6 +1775,7 @@ export async function POST(req: NextRequest) {
           primarySubject: shauriPaper.primarySubject,
           secondarySubject: shauriPaper.secondarySubject,
           primaryTopic: shauriPaper.primaryTopic,
+          writingSubjects: shauriPaper.writingSubjects,
         });
         return generateShauriPaper(shauriPaper, cls, board, name, key, callName);
       }
@@ -1852,18 +1824,18 @@ export async function POST(req: NextRequest) {
       if (isGreeting(lower) && session.status === "READY" && !uploadedText) {
         return NextResponse.json({
           reply:
-            `📚 Welcome back${callName}! Your subject is set to **${session.subject}**.\n\n` +
-            `Type **start** when you're ready to begin your exam. ⏱️ Timer starts immediately.\n\n` +
-            `💡 Want a custom format? Type: "prepare 30 marks exam" or "give 20 MCQ questions"\n\n` +
-            `📎 Want a different syllabus? Upload a PDF or image now to override.`,
+            `ðŸ“š Welcome back${callName}! Your subject is set to **${session.subject}**.\n\n` +
+            `Type **start** when you're ready to begin your exam. â±ï¸ Timer starts immediately.\n\n` +
+            `ðŸ’¡ Want a custom format? Type: "prepare 30 marks exam" or "give 20 MCQ questions"\n\n` +
+            `ðŸ“Ž Want a different syllabus? Upload a PDF or image now to override.`,
         });
       }
 
       if (isGreeting(lower) && session.status === "IN_EXAM") {
-        const elapsed = session.started_at ? formatDuration(Date.now() - session.started_at) : "—";
+        const elapsed = session.started_at ? formatDuration(Date.now() - session.started_at) : "â€”";
         return NextResponse.json({
           reply:
-            `⏱️ Your **${session.subject}** exam is still in progress!\n\n` +
+            `â±ï¸ Your **${session.subject}** exam is still in progress!\n\n` +
             `Time elapsed: **${elapsed}**\n` +
             `Answers recorded: **${session.answer_log.length}**\n\n` +
             `Your question paper has been restored on the left. Continue answering.\n` +
@@ -1878,7 +1850,7 @@ export async function POST(req: NextRequest) {
       if (isGreeting(lower) && session.status === "FAILED") {
         return NextResponse.json({
           reply:
-            `⚠️ Welcome back${callName}! Your previous evaluation hit a timeout, but your answers are all saved.\n\n` +
+            `âš ï¸ Welcome back${callName}! Your previous evaluation hit a timeout, but your answers are all saved.\n\n` +
             `Type **submit** to retry the evaluation.`,
         });
       }
@@ -1886,15 +1858,15 @@ export async function POST(req: NextRequest) {
       if (isGreeting(lower) && session.status === "IDLE" && !uploadedText) {
         return NextResponse.json({
           reply:
-            `Hello ${greetName}! 📋 I'm your CBSE Examiner.\n\n` +
+            `Hello ${greetName}! ðŸ“‹ I'm your CBSE Examiner.\n\n` +
             `Tell me the **subject** you want to be tested on:\n` +
             `Science | Mathematics | SST | History | Geography | Civics | Economics | English | Hindi\n\n` +
-            `📎 **OR** upload your **syllabus as a PDF or image** and I'll generate a paper exactly based on it.\n\n` +
-            `💡 You can also specify the format:\n` +
-            `   • "prepare 30 marks exam for Hindi"\n` +
-            `   • "give 20 MCQ questions on Science"\n` +
-            `   • "1 hour Maths test"\n\n` +
-            `⏱️ Your timer starts the moment you type **start**.`,
+            `ðŸ“Ž **OR** upload your **syllabus as a PDF or image** and I'll generate a paper exactly based on it.\n\n` +
+            `ðŸ’¡ You can also specify the format:\n` +
+            `   â€¢ "prepare 30 marks exam for Hindi"\n` +
+            `   â€¢ "give 20 MCQ questions on Science"\n` +
+            `   â€¢ "1 hour Maths test"\n\n` +
+            `â±ï¸ Your timer starts the moment you type **start**.`,
         });
       }
 
@@ -1973,7 +1945,7 @@ export async function POST(req: NextRequest) {
               reply:
                 `Please tell me the **subject** you want to be tested on first${callName}.\n\n` +
                 `Options: Science | Mathematics | SST | History | Geography | Civics | Economics | English | Hindi\n\n` +
-                `📎 Or **upload your syllabus** as a PDF or image for a custom paper.`,
+                `ðŸ“Ž Or **upload your syllabus** as a PDF or image for a custom paper.`,
             });
           }
         }
@@ -1985,13 +1957,12 @@ export async function POST(req: NextRequest) {
         } else {
           return NextResponse.json({
             reply:
-              `⚠️ Your previous evaluation hit a timeout${callName}. Your answers are all saved.\n\n` +
+              `âš ï¸ Your previous evaluation hit a timeout${callName}. Your answers are all saved.\n\n` +
               `Type **submit** to try the evaluation again.`,
           });
         }
       }
 
-      // ── SUBMIT HANDLER — strict evaluation with detailed explanations ──
       if (isSubmit(lower) && session.status === "IN_EXAM") {
         const endTime   = Date.now();
         const overtime  = isOverTime(session.started_at);
@@ -1999,64 +1970,59 @@ export async function POST(req: NextRequest) {
 
         if (session.answer_log.length === 0) {
           return NextResponse.json({
-            reply: `⚠️ No answers were recorded${callName}. Please type or upload your answers before submitting.`,
+            reply: `âš ï¸ No answers were recorded${callName}. Please type or upload your answers before submitting.`,
           });
         }
 
         const fullAnswerTranscript = session.answer_log
           .map((entry, i) => `[Answer Entry ${i + 1}]\n${entry}`)
-          .join("\n\n────────────────────────────────\n\n");
+          .join("\n\nâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€\n\n");
 
         const totalMarks = session.total_marks || 25;
         const evalSubj   = (session.subject || "").toLowerCase();
         const evalIsMath = /math/i.test(evalSubj);
 
-        // ── Get strict marking rules for this subject ──
         const subjectMarkingRules = getSubjectMarkingRules(session.subject || "");
 
-        // ── STRICT EVALUATION PROMPT — with detailed per-question explanations ──
         const evaluationPrompt = `
 You are a STRICT official CBSE Board Examiner for Class ${cls}.
 Subject: ${session.subject || "General"} | Board: ${board} | Maximum Marks: ${totalMarks}
 ${evalIsMath ? "MATH FORMATTING: Use LaTeX notation for all equations. Wrap inline math in $...$ and display math in $$...$$." : ""}
-Time Taken: ${timeTaken}${overtime ? " ⚠️ SUBMITTED AFTER 3-HOUR LIMIT" : ""}
+Time Taken: ${timeTaken}${overtime ? " âš ï¸ SUBMITTED AFTER 3-HOUR LIMIT" : ""}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
 MARKING SCHEME (STRICTLY ENFORCED):
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
 ${subjectMarkingRules}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
 UNIVERSAL STRICT RULES:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• No negative marking — minimum per question is 0.
-• Match answers to questions by number OR topic — student may have answered out of order.
-• Evaluate EVERY single question in the paper — unattempted = 0, do NOT skip any question.
-• Image/PDF answers → evaluate content only, ignore handwriting quality.
-• NCERT-accurate facts = full marks. Correct concept in own words = full marks.
-• Partially correct answer = partial marks as specified in scheme above.
-• Vague/general answer without specific content = 0 marks.
-• Long answer that is off-topic = 0 marks even if it looks detailed.
-${overtime ? "• Student submitted after the 3-hour limit — note this in overtime field." : ""}
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+â€¢ No negative marking â€” minimum per question is 0.
+â€¢ Match answers to questions by number OR topic â€” student may have answered out of order.
+â€¢ Evaluate EVERY single question in the paper â€” unattempted = 0, do NOT skip any question.
+â€¢ Image/PDF answers â†’ evaluate content only, ignore handwriting quality.
+â€¢ NCERT-accurate facts = full marks. Correct concept in own words = full marks.
+â€¢ Partially correct answer = partial marks as specified in scheme above.
+â€¢ Vague/general answer without specific content = 0 marks.
+â€¢ Long answer that is off-topic = 0 marks even if it looks detailed.
+${overtime ? "â€¢ Student submitted after the 3-hour limit â€” note this in overtime field." : ""}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-EXPLANATION REQUIREMENTS (CRITICAL — READ CAREFULLY):
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-For every question where the student got PARTIAL or WRONG marks, you MUST provide ALL FOUR of:
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+EXPLANATION REQUIREMENTS (CRITICAL):
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+For every question where the student got PARTIAL or WRONG marks, provide ALL FOUR of:
 
-1. "marksDeductionReason": Explain EXACTLY which part of the answer was wrong or missing and WHY marks were cut. Be specific — e.g. "Missing the balanced equation — only formula written, not balanced" or "Step 2 arithmetic error: 6÷2=4 written instead of 3".
+1. "marksDeductionReason": Exactly which part was wrong and WHY marks were cut.
+2. "correctAnswer": Complete model correct answer â€” not just "see NCERT".
+3. "detailedExplanation": Teach the concept in 2-4 sentences so student understands WHY.
+4. "keyConceptMissed": Specific NCERT concept/formula/theorem to revise.
 
-2. "correctAnswer": The complete, model correct answer for this question as an official examiner would write it. Must be full and specific — not just "see NCERT". Include the complete answer a student should have written.
+For fully CORRECT questions: set these fields to empty strings "".
 
-3. "detailedExplanation": Teach the concept from scratch in 2-4 sentences. Explain the underlying concept so the student understands WHY the correct answer is what it is. Use simple, clear language. This is the most important learning part.
-
-4. "keyConceptMissed": Name the specific NCERT concept, formula, theorem, or topic the student needs to revise. Be precise — e.g. "Law of Conservation of Mass", "Sum of zeros formula: -b/a", "Rowlatt Act 1919 provisions".
-
-For questions that are fully CORRECT: set these fields to empty strings "" — no need to explain correct answers.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
 OUTPUT FORMAT:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
 Respond ONLY with a single valid JSON object. No markdown, no explanation outside JSON:
 {
   "studentName": "${name || "Student"}",
@@ -2066,39 +2032,39 @@ Respond ONLY with a single valid JSON object. No markdown, no explanation outsid
   "timeTaken": "${timeTaken}",
   "overtime": ${overtime},
   "totalMarks": ${totalMarks},
-  "totalObtained": <number — must be ≤ totalMarks>,
+  "totalObtained": <number â€” must be â‰¤ totalMarks>,
   "percentage": <number 0-100, rounded to nearest integer>,
   "grade": "<A1|A2|B1|B2|C1|C2|D|E>",
   "gradeLabel": "<Outstanding|Excellent|Very Good|Good|Average|Satisfactory|Pass|Needs Improvement>",
   "sections": [
     {
-      "name": "<Section name e.g. Section A – MCQ>",
+      "name": "<Section name>",
       "maxMarks": <number>,
       "obtained": <number>,
       "questions": [
         {
-          "qNum": "<e.g. Q1, Q2a, Q3(i)>",
-          "topic": "<specific topic tested e.g. Euclid's Division Lemma>",
+          "qNum": "<e.g. Q1>",
+          "topic": "<specific topic>",
           "maxMarks": <number>,
-          "obtained": <number 0 to maxMarks>,
+          "obtained": <number>,
           "status": "<correct|partial|wrong|unattempted>",
-          "feedback": "<one precise sentence about this specific answer>",
-          "marksDeductionReason": "<for partial/wrong: exactly what was wrong and why marks cut. For correct: empty string>",
+          "feedback": "<one precise sentence>",
+          "marksDeductionReason": "<for partial/wrong: exact reason. For correct: empty string>",
           "correctAnswer": "<for partial/wrong: complete model answer. For correct: empty string>",
-          "detailedExplanation": "<for partial/wrong: 2-4 sentence concept explanation for learning. For correct: empty string>",
-          "keyConceptMissed": "<for partial/wrong: specific NCERT concept/formula/theorem to revise. For correct: empty string>"
+          "detailedExplanation": "<for partial/wrong: 2-4 sentence concept explanation. For correct: empty string>",
+          "keyConceptMissed": "<for partial/wrong: specific NCERT concept to revise. For correct: empty string>"
         }
       ]
     }
   ],
-  "strengths": "<specific sections and question types where student did well — be concrete>",
-  "weaknesses": "<specific sections and topics where student lost marks — name the exact concepts>",
-  "studyTip": "<one concrete, actionable improvement — name the specific NCERT chapter/exercise/concept to practise>"
+  "strengths": "<specific sections where student did well>",
+  "weaknesses": "<specific topics where student lost marks>",
+  "studyTip": "<one concrete actionable improvement>"
 }
 
-Grade scale: 91-100% = A1 Outstanding | 81-90% = A2 Excellent | 71-80% = B1 Very Good | 61-70% = B2 Good | 51-60% = C1 Average | 41-50% = C2 Satisfactory | 33-40% = D Pass | <33% = E Needs Improvement
+Grade scale: 91-100%=A1 Outstanding | 81-90%=A2 Excellent | 71-80%=B1 Very Good | 61-70%=B2 Good | 51-60%=C1 Average | 41-50%=C2 Satisfactory | 33-40%=D Pass | <33%=E Needs Improvement
 
-IMPORTANT: totalObtained must equal the sum of all "obtained" values across all questions. Double-check this before outputting.
+IMPORTANT: totalObtained must equal the sum of all "obtained" values. Double-check before outputting.
         `.trim();
 
         await saveSession({ ...session, status: "FAILED" });
@@ -2110,16 +2076,16 @@ IMPORTANT: totalObtained must equal the sum of all "obtained" values across all 
               role: "user",
               content:
                 `QUESTION PAPER:\n${session.question_paper}\n\n` +
-                `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+                `â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”\n` +
                 `STUDENT'S COMPLETE ANSWER TRANSCRIPT (${session.answer_log.length} entries):\n` +
-                `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+                `â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”\n\n` +
                 fullAnswerTranscript,
             },
           ]);
         } catch (evalErr) {
           console.error("[evaluation] callAIForEvaluation threw:", evalErr);
           return NextResponse.json({
-            reply: `⚠️ The evaluation timed out${callName}. Your answers are all safely saved.\n\nType **submit** to try again.`,
+            reply: `âš ï¸ The evaluation timed out${callName}. Your answers are all safely saved.\n\nType **submit** to try again.`,
           });
         }
 
@@ -2142,10 +2108,10 @@ IMPORTANT: totalObtained must equal the sum of all "obtained" values across all 
         const gradeLabel = (evalJson.gradeLabel as string) || "";
         const grade      = (evalJson.grade      as string) || "";
         const plainSummary =
-          `✅ **Evaluation complete${callName}!**\n\n` +
-          `📊 **${obtained2} / ${total2}** &nbsp;(${percentage}%) &nbsp;— Grade **${grade}** ${gradeLabel}\n\n` +
-          `⏱️ Time taken: ${timeTaken}${overtime ? " ⚠️ Over limit" : ""}\n\n` +
-          `_Detailed report with explanations for every wrong answer is below_ 👇`;
+          `âœ… **Evaluation complete${callName}!**\n\n` +
+          `ðŸ“Š **${obtained2} / ${total2}** &nbsp;(${percentage}%) &nbsp;â€” Grade **${grade}** ${gradeLabel}\n\n` +
+          `â±ï¸ Time taken: ${timeTaken}${overtime ? " âš ï¸ Over limit" : ""}\n\n` +
+          `_Detailed report with explanations for every wrong answer is below_ ðŸ‘‡`;
 
         try {
           await supabase.from("exam_attempts").insert({
@@ -2183,7 +2149,7 @@ IMPORTANT: totalObtained must equal the sum of all "obtained" values across all 
       if (session.status === "IN_EXAM" && isOverTime(session.started_at)) {
         return NextResponse.json({
           reply:
-            `⏰ **Time's up${callName}!** Your 3-hour exam window has closed.\n\n` +
+            `â° **Time's up${callName}!** Your 3-hour exam window has closed.\n\n` +
             `Type **submit** now to get your evaluation based on answers recorded so far.\n` +
             `Any further answers added after time limit will be flagged in the evaluation.`,
           overtime: true,
@@ -2197,26 +2163,26 @@ IMPORTANT: totalObtained must equal the sum of all "obtained" values across all 
           if (uploadType === "syllabus") {
             return NextResponse.json({
               reply:
-                `⚠️ That looks like a **syllabus upload** but your exam is already in progress.\n\n` +
+                `âš ï¸ That looks like a **syllabus upload** but your exam is already in progress.\n\n` +
                 `If you meant to upload an **answer**, please re-attach the file.\n\n` +
-                `⏱️ Timer is still running. Type **submit** when done.`,
+                `â±ï¸ Timer is still running. Type **submit** when done.`,
             });
           }
-          parts.push(`[UPLOADED ANSWER — IMAGE/PDF]\n${uploadedText}`);
+          parts.push(`[UPLOADED ANSWER â€” IMAGE/PDF]\n${uploadedText}`);
         }
         if (parts.length > 0) {
           session.answer_log.push(parts.join("\n\n"));
           await saveSession(session);
         }
-        const elapsed = session.started_at ? formatDuration(Date.now() - session.started_at) : "—";
+        const elapsed = session.started_at ? formatDuration(Date.now() - session.started_at) : "â€”";
         return NextResponse.json({
           reply:
-            `✅ **Answer recorded** (Entry ${session.answer_log.length})\n` +
-            `⏱️ Time elapsed: **${elapsed}**\n\n` +
+            `âœ… **Answer recorded** (Entry ${session.answer_log.length})\n` +
+            `â±ï¸ Time elapsed: **${elapsed}**\n\n` +
             `Continue answering. You can:\n` +
-            `• Type more answers directly\n` +
-            `• Upload photos or PDFs of handwritten answers\n` +
-            `• Answer questions in any order\n\n` +
+            `â€¢ Type more answers directly\n` +
+            `â€¢ Upload photos or PDFs of handwritten answers\n` +
+            `â€¢ Answer questions in any order\n\n` +
             `When finished with all questions, type **submit**.`,
         });
       }
@@ -2229,9 +2195,9 @@ IMPORTANT: totalObtained must equal the sum of all "obtained" values across all 
         if (isSubmit(lower)) {
           return NextResponse.json({
             reply:
-              `⚠️ Your exam hasn't started yet${callName} — there's nothing to submit.\n\n` +
+              `âš ï¸ Your exam hasn't started yet${callName} â€” there's nothing to submit.\n\n` +
               `Subject is set to **${session.subject}**.\n\n` +
-              `Type **start** when you're ready to begin. ⏱️ Timer starts immediately.`,
+              `Type **start** when you're ready to begin. â±ï¸ Timer starts immediately.`,
           });
         }
         const reqs = parsePaperRequirements(message);
@@ -2243,18 +2209,18 @@ IMPORTANT: totalObtained must equal the sum of all "obtained" values across all 
           const typeDesc  = reqs.questionTypes.length > 0 ? `, ${reqs.questionTypes.join(" + ")} questions` : "";
           return NextResponse.json({
             reply:
-              `✅ Got it! Paper format updated:\n` +
-              `📝 ${totalDesc}${timeDesc}${typeDesc}\n\n` +
+              `âœ… Got it! Paper format updated:\n` +
+              `ðŸ“ ${totalDesc}${timeDesc}${typeDesc}\n\n` +
               `Subject: **${session.subject}**\n\n` +
-              `Type **start** when ready. ⏱️ Timer starts immediately.`,
+              `Type **start** when ready. â±ï¸ Timer starts immediately.`,
           });
         }
         return NextResponse.json({
           reply:
-            `📚 Subject is set to **${session.subject}**.\n\n` +
-            `📎 Want to use your own syllabus instead? Upload a PDF or image now.\n` +
-            `💡 Want a custom format? Try: "prepare 30 marks exam" or "give 20 MCQ questions"\n\n` +
-            `Type **start** when ready to begin. ⏱️ Timer starts immediately.`,
+            `ðŸ“š Subject is set to **${session.subject}**.\n\n` +
+            `ðŸ“Ž Want to use your own syllabus instead? Upload a PDF or image now.\n` +
+            `ðŸ’¡ Want a custom format? Try: "prepare 30 marks exam" or "give 20 MCQ questions"\n\n` +
+            `Type **start** when ready to begin. â±ï¸ Timer starts immediately.`,
         });
       }
 
@@ -2262,7 +2228,7 @@ IMPORTANT: totalObtained must equal the sum of all "obtained" values across all 
         const looksLikeAnswer =
           message.trim().length > 40 ||
           /^\d+[.)]/m.test(message.trim()) ||
-          /[।\.]{2,}/.test(message) ||
+          /[à¥¤\.]{2,}/.test(message) ||
           /\b(answer|ans|q\d|question|ques)\b/i.test(message) ||
           message.trim().split(/\s+/).length >= 3 ||
           /^[A-Z][a-z]/.test(message.trim());
@@ -2278,11 +2244,11 @@ IMPORTANT: totalObtained must equal the sum of all "obtained" values across all 
               if (uploadedText) answerParts.push(`[UPLOADED ANSWER]\n${uploadedText}`);
               activeSession.answer_log.push(answerParts.join("\n\n"));
               await saveSession(activeSession);
-              const elapsed = activeSession.started_at ? formatDuration(Date.now() - activeSession.started_at) : "—";
+              const elapsed = activeSession.started_at ? formatDuration(Date.now() - activeSession.started_at) : "â€”";
               return NextResponse.json({
                 reply:
-                  `✅ **Answer recorded** (Entry ${activeSession.answer_log.length})\n` +
-                  `⏱️ Time elapsed: **${elapsed}**\n\n` +
+                  `âœ… **Answer recorded** (Entry ${activeSession.answer_log.length})\n` +
+                  `â±ï¸ Time elapsed: **${elapsed}**\n\n` +
                   `Continue answering, or type **submit** when done.`,
               });
             }
@@ -2304,10 +2270,10 @@ IMPORTANT: totalObtained must equal the sum of all "obtained" values across all 
           } else {
             return NextResponse.json({
               reply:
-                `⚠️ It looks like you typed **"${message.trim()}"** — but there's no active exam session${callName}.\n\n` +
+                `âš ï¸ It looks like you typed **"${message.trim()}"** â€” but there's no active exam session${callName}.\n\n` +
                 `To get started, tell me the **subject** you want to be tested on:\n` +
                 `Science | Mathematics | SST | History | Geography | Civics | Economics | English | Hindi\n\n` +
-                `📎 Or **upload your syllabus** as a PDF or image for a custom paper.\n\n` +
+                `ðŸ“Ž Or **upload your syllabus** as a PDF or image for a custom paper.\n\n` +
                 `Once a subject is set, type **start** to begin.`,
             });
           }
@@ -2318,7 +2284,7 @@ IMPORTANT: totalObtained must equal the sum of all "obtained" values across all 
             reply:
               `Please tell me the **subject** you want to be tested on${callName}.\n` +
               `Options: Science | Mathematics | SST | History | Geography | Civics | Economics | English | Hindi\n\n` +
-              `📎 Or **upload your syllabus** as a PDF or image for a custom paper.`,
+              `ðŸ“Ž Or **upload your syllabus** as a PDF or image for a custom paper.`,
           });
         }
 
@@ -2326,7 +2292,7 @@ IMPORTANT: totalObtained must equal the sum of all "obtained" values across all 
         const coreSubject = messageReqs.isCustom ? extractSubjectFromInstruction(message) : message;
 
         const { subjectName } = getChaptersForSubject(coreSubject, cls);
-        const displaySubject = subjectName.replace(/\s*[–-]\s*Class\s*\d+$/i, "");
+        const displaySubject = subjectName.replace(/\s*[â€“-]\s*Class\s*\d+$/i, "");
 
         const newSession: ExamSession = {
           session_key:         key,
@@ -2343,30 +2309,30 @@ IMPORTANT: totalObtained must equal the sum of all "obtained" values across all 
 
         if (messageReqs.isCustom) {
           const totalDesc   = messageReqs.totalMarks ? `**${messageReqs.totalMarks} marks**` : "custom marks";
-          const timeDesc    = messageReqs.timeMinutes ? ` · Time: **${formatTimeAllowed(messageReqs.timeMinutes)}**` : "";
-          const typeDesc    = messageReqs.questionTypes.length > 0 ? ` · Type: **${messageReqs.questionTypes.join(" + ")}**` : "";
-          const chapterDesc = messageReqs.chapterFilter ? ` · Scope: **${messageReqs.chapterFilter}**` : "";
+          const timeDesc    = messageReqs.timeMinutes ? ` Â· Time: **${formatTimeAllowed(messageReqs.timeMinutes)}**` : "";
+          const typeDesc    = messageReqs.questionTypes.length > 0 ? ` Â· Type: **${messageReqs.questionTypes.join(" + ")}**` : "";
+          const chapterDesc = messageReqs.chapterFilter ? ` Â· Scope: **${messageReqs.chapterFilter}**` : "";
           return NextResponse.json({
             reply:
-              `📚 Got it! I'll prepare a **custom paper** for:\n` +
-              `**${displaySubject} — Class ${cls}**\n\n` +
-              `📝 **Paper format:**\n` +
+              `ðŸ“š Got it! I'll prepare a **custom paper** for:\n` +
+              `**${displaySubject} â€” Class ${cls}**\n\n` +
+              `ðŸ“ **Paper format:**\n` +
               `   Marks: ${totalDesc}${timeDesc}${typeDesc}${chapterDesc}\n\n` +
               `Type **start** when you're ready to begin.\n` +
-              `⏱️ Timer starts the moment you type start.`,
+              `â±ï¸ Timer starts the moment you type start.`,
           });
         }
 
         return NextResponse.json({
           reply:
-            `📚 Got it! I'll prepare a **strict CBSE Board question paper** for:\n` +
-            `**${displaySubject} — Class ${cls}**\n\n` +
+            `ðŸ“š Got it! I'll prepare a **strict CBSE Board question paper** for:\n` +
+            `**${displaySubject} â€” Class ${cls}**\n\n` +
             `Paper will strictly follow the NCERT Class ${cls} syllabus chapters.\n\n` +
-            `📎 **Tip:** Want a paper based on YOUR specific syllabus?\n` +
+            `ðŸ“Ž **Tip:** Want a paper based on YOUR specific syllabus?\n` +
             `Upload your syllabus as a PDF or image now, before typing start.\n\n` +
-            `💡 Want a custom format? Type: "prepare 30 marks exam" or "give 20 MCQ questions"\n\n` +
+            `ðŸ’¡ Want a custom format? Type: "prepare 30 marks exam" or "give 20 MCQ questions"\n\n` +
             `Type **start** when you're ready to begin.\n` +
-            `⏱️ Timer starts the moment you type start.`,
+            `â±ï¸ Timer starts the moment you type start.`,
         });
       }
 
@@ -2383,10 +2349,7 @@ IMPORTANT: totalObtained must equal the sum of all "obtained" values across all 
           const recentUserMsgs = history.filter((m) => m.role === "user").slice(-8).map((m) => m.content);
           for (const msg of recentUserMsgs) {
             const r = parsePaperRequirements(msg);
-            if (r.isCustom) {
-              recoveredInstructions = msg;
-              break;
-            }
+            if (r.isCustom) { recoveredInstructions = msg; break; }
           }
         }
 
@@ -2394,7 +2357,7 @@ IMPORTANT: totalObtained must equal the sum of all "obtained" values across all 
           subjectName = session.subject || "Custom Subject";
           chapterList = session.syllabus_from_upload;
         } else {
-          const subjectKey = session.subject_request || session.subject?.replace(/\s*[–-]\s*Class\s*\d+$/i, "") || "";
+          const subjectKey = session.subject_request || session.subject?.replace(/\s*[â€“-]\s*Class\s*\d+$/i, "") || "";
           const resolved = getChaptersForSubject(subjectKey, cls);
           subjectName = resolved.subjectName;
           chapterList = resolved.chapterList;
@@ -2419,9 +2382,7 @@ IMPORTANT: totalObtained must equal the sum of all "obtained" values across all 
 
         const paperSeed = makeSeed();
 
-        // ── CUSTOM / UPLOADED SYLLABUS PAPER GENERATION ──
         if (hasCustomInstr || hasUploadedSyllabus) {
-
           const cleanTopicList = chapterList
             .replace(/.*UPLOADED SYLLABUS.*\n/g, "")
             .replace(/.*ABSOLUTE RULE.*\n/g, "")
@@ -2444,7 +2405,7 @@ IMPORTANT: totalObtained must equal the sum of all "obtained" values across all 
 
           if (!hasUploadedSyllabus && reqs.chapterFilter) {
             const chapterNums: number[] = [];
-            const rangeMatch = reqs.chapterFilter.match(/(\d+)\s*[-–to]+\s*(\d+)/i);
+            const rangeMatch = reqs.chapterFilter.match(/(\d+)\s*[-â€“to]+\s*(\d+)/i);
             if (rangeMatch) {
               const from = parseInt(rangeMatch[1]);
               const to   = parseInt(rangeMatch[2]);
@@ -2479,13 +2440,7 @@ IMPORTANT: totalObtained must equal the sum of all "obtained" values across all 
           if (topicLines.length === 0) topicLines = allTopicLines;
           if (topicLines.length === 0) topicLines = [subjectName];
 
-          const questionPlan = buildCbseQuestionPlan(
-            finalMarks,
-            topicLines,
-            reqs,
-            isHindi,
-            isMath
-          );
+          const questionPlan = buildCbseQuestionPlan(finalMarks, topicLines, reqs, isHindi, isMath);
 
           const verbBank = isHindi ? shuffle([...HINDI_VERBS])
             : isEnglish ? shuffle([...ENGLISH_VERBS])
@@ -2503,10 +2458,10 @@ IMPORTANT: totalObtained must equal the sum of all "obtained" values across all 
 
             const qTypeHint =
               slot.marks === 1 ? "MCQ or fill-in-the-blank or one-word" :
-              slot.marks === 2 ? "very short answer (2–3 lines)" :
-              slot.marks === 3 ? "short answer (4–5 lines)" :
-              slot.marks === 4 ? "short-long answer (6–8 lines)" :
-              "long answer (8–10 lines)";
+              slot.marks === 2 ? "very short answer (2â€“3 lines)" :
+              slot.marks === 3 ? "short answer (4â€“5 lines)" :
+              slot.marks === 4 ? "short-long answer (6â€“8 lines)" :
+              "long answer (8â€“10 lines)";
 
             const angles = [
               "Ask about a definition or concept",
@@ -2525,25 +2480,15 @@ IMPORTANT: totalObtained must equal the sum of all "obtained" values across all 
 Topic: "${slot.topic}" | Marks: ${slot.marks} | Type: ${qTypeHint} | Difficulty: ${difficulty}
 Angle: ${angle}
 Style: ${verbStyle}
-
 Write EXACTLY ONE unique Hindi grammar question worth ${slot.marks} mark(s).
-RULES:
-- Question type MUST match: ${qTypeHint}
-- Test ONLY the grammar concept "${slot.topic}"
-- Do NOT repeat question patterns used previously
-- Output ONLY the question text in Hindi. No numbering, no marks label.`
+Output ONLY the question text in Hindi. No numbering, no marks label.`
               : `You are a ${subjectName} examiner (Class ${cls} CBSE). ${paperSeed}
 Topic: "${slot.topic}" | Marks: ${slot.marks} | Type: ${qTypeHint} | Difficulty: ${difficulty}
 Approach: ${angle}
 Style hint: "${verbStyle}"
 ${reqs.chapterFilter ? `Chapter scope: ${reqs.chapterFilter}` : ""}
-
 Write EXACTLY ONE fresh, unique ${qTypeHint} question worth ${slot.marks} mark(s) on "${slot.topic}".
-RULES:
-- Question complexity MUST match a ${slot.marks}-mark CBSE question (${qTypeHint})
-- Do NOT repeat the same question stem used in any previous question
-- Do NOT add topics outside "${slot.topic}"
-- Output ONLY the question text. No numbering, no marks label, no explanation.`;
+Output ONLY the question text. No numbering, no marks label, no explanation.`;
 
             const qText = await callAI(singleQPrompt, [
               { role: "user", content: `Write one ${slot.marks}-mark ${difficulty} ${qTypeHint} question on "${slot.topic}".` }
@@ -2552,23 +2497,13 @@ RULES:
             questionTexts.push(cleanQ);
           }
 
-          const paperHeader = `Subject       : ${subjectName}
-Class         : ${cls}
-Board         : ${board}
-Time Allowed  : ${timeAllowed}
-Maximum Marks : ${finalMarks}`;
-
-          const generalInstructions = `General Instructions:
-1. All questions are compulsory.
-2. Marks are indicated against each question.
-3. For 1-mark questions write only the answer; for 2-mark questions write 2–3 sentences; for 3-mark questions write 4–5 sentences; for 5-mark questions write a detailed paragraph.`;
-
+          const paperHeader = `Subject       : ${subjectName}\nClass         : ${cls}\nBoard         : ${board}\nTime Allowed  : ${timeAllowed}\nMaximum Marks : ${finalMarks}`;
+          const generalInstructions = `General Instructions:\n1. All questions are compulsory.\n2. Marks are indicated against each question.\n3. For 1-mark questions write only the answer; for 2-mark questions write 2â€“3 sentences; for 3-mark questions write 4â€“5 sentences; for 5-mark questions write a detailed paragraph.`;
           const questionBody = questionPlan
             .map((slot, i) => `${slot.qNum}. ${questionTexts[i] || "(Question unavailable)"} [${slot.marks} mark${slot.marks > 1 ? "s" : ""}]`)
             .join("\n\n");
 
           const paper = `${paperHeader}\n\n${generalInstructions}\n\n${questionBody}`;
-          const { verified: totalMarksOnPaper } = verifyPaperMarks(paper, finalMarks);
           const startTime = Date.now();
 
           const activeSession: ExamSession = {
@@ -2590,128 +2525,128 @@ Maximum Marks : ${finalMarks}`;
 
           return NextResponse.json({
             reply:
-              `⏱️ **Exam started! Timer is running.**\n\n` +
-              `📌 How to answer:\n` +
-              `• Answer questions in **any order** you prefer\n` +
-              `• Type answers directly in chat, OR\n` +
-              `• Upload **photos / PDFs** of your handwritten answers\n` +
-              `• You can send multiple messages — all will be collected\n` +
-              `• When fully done, type **submit** (or **done** / **finish**)\n\n` +
-              `Good luck${callName}! 💪 Give it your best.`,
+              `â±ï¸ **Exam started! Timer is running.**\n\n` +
+              `ðŸ“Œ How to answer:\n` +
+              `â€¢ Answer questions in **any order** you prefer\n` +
+              `â€¢ Type answers directly in chat, OR\n` +
+              `â€¢ Upload **photos / PDFs** of your handwritten answers\n` +
+              `â€¢ You can send multiple messages â€” all will be collected\n` +
+              `â€¢ When fully done, type **submit** (or **done** / **finish**)\n\n` +
+              `Good luck${callName}! ðŸ’ª Give it your best.`,
             paper,
             startTime,
           });
         }
 
-        // ── Standard 80-mark CBSE paper generation ──
+        // Standard 80-mark CBSE paper
         const englishSections = `
-⚠️ CBSE 2026 FORMAT: 50% competency-based.
-SECTION A — READING [20 Marks]
-Q1  Unseen Passage — Factual / Discursive [10 marks]
-  • (a) 5 MCQs × 1 mark = 5 marks  (b) 5 Short-answer questions × 1 mark = 5 marks
-Q2  Unseen Passage — Literary / Poem extract [10 marks]
-  • (a) 5 MCQs × 1 mark = 5 marks  (b) 5 Short-answer questions × 1 mark = 5 marks
-SECTION B — WRITING SKILLS [20 Marks]
+âš ï¸ CBSE 2026 FORMAT: 50% competency-based.
+SECTION A â€” READING [20 Marks]
+Q1  Unseen Passage â€” Factual / Discursive [10 marks]
+  â€¢ (a) 5 MCQs Ã— 1 mark = 5 marks  (b) 5 Short-answer questions Ã— 1 mark = 5 marks
+Q2  Unseen Passage â€” Literary / Poem extract [10 marks]
+  â€¢ (a) 5 MCQs Ã— 1 mark = 5 marks  (b) 5 Short-answer questions Ã— 1 mark = 5 marks
+SECTION B â€” WRITING SKILLS [20 Marks]
 Q3  Descriptive Paragraph / Bio-sketch / Dialogue [5 marks]
 Q4  Notice / Message / Advertisement [5 marks]
 Q5  Letter Writing [5 marks]
-Q6  Long Composition — Article / Speech / Story [5 marks]
-SECTION C — GRAMMAR [20 Marks]
-Q7  Gap Filling — Tenses / Modals / Voice [4 × 1 = 4 marks]
-Q8  Editing — Error Correction [4 × 1 = 4 marks]
-Q9  Omission — Missing Words [4 × 1 = 4 marks]
-Q10 Sentence Reordering [4 × 1 = 4 marks]
-Q11 Sentence Transformation [4 × 1 = 4 marks]
-SECTION D — LITERATURE [20 Marks]
-Q12 Extract-based Questions — Prose [5 marks]
-Q13 Extract-based Questions — Poetry [5 marks]
-Q14 Short Answer Questions — Prose & Poetry [6 marks]
-Q15 Long Answer — Prose / Drama [4 marks]`.trim();
+Q6  Long Composition â€” Article / Speech / Story [5 marks]
+SECTION C â€” GRAMMAR [20 Marks]
+Q7  Gap Filling â€” Tenses / Modals / Voice [4 Ã— 1 = 4 marks]
+Q8  Editing â€” Error Correction [4 Ã— 1 = 4 marks]
+Q9  Omission â€” Missing Words [4 Ã— 1 = 4 marks]
+Q10 Sentence Reordering [4 Ã— 1 = 4 marks]
+Q11 Sentence Transformation [4 Ã— 1 = 4 marks]
+SECTION D â€” LITERATURE [20 Marks]
+Q12 Extract-based Questions â€” Prose [5 marks]
+Q13 Extract-based Questions â€” Poetry [5 marks]
+Q14 Short Answer Questions â€” Prose & Poetry [6 marks]
+Q15 Long Answer â€” Prose / Drama [4 marks]`.trim();
 
         const hindiSections = `
-SECTION A — APATHIT GADYANSH / KAVYANSH [20 Marks]
+SECTION A â€” APATHIT GADYANSH / KAVYANSH [20 Marks]
 Q1  Apathit Gadyansh (Unseen Prose Passage) [10 marks]
 Q2  Apathit Kavyansh (Unseen Poem Extract) [10 marks]
-SECTION B — LEKHAN (Writing) [20 Marks]
-Q3  Patra Lekhan — औपचारिक पत्र [5 marks]
+SECTION B â€” LEKHAN (Writing) [20 Marks]
+Q3  Patra Lekhan â€” à¤”à¤ªà¤šà¤¾à¤°à¤¿à¤• à¤ªà¤¤à¥à¤° [5 marks]
 Q4  Anuched Lekhan [5 marks]
 Q5  Suchna Lekhan [5 marks]
 Q6  Sandesh / Vigyapan Lekhan [5 marks]
-SECTION C — VYAKARAN (Grammar) [20 Marks]
+SECTION C â€” VYAKARAN (Grammar) [20 Marks]
 Q7  Shabdalankar / Arth-bhed [4 marks]
 Q8  Sandhi-Viched [4 marks]
 Q9  Samas-Vigraha [4 marks]
 Q10 Muhavare / Lokoktiyan [4 marks]
 Q11 Vakya Bhed [4 marks]
-SECTION D — PATHEN (Literature) [20 Marks]
+SECTION D â€” PATHEN (Literature) [20 Marks]
 Q12 Gadyansh-adharit prashn [5 marks]
 Q13 Kavyansh-adharit prashn [5 marks]
 Q14 Laghu Uttariya Prashn [6 marks]
 Q15 Dirgha Uttariya Prashn [4 marks]`.trim();
 
         const mathSections = `
-SECTION A — MCQ & Assertion-Reason [20 × 1 = 20 Marks]
-Q1–Q18   MCQs [1 mark each]
-Q19–Q20  Assertion-Reason [1 mark each]
-SECTION B — Very Short Answer [5 × 2 = 10 Marks]
-Q21–Q25  [2 marks each]
-SECTION C — Short Answer [6 × 3 = 18 Marks]
-Q26–Q31  [3 marks each]
-SECTION D — Long Answer [4 × 5 = 20 Marks]
-Q32–Q35  [5 marks each]
-SECTION E — Case-Based / Competency [3 × 4 = 12 Marks]
+SECTION A â€” MCQ & Assertion-Reason [20 Ã— 1 = 20 Marks]
+Q1â€“Q18   MCQs [1 mark each]
+Q19â€“Q20  Assertion-Reason [1 mark each]
+SECTION B â€” Very Short Answer [5 Ã— 2 = 10 Marks]
+Q21â€“Q25  [2 marks each]
+SECTION C â€” Short Answer [6 Ã— 3 = 18 Marks]
+Q26â€“Q31  [3 marks each]
+SECTION D â€” Long Answer [4 Ã— 5 = 20 Marks]
+Q32â€“Q35  [5 marks each]
+SECTION E â€” Case-Based / Competency [3 Ã— 4 = 12 Marks]
 Q36  Case Study 1 [4 marks: (i)1m + (ii)1m + (iii)2m]
 Q37  Case Study 2 [4 marks]
 Q38  Case Study 3 [4 marks]`.trim();
 
         const scienceSections = `
-⚠️ CBSE 2026 FORMAT: 50% competency-based.
-SECTION A — Objective [20 × 1 = 20 Marks]
-Q1–Q10   MCQs [1 mark each]
-Q11–Q16  Competency-based MCQs [1 mark each]
-Q17–Q18  Assertion-Reason [1 mark each]
-Q19–Q20  Fill in the Blanks [1 mark each]
-SECTION B — Very Short Answer [5 × 2 = 10 Marks]
-Q21–Q25  [2 marks each]
-SECTION C — Short Answer [6 × 3 = 18 Marks]
-Q26–Q31  [3 marks each]
-SECTION D — Long Answer [4 × 5 = 20 Marks]
-Q32–Q35  [5 marks each]
-SECTION E — Case-Based [3 × 4 = 12 Marks]
-Q36  Case Study — Biology [4 marks]
-Q37  Case Study — Physics [4 marks]
-Q38  Case Study — Chemistry [4 marks]`.trim();
+âš ï¸ CBSE 2026 FORMAT: 50% competency-based.
+SECTION A â€” Objective [20 Ã— 1 = 20 Marks]
+Q1â€“Q10   MCQs [1 mark each]
+Q11â€“Q16  Competency-based MCQs [1 mark each]
+Q17â€“Q18  Assertion-Reason [1 mark each]
+Q19â€“Q20  Fill in the Blanks [1 mark each]
+SECTION B â€” Very Short Answer [5 Ã— 2 = 10 Marks]
+Q21â€“Q25  [2 marks each]
+SECTION C â€” Short Answer [6 Ã— 3 = 18 Marks]
+Q26â€“Q31  [3 marks each]
+SECTION D â€” Long Answer [4 Ã— 5 = 20 Marks]
+Q32â€“Q35  [5 marks each]
+SECTION E â€” Case-Based [3 Ã— 4 = 12 Marks]
+Q36  Case Study â€” Biology [4 marks]
+Q37  Case Study â€” Physics [4 marks]
+Q38  Case Study â€” Chemistry [4 marks]`.trim();
 
         const sstSections = `
-SECTION A — Objective [20 × 1 = 20 Marks]
-Q1–Q16   MCQs [1 mark each]
-Q17–Q18  Assertion-Reason [1 mark each]
-Q19–Q20  Fill in the Blank / Match [1 mark each]
-SECTION B — Short Answer Questions [6 × 3 = 18 Marks]
-Q21–Q26  [3 marks each]
-SECTION C — Long Answer Questions [5 × 5 = 25 Marks]
-Q27–Q31  [5 marks each]
-SECTION D — Source-Based [3 × 4 = 12 Marks]
-Q32  Source — History [4 marks]
-Q33  Source — Geography or Economics [4 marks]
-Q34  Source — Civics [4 marks]
-SECTION E — Map-Based Questions [2 + 3 = 5 Marks]
+SECTION A â€” Objective [20 Ã— 1 = 20 Marks]
+Q1â€“Q16   MCQs [1 mark each]
+Q17â€“Q18  Assertion-Reason [1 mark each]
+Q19â€“Q20  Fill in the Blank / Match [1 mark each]
+SECTION B â€” Short Answer Questions [6 Ã— 3 = 18 Marks]
+Q21â€“Q26  [3 marks each]
+SECTION C â€” Long Answer Questions [5 Ã— 5 = 25 Marks]
+Q27â€“Q31  [5 marks each]
+SECTION D â€” Source-Based [3 Ã— 4 = 12 Marks]
+Q32  Source â€” History [4 marks]
+Q33  Source â€” Geography or Economics [4 marks]
+Q34  Source â€” Civics [4 marks]
+SECTION E â€” Map-Based Questions [2 + 3 = 5 Marks]
 Q35  History Map [2 marks]
 Q36  Geography Map [3 marks]`.trim();
 
         const standardSections = `
-SECTION A — Objective Type [20 × 1 = 20 Marks]
-Q1–Q16   MCQs [1 mark each]
-Q17–Q18  Assertion-Reason [1 mark each]
-Q19–Q20  Fill in the Blank [1 mark each]
-SECTION B — Very Short Answer [5 × 2 = 10 Marks]
-Q21–Q25  [2 marks each]
-SECTION C — Short Answer [6 × 3 = 18 Marks]
-Q26–Q31  [3 marks each]
-SECTION D — Long Answer [4 × 5 = 20 Marks]
-Q32–Q35  [5 marks each]
-SECTION E — Case-Based [3 × 4 = 12 Marks]
-Q36–Q38  [4 marks each]`.trim();
+SECTION A â€” Objective Type [20 Ã— 1 = 20 Marks]
+Q1â€“Q16   MCQs [1 mark each]
+Q17â€“Q18  Assertion-Reason [1 mark each]
+Q19â€“Q20  Fill in the Blank [1 mark each]
+SECTION B â€” Very Short Answer [5 Ã— 2 = 10 Marks]
+Q21â€“Q25  [2 marks each]
+SECTION C â€” Short Answer [6 Ã— 3 = 18 Marks]
+Q26â€“Q31  [3 marks each]
+SECTION D â€” Long Answer [4 Ã— 5 = 20 Marks]
+Q32â€“Q35  [5 marks each]
+SECTION E â€” Case-Based [3 Ã— 4 = 12 Marks]
+Q36â€“Q38  [4 marks each]`.trim();
 
         const sectionBlocks = isMath ? mathSections
           : isEnglish ? englishSections
@@ -2721,11 +2656,10 @@ Q36–Q38  [4 marks each]`.trim();
           : standardSections;
 
         const uploadCoverageNote = hasUploadedSyllabus ? `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🚨 ABSOLUTE RESTRICTION — UPLOADED SYLLABUS IS THE ONLY SOURCE 🚨
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Every single question MUST come from a topic explicitly listed in the uploaded syllabus above.
-Do NOT include any chapter, unit, or concept absent from the uploaded list.`.trim() : "";
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+ðŸš¨ ABSOLUTE RESTRICTION â€” UPLOADED SYLLABUS IS THE ONLY SOURCE ðŸš¨
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+Every single question MUST come from a topic explicitly listed in the uploaded syllabus above.`.trim() : "";
 
         const difficultyDistrib = pick([
           "30% easy | 50% medium | 20% HOTs",
@@ -2763,26 +2697,20 @@ You are an official CBSE Board question paper setter for Class ${cls}.
 ${paperSeed}
 Subject: ${subjectName} | Board: ${board} | Maximum Marks: 80 | Time: 3 Hours
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-UNIQUENESS MANDATE:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-This paper MUST be completely different from any previously generated paper.
-The seed above is unique — use it as your creative anchor.
+UNIQUENESS MANDATE: This paper MUST be completely different from any previously generated paper.
 VARIATION: MCQs use fresh scenarios. Short answers rotate verbs: ${paperVerbSet}
 Difficulty: ${difficultyDistrib}
 
 Follow the EXACT official CBSE 2024-25 paper pattern for ${subjectName} as specified below.
-Output the complete question paper ONLY — no commentary, no preamble.
+Output the complete question paper ONLY â€” no commentary, no preamble.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PAPER HEADER (reproduce exactly):
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Subject       : ${subjectName}
 Class         : ${cls}
 Board         : ${board}
 Time Allowed  : 3 Hours
 Maximum Marks : 80
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 General Instructions:
 1. This question paper contains ${isEnglish || isHindi ? "four" : "five"} sections.
 2. All questions are compulsory. Marks are indicated against each question.
@@ -2790,34 +2718,30 @@ General Instructions:
 4. Write neat, well-structured answers.${isMath ? `
 5. Show all steps clearly. Marks are awarded for method even if the final answer is wrong.
 6. Use of calculator is not permitted.` : ""}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ${hasUploadedSyllabus
-  ? `AUTHORISED TOPICS — ALL QUESTIONS MUST COME FROM THIS LIST ONLY:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${cleanedChapterList}`
-  : `AUTHORISED SYLLABUS (NCERT Class ${cls} ${subjectName}):\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${cleanedChapterList}`
+  ? `AUTHORISED TOPICS â€” ALL QUESTIONS MUST COME FROM THIS LIST ONLY:\n${cleanedChapterList}`
+  : `AUTHORISED SYLLABUS (NCERT Class ${cls} ${subjectName}):\n${cleanedChapterList}`
 }
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ${uploadCoverageNote ? uploadCoverageNote + "\n\n" : ""}${sectionBlocks}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FINAL QUALITY CHECKS:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• Generate ALL sections completely — no section may be missing or short
-• Total marks MUST add up to exactly 80
-• Every question must show its mark value in [brackets]
-• No two questions should test the exact same concept in the same way
-• Do NOT add any text after the last question
+â€¢ Generate ALL sections completely â€” no section may be missing or short
+â€¢ Total marks MUST add up to exactly 80
+â€¢ Every question must show its mark value in [brackets]
+â€¢ No two questions should test the exact same concept in the same way
+â€¢ Do NOT add any text after the last question
         `.trim();
 
         const paper = await callAI(paperPrompt, [
           {
             role: "user",
-            content: `Generate a FRESH UNIQUE CBSE Board paper: ${board} Class ${cls} — ${subjectName}${hasUploadedSyllabus ? " (UPLOADED SYLLABUS — use ONLY listed topics)" : ""}. Paper seed: ${paperSeed}`,
+            content: `Generate a FRESH UNIQUE CBSE Board paper: ${board} Class ${cls} â€” ${subjectName}${hasUploadedSyllabus ? " (UPLOADED SYLLABUS â€” use ONLY listed topics)" : ""}. Paper seed: ${paperSeed}`,
           },
         ]);
 
-        const { verified: totalMarksOnPaper } = verifyPaperMarks(paper, 80);
+        verifyPaperMarks(paper, 80);
         const startTime = Date.now();
 
         const activeSession: ExamSession = {
@@ -2839,14 +2763,14 @@ FINAL QUALITY CHECKS:
 
         return NextResponse.json({
           reply:
-            `⏱️ **Exam started! Timer is running.**\n\n` +
-            `📌 How to answer:\n` +
-            `• Answer questions in **any order** you prefer\n` +
-            `• Type answers directly in chat, OR\n` +
-            `• Upload **photos / PDFs** of your handwritten answers\n` +
-            `• You can send multiple messages — all will be collected\n` +
-            `• When fully done, type **submit** (or **done** / **finish**)\n\n` +
-            `Good luck${callName}! 💪 Give it your best.`,
+            `â±ï¸ **Exam started! Timer is running.**\n\n` +
+            `ðŸ“Œ How to answer:\n` +
+            `â€¢ Answer questions in **any order** you prefer\n` +
+            `â€¢ Type answers directly in chat, OR\n` +
+            `â€¢ Upload **photos / PDFs** of your handwritten answers\n` +
+            `â€¢ You can send multiple messages â€” all will be collected\n` +
+            `â€¢ When fully done, type **submit** (or **done** / **finish**)\n\n` +
+            `Good luck${callName}! ðŸ’ª Give it your best.`,
           paper,
           startTime,
         });
@@ -2856,13 +2780,13 @@ FINAL QUALITY CHECKS:
         reply:
           `Please tell me the **subject** you want to be tested on${callName}.\n` +
           `Options: Science | Mathematics | SST | History | Geography | Civics | Economics | English | Hindi\n\n` +
-          `📎 Or **upload your syllabus** as a PDF or image for a custom paper.`,
+          `ðŸ“Ž Or **upload your syllabus** as a PDF or image for a custom paper.`,
       });
     }
 
-    // ═══════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // ORAL MODE
-    // ═══════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     if (mode === "oral") {
       const contextPrimer: ChatMessage[] = name ? [
         { role: "user", content: `My name is ${name}${cls ? `, I'm in Class ${cls}` : ""}${board ? `, ${board} board` : ""}.` },
@@ -2878,24 +2802,40 @@ FINAL QUALITY CHECKS:
         /hindi/i.test(bodySubject) ||
         bodyLang === "hi-IN" ||
         /[\u0900-\u097F]{5,}/.test(oralConversationText) ||
-        /hindi|हिंदी/i.test(oralConversationText);
+        /hindi|à¤¹à¤¿à¤‚à¤¦à¥€/i.test(oralConversationText);
       const oralSystemPrompt = name
-        ? systemPrompt("oral", isHindiOral ? "hindi" : undefined) + `\n\nSTUDENT IDENTITY: The student's name is ${name}${cls ? `, Class ${cls}` : ""}. Always use their name — never call them "Student".`
+        ? systemPrompt("oral", isHindiOral ? "hindi" : undefined) + `\n\nSTUDENT IDENTITY: The student's name is ${name}${cls ? `, Class ${cls}` : ""}. Always use their name â€” never call them "Student".`
         : systemPrompt("oral", isHindiOral ? "hindi" : undefined);
       const reply = await callAI(oralSystemPrompt, oralConversation);
+      await addActivity({ id: crypto.randomUUID(), createdAt: new Date().toISOString(), userQuery: message || "", aiResponse: reply, mode, user: nameForLog });
       return NextResponse.json({ reply });
     }
 
-    // ═══════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // PRACTICE MODE
-    // ═══════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    const knowledgeLookup = await searchKnowledge(message || "");
+    if (knowledgeLookup.matched) {
+      const kbPrompt = `Use this uploaded knowledge context when answering. If context is incomplete, answer conservatively.\n\n[Source: ${knowledgeLookup.source}]\n${knowledgeLookup.context}`;
+      const kbReply = await callAI(kbPrompt, conversation);
+      await addActivity({
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+        userQuery: message || "",
+        aiResponse: kbReply,
+        mode,
+        user: nameForLog,
+      });
+      return NextResponse.json({ reply: kbReply, source: knowledgeLookup.source });
+    }
+
     if (mode === "practice") {
       const practiceConversationText = conversation.map((m) => m.content).join(" ");
       const isHindiPractice =
         /hindi/i.test(bodySubject) ||
         bodyLang === "hi-IN" ||
         /[\u0900-\u097F]{5,}/.test(practiceConversationText) ||
-        /hindi|हिंदी/i.test(practiceConversationText);
+        /hindi|à¤¹à¤¿à¤‚à¤¦à¥€/i.test(practiceConversationText);
       const isMathPractice =
         !isHindiPractice && (
           /math/i.test(bodySubject) ||
@@ -2903,19 +2843,20 @@ FINAL QUALITY CHECKS:
         );
       const practiceOverride = isHindiPractice ? "hindi" : isMathPractice ? "mathematics" : undefined;
       const reply = await callAI(systemPrompt("practice", practiceOverride), conversation);
+      await addActivity({ id: crypto.randomUUID(), createdAt: new Date().toISOString(), userQuery: message || "", aiResponse: reply, mode, user: nameForLog });
       return NextResponse.json({ reply });
     }
 
-    // ═══════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // REVISION MODE
-    // ═══════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     if (mode === "revision") {
       const revisionConversationText = conversation.map((m) => m.content).join(" ");
       const isHindiRevision =
         /hindi/i.test(bodySubject) ||
         bodyLang === "hi-IN" ||
         /[\u0900-\u097F]{5,}/.test(revisionConversationText) ||
-        /hindi|हिंदी/i.test(revisionConversationText);
+        /hindi|à¤¹à¤¿à¤‚à¤¦à¥€/i.test(revisionConversationText);
       const isMathRevision =
         !isHindiRevision && (
           /math/i.test(bodySubject) ||
@@ -2923,12 +2864,13 @@ FINAL QUALITY CHECKS:
         );
       const revisionOverride = isHindiRevision ? "hindi" : isMathRevision ? "mathematics" : undefined;
       const reply = await callAI(systemPrompt("revision", revisionOverride), conversation);
+      await addActivity({ id: crypto.randomUUID(), createdAt: new Date().toISOString(), userQuery: message || "", aiResponse: reply, mode, user: nameForLog });
       return NextResponse.json({ reply });
     }
 
-    // ═══════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // PROGRESS MODE
-    // ═══════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     if (mode === "progress") {
       const subjectStats = body?.subjectStats || null;
       const attempts     = body?.attempts     || [];
@@ -2946,30 +2888,36 @@ FINAL QUALITY CHECKS:
       const progressPrompt = `
 You are a sharp CBSE academic advisor. Analyse the student's performance data below.
 Student: ${name || "the student"}, Class ${cls}
-OUTPUT RULES — follow exactly, no exceptions:
+OUTPUT RULES â€” follow exactly, no exceptions:
 - Output EXACTLY 4 lines, each starting with its emoji prefix
 - No preamble, no sign-off, no extra lines whatsoever
-- Every line must name a specific subject — never say "a subject"
-- Be precise and blunt — no filler phrases
+- Every line must name a specific subject â€” never say "a subject"
+- Be precise and blunt â€” no filler phrases
 LINE FORMAT (output all 4, in this exact order):
-💪 Strongest:  [subject] — [score]% ([grade]) — one specific reason why
-⚠️  Weakest:   [subject] — [score]% — [one specific thing to fix]
-📈 Trend:      [subject showing biggest positive delta, or "No improvement data yet"]
-🎯 Next target: [subject closest to next grade] — [X] more marks → [next grade label]
+ðŸ’ª Strongest:  [subject] â€” [score]% ([grade]) â€” one specific reason why
+âš ï¸  Weakest:   [subject] â€” [score]% â€” [one specific thing to fix]
+ðŸ“ˆ Trend:      [subject showing biggest positive delta, or "No improvement data yet"]
+ðŸŽ¯ Next target: [subject closest to next grade] â€” [X] more marks â†’ [next grade label]
       `.trim();
       const reply = await callAI(progressPrompt, [
         { role: "user", content: `Performance data for ${name || "the student"}:\n${dataPayload}` },
       ]);
+      await addActivity({ id: crypto.randomUUID(), createdAt: new Date().toISOString(), userQuery: message || "", aiResponse: reply, mode, user: nameForLog });
       return NextResponse.json({ reply });
     }
 
+    await addActivity({ id: crypto.randomUUID(), createdAt: new Date().toISOString(), userQuery: message || "", aiResponse: "Invalid mode.", mode, user: nameForLog, error: "Invalid mode" });
     return NextResponse.json({ reply: "Invalid mode." });
 
   } catch (err) {
     console.error("[route.ts] Unhandled error:", err);
+    try {
+      await addActivity({ id: crypto.randomUUID(), createdAt: new Date().toISOString(), userQuery: "", aiResponse: "", error: String(err) });
+    } catch {}
     return NextResponse.json(
       { reply: "Server error. Please try again." },
       { status: 500 }
     );
   }
 }
+
