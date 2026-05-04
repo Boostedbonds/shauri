@@ -1,9 +1,8 @@
 /**
  * components/ManualMarksModal.tsx
  *
- * Fixed: now calls /api/verify-marks (dedicated route) instead of
- * /api/chat, which was causing "Unexpected token 'R', Request En..."
- * because large base64 PDFs exceeded the body size limit on /api/chat.
+ * Fix: uploads files to /api/upload-blob first (returns URLs),
+ * then sends only URLs to /api/verify-marks — avoids FUNCTION_PAYLOAD_TOO_LARGE.
  */
 "use client";
 import { useRef, useState } from "react";
@@ -28,6 +27,7 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
   const [asFile,      setAsFile]     = useState<File | null>(null);
   const [qpName,      setQpName]     = useState("");
   const [asName,      setAsName]     = useState("");
+  const [verifyStep,  setVerifyStep] = useState(""); // granular status shown to student
   const [aiResult,    setAiResult]   = useState<{
     confirmedMarks: number; confirmedTotal: number; pct: number;
     errorTopics: string[]; feedback: string; scoreChanged: boolean;
@@ -39,72 +39,65 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
 
   async function maybeCompressImage(file: File): Promise<File> {
     if (!file.type.startsWith("image/")) return file;
-
     const bitmap = await createImageBitmap(file);
     const maxW = 1800;
     const scale = bitmap.width > maxW ? maxW / bitmap.width : 1;
     const w = Math.max(1, Math.round(bitmap.width * scale));
     const h = Math.max(1, Math.round(bitmap.height * scale));
-
     const canvas = document.createElement("canvas");
-    canvas.width = w;
-    canvas.height = h;
+    canvas.width = w; canvas.height = h;
     const ctx = canvas.getContext("2d");
     if (!ctx) return file;
     ctx.drawImage(bitmap, 0, 0, w, h);
-
     const blob = await new Promise<Blob | null>((resolve) =>
       canvas.toBlob(resolve, "image/jpeg", 0.82)
     );
     if (!blob) return file;
-
     const compressed = new File([blob], file.name.replace(/\.\w+$/, ".jpg"), {
-      type: "image/jpeg",
-      lastModified: Date.now(),
+      type: "image/jpeg", lastModified: Date.now(),
     });
     return compressed.size < file.size ? compressed : file;
   }
 
-  function isAllowedSize(file: File): boolean {
-    return file.size <= MAX_UPLOAD_BYTES;
-  }
-
-  function sizeMb(bytes: number): string {
-    return (bytes / (1024 * 1024)).toFixed(2);
-  }
+  function isAllowedSize(file: File) { return file.size <= MAX_UPLOAD_BYTES; }
+  function sizeMb(bytes: number) { return (bytes / (1024 * 1024)).toFixed(2); }
 
   async function handleQP(file: File) {
     const processed = await maybeCompressImage(file);
     if (!isAllowedSize(processed)) {
-      setError(
-        `Question paper is ${sizeMb(processed.size)} MB. Please upload a file below ${sizeMb(
-          MAX_UPLOAD_BYTES
-        )} MB.`
-      );
+      setError(`Question paper is ${sizeMb(processed.size)} MB. Max ${sizeMb(MAX_UPLOAD_BYTES)} MB.`);
       return;
     }
-    setError("");
-    setQpName(processed.name);
-    setQpFile(processed);
+    setError(""); setQpName(processed.name); setQpFile(processed);
   }
 
   async function handleAS(file: File) {
     const processed = await maybeCompressImage(file);
     if (!isAllowedSize(processed)) {
-      setError(
-        `Answer sheet is ${sizeMb(processed.size)} MB. Please upload a file below ${sizeMb(
-          MAX_UPLOAD_BYTES
-        )} MB.`
-      );
+      setError(`Answer sheet is ${sizeMb(processed.size)} MB. Max ${sizeMb(MAX_UPLOAD_BYTES)} MB.`);
       return;
     }
-    setError("");
-    setAsName(processed.name);
-    setAsFile(processed);
+    setError(""); setAsName(processed.name); setAsFile(processed);
   }
 
   function canVerify() {
     return marks && total && parseInt(marks) <= parseInt(total) && qpFile && asFile;
+  }
+
+  // ── Upload a single file to Vercel Blob via /api/upload-blob ──
+  async function uploadToBlob(file: File): Promise<string> {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch("/api/upload-blob", { method: "POST", body: form });
+    const raw = await res.text();
+    let data: any;
+    try { data = JSON.parse(raw); } catch {
+      throw new Error("Upload failed: invalid server response.");
+    }
+    if (!res.ok || !data?.url) {
+      throw new Error(data?.error || "File upload failed. Please try again.");
+    }
+    return data.url as string;
   }
 
   async function verify() {
@@ -114,37 +107,36 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
     const t = parseInt(total);
 
     try {
-      const form = new FormData();
-      form.append("marks", String(m));
-      form.append("total", String(t));
-      form.append("subject", subject);
-      form.append("chapter", chapter);
-      form.append("day", String(day));
-      if (qpFile) form.append("qpFile", qpFile);
-      if (asFile) form.append("asFile", asFile);
+      // Step 1 — upload files to Blob (invisible to student)
+      setVerifyStep("Uploading question paper…");
+      const qpUrl = await uploadToBlob(qpFile!);
 
+      setVerifyStep("Uploading answer sheet…");
+      const asUrl = await uploadToBlob(asFile!);
+
+      // Step 2 — send only URLs + metadata to verify-marks
+      setVerifyStep("AI is checking your work…");
       const res = await fetch("/api/verify-marks", {
         method: "POST",
-        body: form,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          marks: m, total: t,
+          subject, chapter, day: String(day),
+          qpUrl, asUrl,
+        }),
       });
 
-      // ── Safe JSON parse — shows friendly error instead of crashing ──
       const raw = await res.text();
       let data: any = null;
-      try {
-        data = raw ? JSON.parse(raw) : null;
-      } catch {
+      try { data = raw ? JSON.parse(raw) : null; } catch {
         const compact = raw.replace(/\s+/g, " ").slice(0, 180);
-        throw new Error(
-          compact
-            ? `Server returned an invalid response: ${compact}`
-            : "Server returned an invalid response. Please try again."
+        throw new Error(compact
+          ? `Server returned an invalid response: ${compact}`
+          : "Server returned an invalid response. Please try again."
         );
       }
 
-      if (!res.ok) {
-        throw new Error(data?.reply || "Verification failed. Please try again.");
-      }
+      if (!res.ok) throw new Error(data?.reply || "Verification failed. Please try again.");
 
       const reply = data?.reply || "";
 
@@ -159,8 +151,8 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
       const errorTopics    = errorsMatch
         ? errorsMatch[1].split(",").map((s: string) => s.trim()).filter(Boolean)
         : [];
-      const feedback       = feedbackMatch ? feedbackMatch[1].trim() : reply.slice(0, 400);
-      const scoreChanged   = confirmedMarks !== m || confirmedTotal !== t;
+      const feedback     = feedbackMatch ? feedbackMatch[1].trim() : reply.slice(0, 400);
+      const scoreChanged = confirmedMarks !== m || confirmedTotal !== t;
 
       setAiResult({ confirmedMarks, confirmedTotal, pct, errorTopics, feedback, scoreChanged });
       setStep("result");
@@ -227,15 +219,11 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
         {/* Step indicator */}
         <div style={{ display: "flex", gap: 6, marginBottom: 24 }}>
           {(["entry", "upload", "verifying", "result"] as Step[]).map((s, i) => (
-            <div
-              key={s}
-              style={{
-                flex: 1, height: 4, borderRadius: 2,
-                background: (["entry", "upload", "verifying", "result"].indexOf(step) >= i)
-                  ? "#2563eb" : "#e2e8f0",
-                transition: "background 0.3s",
-              }}
-            />
+            <div key={s} style={{
+              flex: 1, height: 4, borderRadius: 2,
+              background: (["entry", "upload", "verifying", "result"].indexOf(step) >= i) ? "#2563eb" : "#e2e8f0",
+              transition: "background 0.3s",
+            }} />
           ))}
         </div>
 
@@ -275,7 +263,7 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
               Upload the <strong>question paper</strong> and your <strong>answer sheet</strong>. The AI will check your score of <strong>{marks}/{total}</strong> against the actual content.
             </p>
 
-            {/* Question paper upload */}
+            {/* Question paper */}
             <div
               onClick={() => qpRef.current?.click()}
               style={{ border: `2px dashed ${qpFile ? "#2563eb" : "#e2e8f0"}`, borderRadius: 12, padding: 20, cursor: "pointer", background: qpFile ? "#eff6ff" : "#f8fafc", textAlign: "center" }}
@@ -292,12 +280,10 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
                 </>
               )}
             </div>
-            <input
-              ref={qpRef} type="file" accept="image/*,application/pdf" hidden
-              onChange={e => { const f = e.target.files?.[0]; if (f) handleQP(f); }}
-            />
+            <input ref={qpRef} type="file" accept="image/*,application/pdf" hidden
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleQP(f); }} />
 
-            {/* Answer sheet upload */}
+            {/* Answer sheet */}
             <div
               onClick={() => asRef.current?.click()}
               style={{ border: `2px dashed ${asFile ? "#059669" : "#e2e8f0"}`, borderRadius: 12, padding: 20, cursor: "pointer", background: asFile ? "#f0fdf4" : "#f8fafc", textAlign: "center" }}
@@ -314,10 +300,8 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
                 </>
               )}
             </div>
-            <input
-              ref={asRef} type="file" accept="image/*,application/pdf" hidden
-              onChange={e => { const f = e.target.files?.[0]; if (f) handleAS(f); }}
-            />
+            <input ref={asRef} type="file" accept="image/*,application/pdf" hidden
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleAS(f); }} />
 
             {error && (
               <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "10px 14px", color: "#b91c1c", fontSize: 13 }}>
@@ -343,7 +327,9 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
           <div style={{ textAlign: "center", padding: "40px 0" }}>
             <div style={{ fontSize: 40, marginBottom: 16, animation: "spin 1.5s linear infinite", display: "inline-block" }}>🔍</div>
             <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-            <p style={{ fontSize: 15, fontWeight: 600, color: "#0f172a", marginBottom: 6 }}>AI is checking your work…</p>
+            <p style={{ fontSize: 15, fontWeight: 600, color: "#0f172a", marginBottom: 6 }}>
+              {verifyStep || "AI is checking your work…"}
+            </p>
             <p style={{ fontSize: 13, color: "#64748b" }}>
               Reading question paper and answer sheet against your claimed score of {marks}/{total}
             </p>
@@ -353,7 +339,6 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
         {/* ── Step 4: Result ── */}
         {step === "result" && aiResult && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {/* Score result */}
             <div style={{
               background: aiResult.scoreChanged ? "#fef9c3" : "#f0fdf4",
               border: `1px solid ${aiResult.scoreChanged ? "#fde68a" : "#86efac"}`,
@@ -365,21 +350,16 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
               }}>
                 {aiResult.confirmedMarks}/{aiResult.confirmedTotal}
               </div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: "#0f172a", marginTop: 6 }}>
-                {aiResult.pct}%
-              </div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#0f172a", marginTop: 6 }}>{aiResult.pct}%</div>
               {aiResult.scoreChanged ? (
                 <div style={{ fontSize: 13, color: "#92400e", marginTop: 8, fontWeight: 600 }}>
                   ⚠️ AI corrected your score from {marks}/{total} to {aiResult.confirmedMarks}/{aiResult.confirmedTotal}
                 </div>
               ) : (
-                <div style={{ fontSize: 13, color: "#059669", marginTop: 8, fontWeight: 600 }}>
-                  ✅ Your claimed score confirmed
-                </div>
+                <div style={{ fontSize: 13, color: "#059669", marginTop: 8, fontWeight: 600 }}>✅ Your claimed score confirmed</div>
               )}
             </div>
 
-            {/* Error topics */}
             {aiResult.errorTopics.length > 0 && (
               <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: "14px 16px" }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: "#b91c1c", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
@@ -387,15 +367,12 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
                 </div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   {aiResult.errorTopics.map((t, i) => (
-                    <span key={i} style={{ fontSize: 12, padding: "3px 10px", background: "#fff", border: "1px solid #fecaca", borderRadius: 20, color: "#b91c1c" }}>
-                      {t}
-                    </span>
+                    <span key={i} style={{ fontSize: 12, padding: "3px 10px", background: "#fff", border: "1px solid #fecaca", borderRadius: 20, color: "#b91c1c" }}>{t}</span>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Feedback */}
             {aiResult.feedback && (
               <div style={{ background: "#f8fafc", borderRadius: 12, padding: "12px 16px", fontSize: 13, color: "#334155", lineHeight: 1.65, borderLeft: "3px solid #2563eb" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#2563eb", marginBottom: 6, textTransform: "uppercase" }}>AI Feedback</div>
