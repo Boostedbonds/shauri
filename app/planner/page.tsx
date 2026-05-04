@@ -26,7 +26,9 @@ import {
 
 type ModeView = "independent" | "guided";
 
-function getClassNum(cls: string): number {
+function getClassNum(cls?: string | number): number {
+  if (typeof cls === "number") return cls;
+  if (!cls) return 0;
   const n = parseInt(cls.replace(/\D/g, ""));
   return isNaN(n) ? 0 : n;
 }
@@ -58,7 +60,7 @@ export default function PlannerPage() {
   useEffect(() => {
     try {
       const s = JSON.parse(localStorage.getItem("shauri_student") || "null");
-      if (!s || getClassNum(s.class) !== 10) {
+      if (!s || getClassNum(s.classLevel ?? s.class) !== 10) {
         window.location.href = "/modes";
         return;
       }

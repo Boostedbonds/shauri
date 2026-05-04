@@ -174,8 +174,10 @@ function isTopicCovered(
 CURRENT DAY CALCULATION
 --------------------------------------- */
 
-export function getCurrentDay(state: PlannerState): PlannerState {
-  const logs = getActivityLogs();
+export function getCurrentDay(
+  state: PlannerState,
+  logs: ActivityRecord[] = getActivityLogs()
+): PlannerState {
 
   let next = normalizeState(state);
 
@@ -212,8 +214,13 @@ export function getActivityLogs(): ActivityRecord[] {
 ACTIONS (FIXES YOUR ERROR)
 --------------------------------------- */
 
-export function markComplete(day: number): PlannerState {
-  const state = getPlannerState();
+export function markComplete(
+  stateOrDay: PlannerState | number,
+  maybeDay?: number
+): PlannerState {
+  const state = typeof stateOrDay === "number" ? getPlannerState() : normalizeState(stateOrDay);
+  const day = typeof stateOrDay === "number" ? stateOrDay : maybeDay;
+  if (!day) return setPlannerState(state);
 
   const updated: PlannerState = {
     ...state,
@@ -235,8 +242,13 @@ export function markComplete(day: number): PlannerState {
   return setPlannerState(updated);
 }
 
-export function markSkipped(day: number): PlannerState {
-  const state = getPlannerState();
+export function markSkipped(
+  stateOrDay: PlannerState | number,
+  maybeDay?: number
+): PlannerState {
+  const state = typeof stateOrDay === "number" ? getPlannerState() : normalizeState(stateOrDay);
+  const day = typeof stateOrDay === "number" ? stateOrDay : maybeDay;
+  if (!day) return setPlannerState(state);
 
   const updated: PlannerState = {
     ...state,
@@ -258,8 +270,8 @@ export function markSkipped(day: number): PlannerState {
   return setPlannerState(updated);
 }
 
-export function undoLastAction(): PlannerState {
-  const state = getPlannerState();
+export function undoLastAction(stateArg?: PlannerState): PlannerState {
+  const state = stateArg ? normalizeState(stateArg) : getPlannerState();
 
   if (!state.last_action) return state;
 
@@ -274,8 +286,13 @@ export function undoLastAction(): PlannerState {
   });
 }
 
-export function reopenPendingDay(day: number): PlannerState {
-  const state = getPlannerState();
+export function reopenPendingDay(
+  stateOrDay: PlannerState | number,
+  maybeDay?: number
+): PlannerState {
+  const state = typeof stateOrDay === "number" ? getPlannerState() : normalizeState(stateOrDay);
+  const day = typeof stateOrDay === "number" ? stateOrDay : maybeDay;
+  if (!day) return setPlannerState(state);
 
   const updated: PlannerState = {
     ...state,
@@ -286,13 +303,15 @@ export function reopenPendingDay(day: number): PlannerState {
   return setPlannerState(updated);
 }
 
-export function handleCarryForward(): PlannerState {
-  const state = getPlannerState();
+export function handleCarryForward(stateArg?: PlannerState): number[] {
+  const state = stateArg ? normalizeState(stateArg) : getPlannerState();
+  const pending = [...state.skipped_days];
 
-  const next: PlannerState = {
-    ...state,
-    current_day: state.current_day + 1,
-  };
+  for (let day = 1; day < state.current_day; day++) {
+    if (!state.completed_days.includes(day) && !pending.includes(day)) {
+      pending.push(day);
+    }
+  }
 
-  return setPlannerState(next);
+  return uniq(pending);
 }

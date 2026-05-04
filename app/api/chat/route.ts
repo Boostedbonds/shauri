@@ -58,7 +58,7 @@ function getKey(student?: StudentContext): string {
 
 function getSyllabusSummary() {
   const subjectNames = Object.values(syllabus.subjects).map((entry) => entry.name);
-  return `Class ${syllabus.class} subjects: ${subjectNames.join(", ")}`;
+  return `Allowed subjects: ${subjectNames.join(", ")}`;
 }
 
 /* --------------------------------------------------
@@ -164,7 +164,10 @@ export async function POST(req: NextRequest) {
       }
 
       const reply = await callAI(
-        systemPrompt("teacher"),
+        systemPrompt("teacher", undefined, {
+          name: student?.name,
+          classLevel: student?.class,
+        }),
         [{ role: "user", content: message }]
       );
 
@@ -203,7 +206,10 @@ export async function POST(req: NextRequest) {
         const className = student?.class || `Class ${syllabus.class}`;
 
         const paper = await callAI(
-          systemPrompt("examiner"),
+          systemPrompt("examiner", undefined, {
+            name: student?.name,
+            classLevel: student?.class,
+          }),
           [
             {
               role: "user",
@@ -250,7 +256,10 @@ export async function POST(req: NextRequest) {
         }
 
         const evalResult = await callAI(
-          systemPrompt("examiner"),
+          systemPrompt("examiner", undefined, {
+            name: student?.name,
+            classLevel: student?.class,
+          }),
           [
             {
               role: "user",

@@ -8,13 +8,34 @@ export type StudyMode =
   | "practice"
   | "revision";
 
+type PromptStudentContext = {
+  name?: string;
+  classLevel?: string | number;
+};
+
 const refusalMessage = `This question is not related to your NCERT/CBSE syllabus.
 Please focus on your studies and ask a syllabus-related question. 😊`;
 
-export function systemPrompt(mode: StudyMode, subjectOverride?: string) {
-  const student = getStudent();
-  const name = student?.name || "Student";
-  const cls = student?.classLevel || syllabus.class;
+function normalizeClassLevel(input?: string | number): string | number | undefined {
+  if (input === undefined || input === null) return undefined;
+  if (typeof input === "number") return input;
+  const trimmed = input.trim();
+  if (!trimmed) return undefined;
+  const digits = trimmed.replace(/[^\d]/g, "");
+  return digits ? Number(digits) : trimmed;
+}
+
+export function systemPrompt(
+  mode: StudyMode,
+  subjectOverride?: string,
+  studentOverride?: PromptStudentContext
+) {
+  const browserStudent = typeof window !== "undefined" ? getStudent() : null;
+  const name = studentOverride?.name || browserStudent?.name || "Student";
+  const cls =
+    normalizeClassLevel(studentOverride?.classLevel) ||
+    browserStudent?.classLevel ||
+    syllabus.class;
 
   const isHindiSubject =
     subjectOverride && /hindi/i.test(subjectOverride);
