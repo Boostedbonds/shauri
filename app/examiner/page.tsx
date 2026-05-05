@@ -189,31 +189,55 @@ function createNewSessionId(): string {
 }
 
 // ─────────────────────────────────────────────────────────────
+// DAY STAMP HELPERS
+// Base date: Day 1 = 1 May 2026 (Friday)
+// Derives human-readable date and week number from dayNum.
+// ─────────────────────────────────────────────────────────────
+
+const PLANNER_BASE_DATE = new Date("2026-05-01"); // Day 1
+const SHORT_DAYS   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const SHORT_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function getDayDate(dayNum: number): string {
+  const d = new Date(PLANNER_BASE_DATE);
+  d.setDate(PLANNER_BASE_DATE.getDate() + (dayNum - 1));
+  return `${SHORT_DAYS[d.getDay()]} ${d.getDate()} ${SHORT_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function getWeekNum(dayNum: number): number {
+  return Math.ceil(dayNum / 7);
+}
+
+function getDayType(dayNum: number, isRevision: boolean): string {
+  if (isRevision) return "Revision Day";
+  // Days 3, 10, 17, 24 are revision — others check if it falls on weekend
+  const d = new Date(PLANNER_BASE_DATE);
+  d.setDate(PLANNER_BASE_DATE.getDate() + (dayNum - 1));
+  const dow = d.getDay(); // 0=Sun, 6=Sat
+  if (dow === 0 || dow === 6) return "Holiday";
+  return "School Day";
+}
+
+// ─────────────────────────────────────────────────────────────
 // FIX 1: WRITING SUBJECT — planner-accurate lookup map
-// Replaces the wrong odd/even day logic entirely
 // ─────────────────────────────────────────────────────────────
 
 const WRITING_SUBJECT_MAP: Record<number, "English" | "Hindi"> = {
-  1:  "English",   // First Flight Ch 1 — A Letter to God
-  4:  "Hindi",     // Sparsh Ch 1 — Kabir ke Dohe
-  6:  "English",   // First Flight Ch 2 — Nelson Mandela
-  8:  "Hindi",     // Sparsh Ch 2 — Meera ke Pad
-  12: "English",   // First Flight Ch 3 — Two Stories About Flying
-  13: "Hindi",     // Sparsh Ch 3 — Bihari ke Dohe
-  15: "English",   // First Flight Ch 4 — From the Diary of Anne Frank
-  19: "Hindi",     // Kshitij Ch 1 — Surdas ke Pad
-  20: "English",   // First Flight Ch 5 — The Hundred Dresses I
-  22: "Hindi",     // Kshitij Ch 2 — Tulsidas ke Pad
-  25: "English",   // First Flight Ch 6 — The Hundred Dresses II
-  27: "Hindi",     // Kshitij Ch 3 — Dev ke Savaiye
-  29: "English",   // First Flight Ch 7 — Glimpses of India
+  1:  "English",
+  4:  "Hindi",
+  6:  "English",
+  8:  "Hindi",
+  12: "English",
+  13: "Hindi",
+  15: "English",
+  19: "Hindi",
+  20: "English",
+  22: "Hindi",
+  25: "English",
+  27: "Hindi",
+  29: "English",
 };
 
-// For revision days — which languages were covered in preceding days
-// Day 3  → English only  (Days 1-2: English on Day 1 only)
-// Day 10 → Hindi + English (Days 4-9: Hindi on 4,8 + English on 6)
-// Day 17 → English + Hindi (Days 11-16: English on 12,15 + Hindi on 13)
-// Day 24 → Hindi + English (Days 18-23: Hindi on 19,22 + English on 20)
 const REVISION_WRITING_SUBJECTS: Record<number, ("English" | "Hindi")[]> = {
   3:  ["English"],
   10: ["Hindi", "English"],
@@ -222,11 +246,9 @@ const REVISION_WRITING_SUBJECTS: Record<number, ("English" | "Hindi")[]> = {
 };
 
 function getWritingSubject(day: number): "English" | "Hindi" {
-  // For revision days — return the primary language (first in array)
   if (REVISION_WRITING_SUBJECTS[day]) {
     return REVISION_WRITING_SUBJECTS[day][0];
   }
-  // For regular days — exact planner lookup
   return WRITING_SUBJECT_MAP[day] ?? "English";
 }
 
@@ -235,8 +257,7 @@ function getWritingSubjectsForRevision(day: number): ("English" | "Hindi")[] {
 }
 
 // ─────────────────────────────────────────────────────────────
-// FIX 2: REVISION COVERAGE MAP — exact planner day ranges
-// Replaces the wrong Math.floor formula entirely
+// FIX 2: REVISION COVERAGE MAP
 // ─────────────────────────────────────────────────────────────
 
 const REVISION_COVERAGE_MAP: Record<number, { from: number; to: number }> = {
@@ -246,13 +267,12 @@ const REVISION_COVERAGE_MAP: Record<number, { from: number; to: number }> = {
   24: { from: 18, to: 23 },
 };
 
-// FIX 4: Hardcoded revision day detection — does not rely on plannerState field names
 function isRevisionDayNum(dayNum: number): boolean {
   return dayNum === 3 || dayNum === 10 || dayNum === 17 || dayNum === 24;
 }
 
 // ─────────────────────────────────────────────────────────────
-// FIX 3: SHAURI PAPER FORMAT — correct marks structure + AR + case-based MCQs
+// FIX 3: SHAURI PAPER FORMAT
 // ─────────────────────────────────────────────────────────────
 
 function getSharuiPaperFormat(
@@ -271,9 +291,12 @@ function getSharuiPaperFormat(
         `     (a) ${writingSubjects[0]} writing task [3 marks]`,
         `         Choose ONE format: formal letter OR article`,
         `         Must use vocabulary/themes from the ${writingSubjects[0]} chapters covered`,
+        `         Word limit: 120-150 words`,
+        `         Marking: Format-1 | Content-2 | Grammar-1 | Vocabulary use (min 3 words)-1`,
         `     (b) ${writingSubjects[1]} writing task [2 marks]`,
         `         Choose ONE format: anuched lekhan OR patra lekhan (if Hindi)`,
         `         OR paragraph OR short letter (if English)`,
+        `         Word limit: 60-80 words`,
         `  • Total Section E: 3 + 2 = 5 marks`,
         `  • Do NOT mix formats within each part`,
         `  • Both parts are compulsory — no internal choice in Section E`,
@@ -283,7 +306,9 @@ function getSharuiPaperFormat(
       `SECTION E – Writing Skills  [1 × 5 = 5 marks]  Language: ${writingSubject}`,
       `  • Write exactly 1 writing question in ${writingSubject}`,
       `  • Choose exactly ONE format: formal letter OR article OR paragraph`,
+      `  • Word limit: 120-150 words for letter/article, 80-100 for paragraph`,
       `  • Must connect to themes/vocabulary from the revision chapters`,
+      `  • Include marking breakdown: Format-1 | Content-2 | Grammar-1 | Vocabulary-1 = 5`,
       `  • Do NOT mix formats`,
     ].join("\n");
   }
@@ -292,14 +317,16 @@ function getSharuiPaperFormat(
     return [
       `SECTION E – Writing Skills  [1 × 3 = 3 marks]  Language: ${writingSubject}`,
       `  • Write exactly 1 writing question in ${writingSubject}`,
-      `  • Choose exactly ONE format: paragraph OR letter OR notice`,
+      `  • Format: Anucched Lekhan (paragraph) if Hindi; paragraph/appropriate format if English`,
+      `  • Word limit: 60-70 words (state this explicitly in the question)`,
+      `  • Must include step-by-step writing guidance as bullet points`,
       `  • Must connect to the primary topic studied today`,
+      `  • Repeat word limit at the end of the question`,
       `  • Do NOT mix formats`,
-      `  • Questions must be solvable within 45 minutes`,
+      `  • Do NOT use letter/patra format unless it has been introduced in the planner by this day`,
     ].join("\n");
   }
 
-  // ── REVISION DAY — 50 marks ──────────────────────────────
   if (isRevisionDay) {
     return [
       "SHAURI REVISION DAY TEST FORMAT (follow exactly — no deviations):",
@@ -309,16 +336,16 @@ function getSharuiPaperFormat(
       "SECTION A – Multiple Choice Questions  [10 × 1 = 10 marks]",
       "  • Write exactly 10 MCQs total, distributed EXACTLY as follows:",
       "    – Q1–Q6:  Standard MCQs with 4 options (A/B/C/D) [1 mark each]",
-      "              At least 2 must be competency/application-based scenarios",
-      "              Spread across all subjects covered in the revision days",
+      "              Spread EVENLY across all subjects covered in the revision days",
+      "              No subject gets more than 2 of Q1-Q6",
+      "              All 4 options must have DIFFERENT values — no duplicate options",
       "    – Q7–Q8:  Case-based MCQs [1 mark each]",
-      "              ONE shared passage/scenario (3–4 lines), then Q7 and Q8 based on it",
-      "              Passage must relate to a topic from the covered days",
+      "              ONE shared passage/scenario (4–6 lines), then Q7 and Q8 based on it",
+      "              Label: 'Questions 7 and 8 are based on the following passage:'",
+      "              Passage must be a rich Indian real-life scenario from covered topics",
       "    – Q9–Q10: Assertion–Reason MCQs [1 mark each]",
-      "              Format MUST be:",
-      "              Assertion (A): [statement]",
-      "              Reason (R): [statement]",
-      "              Options MUST be exactly:",
+      "              Both A and R must be FACTUALLY CORRECT statements",
+      "              Options MUST be EXACTLY:",
       "              (A) Both Assertion (A) and Reason (R) are true, and (R) is the correct explanation of (A)",
       "              (B) Both Assertion (A) and Reason (R) are true, but (R) is NOT the correct explanation of (A)",
       "              (C) Assertion (A) is true but Reason (R) is false",
@@ -327,24 +354,23 @@ function getSharuiPaperFormat(
       "",
       "SECTION B – Very Short Answer  [5 × 2 = 10 marks]",
       "  • Write exactly 5 questions [2 marks each]",
-      "  • Every question MUST include an internal choice (OR)",
-      "  • Internal choice MUST be within the SAME subject — never cross-subject OR",
-      "  • Expected answer: 1–2 sentences or a single equation/calculation",
+      "  • EVERY question MUST include an internal choice (OR) — NO missing ORs",
+      "  • Internal choice MUST be within the SAME subject — NEVER cross-subject OR",
+      "  • All Maths questions must provide ALL values needed (self-contained)",
       "  • Cover all subjects covered in the revision days proportionally",
       "",
       "SECTION C – Short Answer  [5 × 3 = 15 marks]",
       "  • Write exactly 5 questions [3 marks each]",
-      "  • Every question MUST include an internal choice (OR)",
-      "  • Internal choice MUST be within the SAME subject — never cross-subject OR",
+      "  • EVERY question MUST include an internal choice (OR) — NO missing ORs",
+      "  • Internal choice MUST be within the SAME subject — NEVER cross-subject OR",
       "  • Application-based; stepwise answers required",
-      "  • Expected answer: 4–6 sentences or stepped working",
       "  • Cover all subjects covered in the revision days",
       "",
       "SECTION D – Case Study  [2 × 5 = 10 marks]",
       "  • Write exactly 2 case study questions [5 marks each]",
-      "  • Each must have a real-life or competency-based passage (4–6 lines)",
+      "  • Each must have a rich real-life Indian passage (5–6 lines) — not a thin 1-line scenario",
       "  • Each case study must have 3–4 sub-questions",
-      "  • Sub-question marks MUST add to exactly 5: e.g. (a)1+(b)2+(c)2=5 or (a)1+(b)1+(c)2+(d)1=5",
+      "  • Sub-question marks MUST add to exactly 5",
       "  • Draw one case from Science/Maths and one from SST/Languages",
       "",
       buildSectionE_Revision(),
@@ -353,19 +379,17 @@ function getSharuiPaperFormat(
       "  A(10) + B(10) + C(15) + D(10) + E(5) = 50 ✓",
       "",
       "STRICT RULES:",
-      "– Each section must be clearly labelled: SECTION A, SECTION B, SECTION C, SECTION D, SECTION E",
-      "– Marks must be shown in [brackets] for EVERY question and sub-question",
-      "– Section A MUST contain: 6 standard MCQs + 2 case-based MCQs (Q7-Q8) + 2 AR questions (Q9-Q10)",
-      "– Section C is 5×3=15 marks NOT 5×2=10 marks",
-      "– Section D is 2×5=10 marks NOT 3×5=15 marks",
-      "– Internal choices in B and C must be within the SAME subject only",
-      "– Do NOT generate only MCQs — ALL sections A–E are compulsory",
-      "– Do NOT generate a full 80-mark board paper; this is a 50-mark revision test",
-      "– Generate ALL sections A–E completely — do NOT stop early",
+      "– Each section clearly labelled: SECTION A, B, C, D, E",
+      "– Marks in [brackets] for EVERY question and sub-question",
+      "– Section A: 6 standard MCQs + 2 case-based (Q7-Q8) + 2 AR (Q9-Q10)",
+      "– Section C: 5×3=15 marks",
+      "– Section D: 2×5=10 marks",
+      "– ORs in B and C: SAME subject only — never cross-subject",
+      "– ALL sections A–E must be fully generated — do NOT stop early",
+      "– This is a 50-mark revision test, NOT an 80-mark board paper",
     ].join("\n");
   }
 
-  // ── STUDY DAY — 25 marks ─────────────────────────────────
   return [
     "SHAURI STUDY DAY TEST FORMAT (follow exactly — no deviations):",
     "Total Marks: 25 | Time Allowed: 45 minutes | Maximum Marks: 25",
@@ -374,40 +398,42 @@ function getSharuiPaperFormat(
     "SECTION A – Multiple Choice Questions  [5 × 1 = 5 marks]",
     "  • Write exactly 5 MCQs total, distributed EXACTLY as follows:",
     "    – Q1–Q3: Standard MCQs with 4 options (A/B/C/D) from PRIMARY topic [1 mark each]",
+    "             All 4 options must have DIFFERENT values — no duplicate options",
     "    – Q4:    Case-based MCQ [1 mark]",
-    "             Short 2-line real-life scenario related to PRIMARY topic, then 1 MCQ based on it",
+    "             2-3 line real-life Indian scenario where the PRIMARY concept is NECESSARY",
+    "             to solve the question (not just mentioned)",
+    "             ✅ GOOD: school groups → requires HCF",
+    "             ❌ BAD: 48÷4 → simple division, not HCF",
     "    – Q5:    Assertion–Reason MCQ [1 mark]",
-    "             Format MUST be:",
-    "             Assertion (A): [statement about PRIMARY topic]",
-    "             Reason (R): [statement]",
-    "             Options MUST be exactly:",
+    "             Both A and R must be FACTUALLY CORRECT statements",
+    "             Options MUST be EXACTLY:",
     "             (A) Both Assertion (A) and Reason (R) are true, and (R) is the correct explanation of (A)",
     "             (B) Both Assertion (A) and Reason (R) are true, but (R) is NOT the correct explanation of (A)",
     "             (C) Assertion (A) is true but Reason (R) is false",
     "             (D) Assertion (A) is false but Reason (R) is true",
-    "  • Do NOT write all 5 as plain MCQs — Q4 MUST be case-based, Q5 MUST be AR",
+    "  • Q4 MUST be case-based, Q5 MUST be AR — do NOT make all 5 plain MCQs",
     "",
     "SECTION B – Very Short Answer  [3 × 2 = 6 marks]",
     "  • Write exactly 3 questions [2 marks each]",
-    "  • Every question MUST include an internal choice (OR)",
+    "  • EVERY question MUST include an internal choice (OR) — NO missing ORs",
     "  • At least 2 questions from PRIMARY subject/topic",
     "  • At most 1 question from secondary subject/topic",
-    "  • Internal choice MUST be within the SAME subject — never cross-subject OR",
-    "  • Expected answer: 1–2 sentences",
+    "  • Internal choice MUST be within the SAME subject — NEVER cross-subject OR",
+    "  • All Maths questions must provide ALL values needed (self-contained)",
     "",
     "SECTION C – Short Answer  [2 × 3 = 6 marks]",
     "  • Write exactly 2 questions [3 marks each]",
-    "  • Every question MUST include an internal choice (OR)",
+    "  • EVERY question MUST include an internal choice (OR) — NO missing ORs",
     "  • Both questions from PRIMARY subject/topic",
-    "  • Internal choice MUST be within the SAME subject — never cross-subject OR",
+    "  • Internal choice MUST be within the SAME subject — NEVER cross-subject OR",
     "  • Application-based; stepwise answers required",
-    "  • Expected answer: 4–6 sentences or stepped working",
     "",
     "SECTION D – Case Study  [1 × 5 = 5 marks]",
     "  • Write exactly 1 case study question",
-    "  • Must be a real-life or competency-based passage (3–5 lines) on PRIMARY topic",
-    "  • Must have 3–4 sub-questions adding to exactly 5 marks",
-    "  • e.g. (a) 1 mark + (b) 2 marks + (c) 2 marks = 5",
+    "  • 3-5 line rich Indian narrative scenario on PRIMARY topic",
+    "  • Must have exactly 4 sub-questions: (i)1 + (ii)2 + (iii)1 + (iv)1 = 5 marks",
+    "  • Sub-question (ii) uses exactly TWO numbers if HCF/LCM topic",
+    "  • Scenario must be relatable (beads, ropes, groups, tiles) — not abstract arithmetic",
     "",
     buildSectionE_StudyDay(),
     "",
@@ -415,14 +441,12 @@ function getSharuiPaperFormat(
     "  A(5) + B(6) + C(6) + D(5) + E(3) = 25 ✓",
     "",
     "STRICT RULES:",
-    "– Each section must be clearly labelled: SECTION A, SECTION B, SECTION C, SECTION D, SECTION E",
-    "– Marks must be shown in [brackets] for EVERY question and sub-question",
-    "– Section A MUST contain: 3 standard MCQs + 1 case-based MCQ (Q4) + 1 AR question (Q5)",
-    "– Higher weight to PRIMARY subject; secondary included but limited to max 1 question in B",
-    "– Internal choices in B and C must be within the SAME subject only",
-    "– Do NOT generate only MCQs — ALL sections A–E are compulsory",
-    "– Do NOT generate a full 80-mark board paper; this is a 25-mark daily test",
-    "– Generate ALL sections A–E completely — do NOT stop early",
+    "– Each section clearly labelled: SECTION A, B, C, D, E",
+    "– Marks in [brackets] for EVERY question and sub-question",
+    "– Section A: 3 standard MCQs + 1 case-based (Q4) + 1 AR (Q5)",
+    "– ORs in B and C: SAME subject only — never cross-subject",
+    "– ALL sections A–E must be fully generated — do NOT stop early",
+    "– This is a 25-mark daily test, NOT an 80-mark board paper",
   ].join("\n");
 }
 
@@ -509,11 +533,16 @@ function PaperRenderer({ content }: { content: string }) {
   const classPair    = headerPairs.find(p => /^class$/i.test(p.key));
   const boardPair    = headerPairs.find(p => /board/i.test(p.key));
 
+  // Extract day stamp from paper content
+  const dayStampMatch = content.match(/Day\s+(\d+)\s*[·•]\s*([^·•\n]+)[·•]\s*([^·•\n]+)[·•]\s*(Week\s*\d+)/i);
+  const dayStampLine  = dayStampMatch ? dayStampMatch[0].trim() : "";
+
   type Block =
     | { type: "section"; text: string; sub?: string }
     | { type: "instruction-block"; lines: string[] }
     | { type: "question"; num: string; text: string; marks: string; options: string[]; subparts: string[] }
     | { type: "general-instructions"; lines: string[] }
+    | { type: "daystamp"; text: string }
     | { type: "blank" }
     | { type: "text"; text: string };
 
@@ -526,6 +555,12 @@ function PaperRenderer({ content }: { content: string }) {
     const line = raw.trim();
 
     if (!line) { blocks.push({ type: "blank" }); i++; continue; }
+
+    // Day stamp detection
+    if (/^Day\s+\d+\s*[·•]/i.test(line) || /Strictly aligned to Day/i.test(line)) {
+      blocks.push({ type: "daystamp", text: line });
+      i++; continue;
+    }
 
     if (/^SECTION\s+[A-E]\b/i.test(line)) {
       const dashIdx = line.search(/[–—-]/);
@@ -612,6 +647,9 @@ function PaperRenderer({ content }: { content: string }) {
           {subjectPair && (
             <div style={{ fontSize: 13, color: "#38bdf8", marginTop: 4, fontWeight: 600 }}>{subjectPair.val}</div>
           )}
+          {dayStampLine && (
+            <div style={{ fontSize: 11, color: "#64748b", marginTop: 6, fontStyle: "italic" }}>{dayStampLine}</div>
+          )}
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
           <div style={{ display: "flex", gap: 20 }}>
@@ -632,6 +670,16 @@ function PaperRenderer({ content }: { content: string }) {
 
       {blocks.map((block, idx) => {
         if (block.type === "blank") return <div key={idx} style={{ height: 8 }} />;
+
+        if (block.type === "daystamp") return (
+          <div key={idx} style={{
+            background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6,
+            padding: "6px 12px", marginBottom: 10, fontSize: 11,
+            color: "#15803d", fontWeight: 600, letterSpacing: "0.02em",
+          }}>
+            📅 {block.text}
+          </div>
+        );
 
         if (block.type === "general-instructions") return (
           <div key={idx} style={{ border: "1px solid #e2e8f0", borderLeft: "3px solid #2563eb", borderRadius: 8, padding: "10px 14px", marginBottom: 16, background: "#f8fafc" }}>
@@ -741,6 +789,7 @@ function ExaminerContent() {
   const [examMeta, setMeta]                 = useState<{
     examEnded?: boolean; marksObtained?: number; totalMarks?: number;
     percentage?: number; timeTaken?: string; subject?: string; isRevisionDay?: boolean;
+    dayStamp?: string;
   }>({});
   const [studentName,  setStudentName]  = useState("");
   const [studentClass, setStudentClass] = useState("");
@@ -885,8 +934,9 @@ function ExaminerContent() {
 
         setMeta(p => ({
           ...p,
-          subject: paperSubject || p.subject,
+          subject:      paperSubject || p.subject,
           isRevisionDay: data?.isRevisionDay ?? isRevisionDayRef.current ?? p.isRevisionDay,
+          dayStamp:     data?.dayStamp ?? p.dayStamp,
         }));
         setPaper(paper);
         confirmedSubjectRef.current = "";
@@ -976,15 +1026,11 @@ function ExaminerContent() {
             /(?:I'll prepare|preparing|strict CBSE|custom paper|paper for)/i.test(reply);
           if (looksLikeSubjectConfirmation) {
             const extracted = extractConfirmedSubject(reply);
-            if (extracted) {
-              confirmedSubjectRef.current = extracted;
-            }
+            if (extracted) confirmedSubjectRef.current = extracted;
           }
         } else {
           const detected = extractUploadedSubject(reply);
-          if (detected) {
-            uploadedSubjectRef.current = detected;
-          }
+          if (detected) uploadedSubjectRef.current = detected;
         }
 
         setMessages(p => [...p, { role: "assistant", content: reply }]);
@@ -1014,9 +1060,7 @@ function ExaminerContent() {
   }
 
   // ─────────────────────────────────────────────────────────
-  // FIX 2 + FIX 4 + FIX 5: useEffect with corrected
-  // isRevisionDay detection, weekCoverage, writingSubjects,
-  // formatBlock — all using new planner-accurate functions
+  // MAIN useEffect — builds shauriPaperData with full day stamp
   // ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (autoTriggeredRef.current) return;
@@ -1035,18 +1079,15 @@ function ExaminerContent() {
     const primary    = plannerDay?.topics?.[0];
     const secondary  = plannerDay?.topics?.[1];
 
-    // FIX 4: Use hardcoded fallback + meta check — not fragile meta-only detection
     const isRevisionDay = isRevisionDayNum(dayNum) ||
       Boolean(plannerDay?.meta?.isRev || plannerDay?.meta?.type === "rev");
     isRevisionDayRef.current = isRevisionDay;
 
-    // FIX 1: Use planner-accurate writing subject lookup
     const writingSubject  = getWritingSubject(dayNum);
     const writingSubjects = isRevisionDay
       ? getWritingSubjectsForRevision(dayNum)
       : [writingSubject];
 
-    // FIX 2: Use exact revision coverage map — not Math.floor formula
     const coverageRange = isRevisionDay ? REVISION_COVERAGE_MAP[dayNum] : undefined;
     const coverageDays  = coverageRange
       ? THIRTY_DAY_PLAN.filter(d => d.day >= coverageRange.from && d.day <= coverageRange.to)
@@ -1058,16 +1099,23 @@ function ExaminerContent() {
           .join("\n")
       : undefined;
 
-    // FIX 3: Use corrected format with AR + case-based MCQs + right marks structure
     const formatBlock = getSharuiPaperFormat(isRevisionDay, writingSubject, writingSubjects);
 
+    // ── DAY STAMP FIELDS — derived from dayNum ──────────────
+    const dayDate  = Number.isFinite(dayNum) && dayNum > 0 ? getDayDate(dayNum)          : "";
+    const dayType  = Number.isFinite(dayNum) && dayNum > 0 ? getDayType(dayNum, isRevisionDay) : "School Day";
+    const weekNum  = Number.isFinite(dayNum) && dayNum > 0 ? getWeekNum(dayNum)           : 1;
+    const dayStamp = dayNum > 0
+      ? `Day ${dayNum}  ·  ${dayDate}  ·  ${dayType}  ·  Week ${weekNum}`
+      : "";
+    // ────────────────────────────────────────────────────────
+
     const displaySubject = isRevisionDay
-      ? `Week ${Math.ceil(dayNum / 7)} Revision`
+      ? `Week ${weekNum} Revision`
       : primary
         ? `${primary.subject}${secondary ? ` + ${secondary.subject}` : ""}`
         : (subject || "General");
 
-    // FIX 5: shauriPaperData now includes writingSubjects array + corrected weekCoverage
     const shauriPaperData = {
       isRevisionDay,
       totalMarks:       isRevisionDay ? 50 : 25,
@@ -1077,19 +1125,24 @@ function ExaminerContent() {
       secondarySubject: secondary?.subject || "",
       secondaryTopic:   secondary?.topic   || "",
       writingSubject,
-      writingSubjects,                            // FIX 5: dual-language array passed to backend
+      writingSubjects,
       weekCoverage:     isRevisionDay ? weekCoverage : undefined,
       dayNum,
       cycleNum,
       formatBlock,
+      // ── NEW: day stamp fields sent to route.ts ──
+      dayDate,
+      dayType,
+      weekNum,
     };
 
     shauriPaperRef.current = shauriPaperData;
 
     setMeta(p => ({
       ...p,
-      subject: displaySubject,
+      subject:      displaySubject,
       isRevisionDay,
+      dayStamp,
     }));
 
     const cleanUserMessage = from === "planner" && plannerDay
@@ -1135,9 +1188,12 @@ function ExaminerContent() {
           ← Back
         </button>
 
-        <span style={{ fontSize: 15, fontWeight: 700, color: "#0f172a" }}>
-          📋 Examiner Mode
-        </span>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: "#0f172a" }}>📋 Examiner Mode</span>
+          {examMeta.dayStamp && (
+            <span style={{ fontSize: 10, color: "#64748b", fontWeight: 500 }}>{examMeta.dayStamp}</span>
+          )}
+        </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 80, justifyContent: "flex-end" }}>
           {paperContent && (
@@ -1168,7 +1224,6 @@ function ExaminerContent() {
 
       {/* SPLIT */}
       <div className="ex-split">
-
         {/* LEFT — chat */}
         <div className="ex-chat">
           <div style={{
@@ -1259,7 +1314,7 @@ function ExaminerContent() {
                 display: "flex", alignItems: "center", justifyContent: "space-between",
                 marginBottom: 20,
               }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                   {examActive && (
                     <div style={{
                       background: "#0f172a", color: "#38bdf8",
@@ -1273,6 +1328,9 @@ function ExaminerContent() {
                     <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>
                       📚 {examMeta.subject}
                     </span>
+                  )}
+                  {examMeta.dayStamp && (
+                    <span style={{ fontSize: 10, color: "#94a3b8" }}>📅 {examMeta.dayStamp}</span>
                   )}
                 </div>
                 <button
@@ -1304,9 +1362,6 @@ function ExaminerContent() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// DEFAULT EXPORT — wraps ExaminerContent in Suspense
-// ─────────────────────────────────────────────────────────────
 export default function ExaminerPage() {
   return (
     <Suspense fallback={
