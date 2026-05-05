@@ -1,8 +1,10 @@
 /**
  * components/ManualMarksModal.tsx
  *
- * Fix: uploads files to /api/upload-blob first (returns URLs),
- * then sends only URLs to /api/verify-marks — avoids FUNCTION_PAYLOAD_TOO_LARGE.
+ * Answer sheet now supports:
+ * - Multiple JPG/PNG images (multi-page handwritten sheets)
+ * - Single PDF
+ * All pages sent to Gemini Vision as separate base64 parts.
  */
 "use client";
 import { useRef, useState } from "react";
@@ -17,26 +19,27 @@ interface Props {
 }
 
 type Step = "entry" | "upload" | "verifying" | "result";
-const MAX_UPLOAD_BYTES = 12 * 1024 * 1024; // 12MB
+const MAX_UPLOAD_BYTES = 12 * 1024 * 1024; // 12MB per file
+const MAX_AS_FILES = 10; // max answer sheet pages
 
 export default function ManualMarksModal({ subject, chapter, day, onSaved, onClose }: Props) {
   const [step,        setStep]       = useState<Step>("entry");
   const [marks,       setMarks]      = useState("");
   const [total,       setTotal]      = useState("");
   const [qpFile,      setQpFile]     = useState<File | null>(null);
-  const [asFile,      setAsFile]     = useState<File | null>(null);
   const [qpName,      setQpName]     = useState("");
-  const [asName,      setAsName]     = useState("");
-  const [verifyStep,  setVerifyStep] = useState(""); // granular status shown to student
+  const [asFiles,     setAsFiles]    = useState<File[]>([]); // multiple pages
+  const [verifyStep,  setVerifyStep] = useState("");
   const [aiResult,    setAiResult]   = useState<{
     confirmedMarks: number; confirmedTotal: number; pct: number;
-    errorTopics: string[]; feedback: string; scoreChanged: boolean;
+    errorTopics: string[]; feedback: string; deductions: string[]; scoreChanged: boolean;
   } | null>(null);
   const [error, setError] = useState("");
 
   const qpRef = useRef<HTMLInputElement>(null);
   const asRef = useRef<HTMLInputElement>(null);
 
+  // ── Image compression ──
   async function maybeCompressImage(file: File): Promise<File> {
     if (!file.type.startsWith("image/")) return file;
     const bitmap = await createImageBitmap(file);
@@ -59,32 +62,56 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
     return compressed.size < file.size ? compressed : file;
   }
 
-  function isAllowedSize(file: File) { return file.size <= MAX_UPLOAD_BYTES; }
   function sizeMb(bytes: number) { return (bytes / (1024 * 1024)).toFixed(2); }
 
+  // ── QP handler (single PDF or image) ──
   async function handleQP(file: File) {
     const processed = await maybeCompressImage(file);
-    if (!isAllowedSize(processed)) {
-      setError(`Question paper is ${sizeMb(processed.size)} MB. Max ${sizeMb(MAX_UPLOAD_BYTES)} MB.`);
-      return;
+    if (processed.size > MAX_UPLOAD_BYTES) {
+      setError(`Question paper is ${sizeMb(processed.size)} MB. Max 12 MB.`); return;
     }
     setError(""); setQpName(processed.name); setQpFile(processed);
   }
 
-  async function handleAS(file: File) {
-    const processed = await maybeCompressImage(file);
-    if (!isAllowedSize(processed)) {
-      setError(`Answer sheet is ${sizeMb(processed.size)} MB. Max ${sizeMb(MAX_UPLOAD_BYTES)} MB.`);
-      return;
+  // ── AS handler (multiple images OR single PDF) ──
+  async function handleAS(newFiles: FileList) {
+    const incoming = Array.from(newFiles);
+
+    // If any PDF in selection, treat as single-file mode
+    const hasPdf = incoming.some(f => f.type === "application/pdf" || f.name.endsWith(".pdf"));
+    if (hasPdf) {
+      if (incoming.length > 1) {
+        setError("Please upload only one PDF at a time for the answer sheet."); return;
+      }
+      const file = incoming[0];
+      if (file.size > MAX_UPLOAD_BYTES) {
+        setError(`Answer sheet PDF is ${sizeMb(file.size)} MB. Max 12 MB.`); return;
+      }
+      setError(""); setAsFiles([file]); return;
     }
-    setError(""); setAsName(processed.name); setAsFile(processed);
+
+    // Images — allow multiple, compress each
+    const combined = [...asFiles, ...incoming].slice(0, MAX_AS_FILES);
+    const processed: File[] = [];
+    for (const f of combined) {
+      const p = await maybeCompressImage(f);
+      if (p.size > MAX_UPLOAD_BYTES) {
+        setError(`"${f.name}" is too large (${sizeMb(p.size)} MB). Max 12 MB per image.`); return;
+      }
+      processed.push(p);
+    }
+    setError(""); setAsFiles(processed);
+  }
+
+  function removeAsFile(idx: number) {
+    setAsFiles(prev => prev.filter((_, i) => i !== idx));
   }
 
   function canVerify() {
-    return marks && total && parseInt(marks) <= parseInt(total) && qpFile && asFile;
+    return marks && total && parseInt(marks) <= parseInt(total) && qpFile && asFiles.length > 0;
   }
 
-  // ── Upload a single file to Vercel Blob via /api/upload-blob ──
+  // ── Upload single file to Blob ──
   async function uploadToBlob(file: File): Promise<string> {
     const form = new FormData();
     form.append("file", file);
@@ -94,35 +121,37 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
     try { data = JSON.parse(raw); } catch {
       throw new Error("Upload failed: invalid server response.");
     }
-    if (!res.ok || !data?.url) {
-      throw new Error(data?.error || "File upload failed. Please try again.");
-    }
+    if (!res.ok || !data?.url) throw new Error(data?.error || "File upload failed.");
     return data.url as string;
   }
 
   async function verify() {
-    setError("");
-    setStep("verifying");
+    setError(""); setStep("verifying");
     const m = parseInt(marks);
     const t = parseInt(total);
 
     try {
-      // Step 1 — upload files to Blob (invisible to student)
+      // Upload QP
       setVerifyStep("Uploading question paper…");
       const qpUrl = await uploadToBlob(qpFile!);
 
-      setVerifyStep("Uploading answer sheet…");
-      const asUrl = await uploadToBlob(asFile!);
+      // Upload all answer sheet pages
+      const asUrls: string[] = [];
+      for (let i = 0; i < asFiles.length; i++) {
+        setVerifyStep(`Uploading answer sheet page ${i + 1} of ${asFiles.length}…`);
+        asUrls.push(await uploadToBlob(asFiles[i]));
+      }
 
-      // Step 2 — send only URLs + metadata to verify-marks
-      setVerifyStep("AI is checking your work…");
+      // Call verify-marks with array of AS URLs
+      setVerifyStep("AI is reading your answer sheet…");
       const res = await fetch("/api/verify-marks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           marks: m, total: t,
           subject, chapter, day: String(day),
-          qpUrl, asUrl,
+          qpUrl,
+          asUrls, // array — supports multi-page
         }),
       });
 
@@ -130,31 +159,32 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
       let data: any = null;
       try { data = raw ? JSON.parse(raw) : null; } catch {
         const compact = raw.replace(/\s+/g, " ").slice(0, 180);
-        throw new Error(compact
-          ? `Server returned an invalid response: ${compact}`
-          : "Server returned an invalid response. Please try again."
-        );
+        throw new Error(compact || "Server returned an invalid response.");
       }
-
-      if (!res.ok) throw new Error(data?.reply || "Verification failed. Please try again.");
+      if (!res.ok) throw new Error(data?.reply || "Verification failed.");
 
       const reply = data?.reply || "";
 
-      // ── Parse AI response ──
-      const scoreMatch    = reply.match(/SCORE:\s*(\d+)\s*\/\s*(\d+)/i);
-      const errorsMatch   = reply.match(/ERRORS:\s*(.+)/i);
-      const feedbackMatch = reply.match(/FEEDBACK:\s*([\s\S]+)/i);
+      // Parse AI response
+      const scoreMatch      = reply.match(/SCORE:\s*(\d+)\s*\/\s*(\d+)/i);
+      const deductionsMatch = reply.match(/DEDUCTIONS:\s*([\s\S]+?)(?=ERRORS:|FEEDBACK:|$)/i);
+      const errorsMatch     = reply.match(/ERRORS:\s*(.+)/i);
+      const feedbackMatch   = reply.match(/FEEDBACK:\s*([\s\S]+)/i);
 
       const confirmedMarks = scoreMatch ? parseInt(scoreMatch[1]) : m;
       const confirmedTotal = scoreMatch ? parseInt(scoreMatch[2]) : t;
       const pct            = Math.round((confirmedMarks / confirmedTotal) * 100);
-      const errorTopics    = errorsMatch
+      const deductions: string[] = deductionsMatch
+        ? deductionsMatch[1].split("\n").map((l: string) => l.trim())
+            .filter((l: string) => l && l.toLowerCase() !== "none" && l.length > 2)
+        : [];
+      const errorTopics = errorsMatch
         ? errorsMatch[1].split(",").map((s: string) => s.trim()).filter(Boolean)
         : [];
       const feedback     = feedbackMatch ? feedbackMatch[1].trim() : reply.slice(0, 400);
       const scoreChanged = confirmedMarks !== m || confirmedTotal !== t;
 
-      setAiResult({ confirmedMarks, confirmedTotal, pct, errorTopics, feedback, scoreChanged });
+      setAiResult({ confirmedMarks, confirmedTotal, pct, errorTopics, feedback, deductions, scoreChanged });
       setStep("result");
 
     } catch (e: any) {
@@ -166,23 +196,15 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
   async function saveResult() {
     if (!aiResult) return;
     await logActivity({
-      mode:             "examiner",
-      subject,
-      chapters:         [chapter],
-      topics:           [],
+      mode: "examiner", subject, chapters: [chapter], topics: [],
       timeTakenSeconds: 0,
-      marks_obtained:   aiResult.confirmedMarks,
-      total_marks:      aiResult.confirmedTotal,
-      score_source:     "manual_verified",
-      evaluation_text:  aiResult.feedback,
-      error_topics:     aiResult.errorTopics,
+      marks_obtained: aiResult.confirmedMarks,
+      total_marks: aiResult.confirmedTotal,
+      score_source: "manual_verified",
+      evaluation_text: aiResult.feedback,
+      error_topics: aiResult.errorTopics,
     });
-    onSaved({
-      marks:       aiResult.confirmedMarks,
-      total:       aiResult.confirmedTotal,
-      pct:         aiResult.pct,
-      errorTopics: aiResult.errorTopics,
-    });
+    onSaved({ marks: aiResult.confirmedMarks, total: aiResult.confirmedTotal, pct: aiResult.pct, errorTopics: aiResult.errorTopics });
   }
 
   const inp: React.CSSProperties = {
@@ -197,6 +219,8 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
     ...btn, background: "transparent", color: "#2563eb", border: "1.5px solid #2563eb",
   };
 
+  const isPdf = asFiles.length === 1 && (asFiles[0].type === "application/pdf" || asFiles[0].name.endsWith(".pdf"));
+
   return (
     <div
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 1000, display: "flex", alignItems: "flex-end", justifyContent: "center" }}
@@ -209,9 +233,7 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
           <div>
             <h2 style={{ fontSize: 19, fontWeight: 800, color: "#0f172a", margin: 0 }}>Submit Marks</h2>
-            <p style={{ fontSize: 13, color: "#64748b", margin: "4px 0 0" }}>
-              {subject} · {chapter} · Day {day}
-            </p>
+            <p style={{ fontSize: 13, color: "#64748b", margin: "4px 0 0" }}>{subject} · {chapter} · Day {day}</p>
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, color: "#94a3b8", cursor: "pointer" }}>✕</button>
         </div>
@@ -221,7 +243,7 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
           {(["entry", "upload", "verifying", "result"] as Step[]).map((s, i) => (
             <div key={s} style={{
               flex: 1, height: 4, borderRadius: 2,
-              background: (["entry", "upload", "verifying", "result"].indexOf(step) >= i) ? "#2563eb" : "#e2e8f0",
+              background: (["entry","upload","verifying","result"].indexOf(step) >= i) ? "#2563eb" : "#e2e8f0",
               transition: "background 0.3s",
             }} />
           ))}
@@ -231,7 +253,7 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
         {step === "entry" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#92400e" }}>
-              ⚠️ You must upload the question paper and answer sheet so the AI can verify your score. Self-reported marks without proof are not counted in your verified average.
+              ⚠️ Upload the question paper and answer sheet so AI can verify your score. Self-reported marks without proof are not counted in your verified average.
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
@@ -256,14 +278,14 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
           </div>
         )}
 
-        {/* ── Step 2: Upload PDFs ── */}
+        {/* ── Step 2: Upload ── */}
         {step === "upload" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <p style={{ fontSize: 14, color: "#334155", lineHeight: 1.6, margin: 0 }}>
-              Upload the <strong>question paper</strong> and your <strong>answer sheet</strong>. The AI will check your score of <strong>{marks}/{total}</strong> against the actual content.
+              Upload the <strong>question paper</strong> and your <strong>answer sheet</strong>. AI will check your score of <strong>{marks}/{total}</strong>.
             </p>
 
-            {/* Question paper */}
+            {/* Question paper — single PDF/image */}
             <div
               onClick={() => qpRef.current?.click()}
               style={{ border: `2px dashed ${qpFile ? "#2563eb" : "#e2e8f0"}`, borderRadius: 12, padding: 20, cursor: "pointer", background: qpFile ? "#eff6ff" : "#f8fafc", textAlign: "center" }}
@@ -283,25 +305,58 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
             <input ref={qpRef} type="file" accept="image/*,application/pdf" hidden
               onChange={e => { const f = e.target.files?.[0]; if (f) handleQP(f); }} />
 
-            {/* Answer sheet */}
-            <div
-              onClick={() => asRef.current?.click()}
-              style={{ border: `2px dashed ${asFile ? "#059669" : "#e2e8f0"}`, borderRadius: 12, padding: 20, cursor: "pointer", background: asFile ? "#f0fdf4" : "#f8fafc", textAlign: "center" }}
-            >
-              {asFile ? (
-                <div style={{ fontSize: 14, color: "#059669", fontWeight: 600 }}>
-                  ✓ {asName} <span style={{ color: "#94a3b8", fontWeight: 400, fontSize: 12 }}>(tap to replace)</span>
+            {/* Answer sheet — multi-image OR single PDF */}
+            <div>
+              <div
+                onClick={() => asRef.current?.click()}
+                style={{ border: `2px dashed ${asFiles.length > 0 ? "#059669" : "#e2e8f0"}`, borderRadius: 12, padding: 20, cursor: "pointer", background: asFiles.length > 0 ? "#f0fdf4" : "#f8fafc", textAlign: "center" }}
+              >
+                {asFiles.length === 0 ? (
+                  <>
+                    <div style={{ fontSize: 28, marginBottom: 6 }}>📝</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#334155" }}>Your Answer Sheet</div>
+                    <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>
+                      Tap to upload — PDF <strong>or</strong> multiple photos (one per page)
+                    </div>
+                  </>
+                ) : isPdf ? (
+                  <div style={{ fontSize: 14, color: "#059669", fontWeight: 600 }}>
+                    ✓ {asFiles[0].name} <span style={{ color: "#94a3b8", fontWeight: 400, fontSize: 12 }}>(tap to replace)</span>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 13, color: "#059669", fontWeight: 600 }}>
+                    ✓ {asFiles.length} page{asFiles.length > 1 ? "s" : ""} uploaded
+                    <span style={{ color: "#94a3b8", fontWeight: 400, fontSize: 12 }}> (tap to add more)</span>
+                  </div>
+                )}
+              </div>
+              <input
+                ref={asRef} type="file"
+                accept="image/*,application/pdf"
+                multiple hidden
+                onChange={e => { if (e.target.files?.length) handleAS(e.target.files); e.target.value = ""; }}
+              />
+
+              {/* Page thumbnails for multi-image */}
+              {asFiles.length > 0 && !isPdf && (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                  {asFiles.map((f, i) => (
+                    <div key={i} style={{ position: "relative", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 8, padding: "6px 10px", fontSize: 12, color: "#166534", display: "flex", alignItems: "center", gap: 6 }}>
+                      📄 Page {i + 1}
+                      <button
+                        onClick={() => removeAsFile(i)}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 14, lineHeight: 1, padding: 0 }}
+                      >✕</button>
+                    </div>
+                  ))}
                 </div>
-              ) : (
-                <>
-                  <div style={{ fontSize: 28, marginBottom: 6 }}>📝</div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: "#334155" }}>Your Answer Sheet</div>
-                  <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>PDF or photo — tap to upload</div>
-                </>
               )}
+
+              {/* Scanner app hint */}
+              <div style={{ marginTop: 10, background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10, padding: "8px 12px", fontSize: 12, color: "#0369a1" }}>
+                💡 <strong>For best results:</strong> Use <strong>Adobe Scan</strong> or <strong>Google Drive</strong> app to scan all pages into one PDF. Free &amp; takes 30 seconds.
+              </div>
             </div>
-            <input ref={asRef} type="file" accept="image/*,application/pdf" hidden
-              onChange={e => { const f = e.target.files?.[0]; if (f) handleAS(f); }} />
 
             {error && (
               <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "10px 14px", color: "#b91c1c", fontSize: 13 }}>
@@ -331,7 +386,7 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
               {verifyStep || "AI is checking your work…"}
             </p>
             <p style={{ fontSize: 13, color: "#64748b" }}>
-              Reading question paper and answer sheet against your claimed score of {marks}/{total}
+              Reading answer sheet against your claimed score of {marks}/{total}
             </p>
           </div>
         )}
@@ -344,10 +399,7 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
               border: `1px solid ${aiResult.scoreChanged ? "#fde68a" : "#86efac"}`,
               borderRadius: 14, padding: 20, textAlign: "center",
             }}>
-              <div style={{
-                fontSize: 48, fontWeight: 800, lineHeight: 1,
-                color: aiResult.pct >= 75 ? "#059669" : aiResult.pct >= 45 ? "#d97706" : "#dc2626",
-              }}>
+              <div style={{ fontSize: 48, fontWeight: 800, lineHeight: 1, color: aiResult.pct >= 75 ? "#059669" : aiResult.pct >= 45 ? "#d97706" : "#dc2626" }}>
                 {aiResult.confirmedMarks}/{aiResult.confirmedTotal}
               </div>
               <div style={{ fontSize: 18, fontWeight: 700, color: "#0f172a", marginTop: 6 }}>{aiResult.pct}%</div>
@@ -360,6 +412,23 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
               )}
             </div>
 
+            {/* Deductions */}
+            {aiResult.scoreChanged && aiResult.deductions.length > 0 && (
+              <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 12, padding: "14px 16px" }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#c2410c", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
+                  📋 Why your score was changed
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {aiResult.deductions.map((line, i) => (
+                    <div key={i} style={{ fontSize: 13, color: "#431407", background: "#fff", border: "1px solid #fed7aa", borderRadius: 8, padding: "8px 12px", lineHeight: 1.6 }}>
+                      {line}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Error topics */}
             {aiResult.errorTopics.length > 0 && (
               <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: "14px 16px" }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: "#b91c1c", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
@@ -373,6 +442,7 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
               </div>
             )}
 
+            {/* Feedback */}
             {aiResult.feedback && (
               <div style={{ background: "#f8fafc", borderRadius: 12, padding: "12px 16px", fontSize: 13, color: "#334155", lineHeight: 1.65, borderLeft: "3px solid #2563eb" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#2563eb", marginBottom: 6, textTransform: "uppercase" }}>AI Feedback</div>

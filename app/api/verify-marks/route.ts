@@ -1,13 +1,22 @@
+/**
+ * app/api/verify-marks/route.ts
+ *
+ * Accepts { qpUrl, asUrls[] } — asUrls is an array to support
+ * multi-page handwritten answer sheets (one image per page).
+ *
+ * Strategy:
+ * - QP (typed PDF)   → pdf-parse extracts text
+ * - AS (images/PDF)  → sent as base64 to Gemini Vision (reads handwriting)
+ * - Fallback         → Groq text-only if Gemini unavailable
+ */
+import { del } from "@vercel/blob";
 import { NextRequest, NextResponse } from "next/server";
-import { put, del } from "@vercel/blob";
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 export const runtime = "nodejs";
 
-const MAX_SIZE = 12 * 1024 * 1024; // 12MB
-
 /* -----------------------------
-   TEXT EXTRACTION
+   EXTRACT TEXT FROM TYPED PDF
 ----------------------------- */
 async function extractPdfText(buffer: Buffer): Promise<string> {
   try {
@@ -20,30 +29,134 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
   }
 }
 
-async function extractText(file: File, buffer: Buffer): Promise<string> {
-  const mimeType = (file.type || "").toLowerCase();
-  const fileName = (file.name || "").toLowerCase();
+/* -----------------------------
+   GEMINI VISION (primary)
+   Sends QP text + all AS pages as base64 vision parts
+----------------------------- */
+async function callGeminiVision(
+  qpText: string,
+  asPages: { buffer: Buffer; mimeType: string }[],
+  marks: number,
+  total: number,
+  subject: string,
+  chapter: string,
+  day: string
+): Promise<string | null> {
+  const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  if (!geminiKey) return null;
 
+  // Build one part per answer sheet page
+  const asParts = asPages.map(({ buffer, mimeType }) => ({
+    inlineData: {
+      mimeType: mimeType.startsWith("image/") ? mimeType : "application/pdf",
+      data: buffer.toString("base64"),
+    },
+  }));
+
+  const promptText = `You are a strict CBSE board examiner checking a student's handwritten answer sheet.
+
+Subject: ${subject}
+Chapter/Topic: ${chapter}
+Day: ${day}
+Student's claimed score: ${marks}/${total}
+Total answer sheet pages provided: ${asPages.length}
+
+QUESTION PAPER TEXT:
+${qpText}
+
+The handwritten answer sheet pages are attached above (${asPages.length} page${asPages.length > 1 ? "s" : ""}). Read ALL pages carefully before scoring.
+
+STRICT RULES:
+- Read EVERY page of the answer sheet before scoring.
+- For MCQs: each is worth exactly 1 mark. Compare student's option to the correct answer in the QP.
+- For short/long answers: check content accuracy against the QP.
+- Only deduct marks for answers that are genuinely wrong or incomplete.
+- Do NOT hallucinate errors. If an answer is correct, say so.
+- Be precise: state the question number, what the student wrote, what was correct, and exact marks affected.
+- If you cannot read a page clearly, say so — do not guess.
+
+Reply EXACTLY in this format (no extra text before or after):
+
+SCORE: X/Y
+DEDUCTIONS:
+Q2: Student wrote (A), correct answer is (B). -1 mark (wrong option)
+Q11: Definition incomplete — missing "without leaving a remainder". -1 mark
+(write "None" if score is confirmed correct)
+ERRORS: topic1, topic2
+FEEDBACK: 2-3 sentences of specific advice based on actual mistakes only.`;
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${geminiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: "user",
+            parts: [
+              ...asParts,          // all answer sheet pages as vision
+              { text: promptText }, // QP text + instructions
+            ],
+          },
+        ],
+        generationConfig: { temperature: 0.1 },
+      }),
+    }
+  );
+
+  const text = await res.text();
+  if (!res.ok) {
+    console.error("[verify-marks] Gemini Vision error:", text.slice(0, 400));
+    return null;
+  }
   try {
-    if (mimeType.includes("pdf") || fileName.endsWith(".pdf")) {
-      return extractPdfText(buffer);
-    }
-    if (mimeType.startsWith("image/")) {
-      return "[Image uploaded – interpret visually]";
-    }
-    return buffer.toString("utf-8").slice(0, 15000);
+    const data = JSON.parse(text);
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text || null;
   } catch {
-    return "[Could not extract text]";
+    return null;
   }
 }
 
 /* -----------------------------
-   AI CALLERS
+   GROQ FALLBACK (text-only)
+   Used only if Gemini is unavailable
 ----------------------------- */
-async function callGroq(prompt: string): Promise<string | null> {
+async function callGroqFallback(
+  qpText: string,
+  asText: string,
+  marks: number,
+  total: number,
+  subject: string,
+  chapter: string,
+  day: string
+): Promise<string | null> {
   if (!process.env.GROQ_API_KEY) return null;
 
-  const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+  const prompt = `You are a strict CBSE board examiner.
+
+Subject: ${subject} | Chapter: ${chapter} | Day: ${day}
+Student claims: ${marks}/${total}
+
+IMPORTANT: The answer sheet text below is OCR-extracted from a handwritten scan and is likely incomplete or garbled. 
+Only mark deductions where you are 100% certain the answer is wrong.
+Do NOT hallucinate deductions. If unsure, confirm the student's score.
+
+QUESTION PAPER:
+${qpText}
+
+STUDENT ANSWERS (OCR — may be incomplete):
+${asText}
+
+Reply EXACTLY in this format:
+
+SCORE: X/Y
+DEDUCTIONS:
+(list specific deductions, or write "None — handwriting could not be read clearly enough to verify")
+ERRORS: topic1, topic2
+FEEDBACK: text`;
+
+  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
@@ -52,52 +165,21 @@ async function callGroq(prompt: string): Promise<string | null> {
     body: JSON.stringify({
       model: "llama-3.3-70b-versatile",
       messages: [
-        { role: "system", content: "You are a strict CBSE board examiner." },
+        { role: "system", content: "You are a strict CBSE examiner. Never hallucinate mark deductions." },
         { role: "user", content: prompt },
       ],
-      temperature: 0.2,
+      temperature: 0.1,
     }),
   });
 
-  const groqText = await groqRes.text();
-  if (!groqRes.ok) {
-    console.error("[verify-marks] Groq error:", groqText.slice(0, 300));
-    return null;
-  }
-
-  try {
-    const data = JSON.parse(groqText);
-    return data?.choices?.[0]?.message?.content || null;
-  } catch {
-    return groqText || null;
-  }
-}
-
-async function callGemini(prompt: string): Promise<string | null> {
-  const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-  if (!geminiKey) return null;
-
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${geminiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.2 },
-      }),
-    }
-  );
-
   const text = await res.text();
   if (!res.ok) {
-    console.error("[verify-marks] Gemini error:", text.slice(0, 300));
+    console.error("[verify-marks] Groq error:", text.slice(0, 300));
     return null;
   }
-
   try {
     const data = JSON.parse(text);
-    return data?.candidates?.[0]?.content?.parts?.[0]?.text || null;
+    return data?.choices?.[0]?.message?.content || null;
   } catch {
     return null;
   }
@@ -110,21 +192,21 @@ export async function POST(req: NextRequest) {
   const uploadedBlobs: string[] = [];
 
   try {
-    const form = await req.formData();
-    const marks = Number(form.get("marks"));
-    const total = Number(form.get("total"));
-    const subject = String(form.get("subject") || "");
-    const chapter = String(form.get("chapter") || "");
-    const day = String(form.get("day") || "");
-    const qpFile = form.get("qpFile");
-    const asFile = form.get("asFile");
+    const body = await req.json();
+    const { marks, total, subject, chapter, day, qpUrl, asUrls } = body;
+
+    // asUrls can be a single string (legacy) or array
+    const asUrlList: string[] = Array.isArray(asUrls)
+      ? asUrls
+      : asUrls
+      ? [asUrls]
+      : body.asUrl
+      ? [body.asUrl]
+      : [];
 
     if (
-      !Number.isFinite(marks) ||
-      !Number.isFinite(total) ||
-      total <= 0 ||
-      !(qpFile instanceof File) ||
-      !(asFile instanceof File)
+      !Number.isFinite(marks) || !Number.isFinite(total) ||
+      total <= 0 || !qpUrl || asUrlList.length === 0
     ) {
       return NextResponse.json({ reply: "Missing required fields." }, { status: 400 });
     }
@@ -136,81 +218,46 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ---------- SIZE CHECK ----------
-    if (qpFile.size > MAX_SIZE || asFile.size > MAX_SIZE) {
-      const qpSize = (qpFile.size / (1024 * 1024)).toFixed(2);
-      const asSize = (asFile.size / (1024 * 1024)).toFixed(2);
-      return NextResponse.json(
-        {
-          reply: `File too large.\n\nQuestion Paper: ${qpSize} MB\nAnswer Sheet: ${asSize} MB\n\nMax allowed: 12 MB each.\n\nTip: Upload images (JPG/PNG) or compress PDF.`,
-        },
-        { status: 413 }
-      );
+    uploadedBlobs.push(qpUrl, ...asUrlList);
+
+    // ── Fetch QP ──
+    const qpRes = await fetch(qpUrl);
+    if (!qpRes.ok) throw new Error("Failed to fetch question paper from Blob.");
+    const qpBuffer = Buffer.from(await qpRes.arrayBuffer());
+    const qpText = await extractPdfText(qpBuffer);
+
+    // ── Fetch all AS pages ──
+    const asPages: { buffer: Buffer; mimeType: string }[] = [];
+    for (const url of asUrlList) {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`Failed to fetch answer sheet page from Blob.`);
+      const contentType = r.headers.get("content-type") || "image/jpeg";
+      const buffer = Buffer.from(await r.arrayBuffer());
+      asPages.push({ buffer, mimeType: contentType });
     }
 
-    // ---------- UPLOAD TO VERCEL BLOB (bypass 4.5MB serverless limit) ----------
-    const [qpBlob, asBlob] = await Promise.all([
-      put(`qp-${crypto.randomUUID()}-${qpFile.name}`, qpFile, { access: "public", addRandomSuffix: false }),
-      put(`as-${crypto.randomUUID()}-${asFile.name}`, asFile, { access: "public", addRandomSuffix: false }),
-    ]);
+    // ── Try Gemini Vision (reads handwriting) ──
+    let reply = await callGeminiVision(
+      qpText, asPages, marks, total, subject, chapter, day
+    );
 
-    uploadedBlobs.push(qpBlob.url, asBlob.url);
-
-    // ---------- FETCH BACK FROM BLOB & EXTRACT TEXT ----------
-    const [qpBlobRes, asBlobRes] = await Promise.all([
-      fetch(qpBlob.url),
-      fetch(asBlob.url),
-    ]);
-
-    const [qpBuffer, asBuffer] = await Promise.all([
-      qpBlobRes.arrayBuffer().then(Buffer.from),
-      asBlobRes.arrayBuffer().then(Buffer.from),
-    ]);
-
-    const [qpText, asText] = await Promise.all([
-      extractText(qpFile, qpBuffer),
-      extractText(asFile, asBuffer),
-    ]);
-
-    // ---------- BUILD PROMPT ----------
-    const prompt = `
-You are a strict CBSE examiner.
-
-Subject: ${subject}
-Chapter: ${chapter}
-Day: ${day}
-
-The student claims a score of ${marks}/${total}.
-
-QUESTION PAPER:
-${qpText}
-
-STUDENT ANSWERS:
-${asText}
-
-Your tasks:
-1. Check if the claimed score is correct
-2. If incorrect, give correct score
-3. List max 5 mistake topics
-4. Give short improvement feedback
-
-Reply EXACTLY in this format:
-
-SCORE: X/Y
-ERRORS: topic1, topic2
-FEEDBACK: text
-`;
-
-    // ---------- CALL AI ----------
-    let reply = await callGroq(prompt);
+    // ── Fallback to Groq text-only ──
     if (!reply) {
-      console.log("[verify-marks] Groq unavailable, trying Gemini fallback.");
-      reply = await callGemini(prompt);
+      console.log("[verify-marks] Gemini Vision failed, falling back to Groq.");
+      const pdfModule = await import("pdf-parse");
+      const pdfParse = (pdfModule as any).default || pdfModule;
+      let asText = "[Could not extract text from handwritten answer sheet]";
+      // Try to extract text from first page only as best effort
+      try {
+        const parsed = await pdfParse(asPages[0].buffer);
+        asText = parsed?.text?.slice(0, 15000) || asText;
+      } catch {}
+      reply = await callGroqFallback(qpText, asText, marks, total, subject, chapter, day);
     }
 
     if (!reply) {
       return NextResponse.json(
-        { reply: "AI unavailable (Groq + Gemini). Try again shortly." },
+        { reply: "AI unavailable (Gemini + Groq both failed). Try again shortly." },
         { status: 500 }
       );
     }
@@ -222,7 +269,6 @@ FEEDBACK: text
     return NextResponse.json({ reply: "Server error. Please try again." }, { status: 500 });
 
   } finally {
-    // ---------- CLEANUP BLOBS ----------
     if (uploadedBlobs.length > 0) {
       await Promise.all(uploadedBlobs.map((url) => del(url))).catch((e) =>
         console.warn("[verify-marks] Blob cleanup failed:", e)

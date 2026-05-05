@@ -248,8 +248,10 @@ export default function PlannerPage() {
                   key={d.day}
                   onClick={() => setOpenedDay(d.day)}
                   style={{
-                    border: isSelected ? `1px solid ${topCol}` : "1px solid rgba(255,255,255,0.08)",
-                    borderTop: `3px solid ${topCol}`,
+  borderTop: `3px solid ${topCol}`,
+  borderRight: isSelected ? `1px solid ${topCol}` : "1px solid rgba(255,255,255,0.08)",
+  borderBottom: isSelected ? `1px solid ${topCol}` : "1px solid rgba(255,255,255,0.08)",
+  borderLeft: isSelected ? `1px solid ${topCol}` : "1px solid rgba(255,255,255,0.08)",
                     borderRadius: 10,
                     background: isCurrent
                       ? "rgba(77,201,255,0.12)"
