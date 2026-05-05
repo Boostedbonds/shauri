@@ -21,11 +21,11 @@ import {
   getAllResults,
   getResultsForCycle,
   hasResultForDayCycle,
-  saveResult,
+  saveResultsForDay,
 } from "@/lib/plannerResults";
 
 type ModeView = "independent" | "guided";
-type MonthId = "may" | "june" | "july";
+type MonthId  = "may" | "june" | "july";
 
 function getClassNum(cls?: string | number): number {
   if (typeof cls === "number") return cls;
@@ -54,7 +54,7 @@ function getMonthForDay(day: number): MonthId {
 }
 
 function getDaysForMonth(month: MonthId): number[] {
-  if (month === "may") return Array.from({ length: 30 }, (_, i) => i + 1);
+  if (month === "may")  return Array.from({ length: 30 }, (_, i) => i + 1);
   if (month === "june") return Array.from({ length: 30 }, (_, i) => i + 31);
   return Array.from({ length: 30 }, (_, i) => i + 61);
 }
@@ -66,8 +66,6 @@ export default function PlannerPage() {
   const [activeMonth,    setActiveMonth]    = useState<MonthId>("may");
   const [resultsVersion, setResultsVersion] = useState(0);
   const [feedback,       setFeedback]       = useState("");
-
-  // ManualMarksModal state
   const [showMarksModal, setShowMarksModal] = useState(false);
   const [modalDay,       setModalDay]       = useState<number | null>(null);
 
@@ -95,7 +93,7 @@ export default function PlannerPage() {
 
   useEffect(() => {
     if (!feedback) return;
-    const timer = setTimeout(() => setFeedback(""), 1800);
+    const timer = setTimeout(() => setFeedback(""), 2500);
     return () => clearTimeout(timer);
   }, [feedback]);
 
@@ -117,27 +115,17 @@ export default function PlannerPage() {
   const hasSubmittedMarks = hasResultForDayCycle(openedDay, plannerState.cycle);
   const currentSubject    = planner.currentPlan.topics[0]?.subject || "General";
   const currentTopic      = planner.currentPlan.topics[0]?.topic   || "General";
-  const visibleDays = getDaysForMonth(activeMonth);
+  const visibleDays       = getDaysForMonth(activeMonth);
 
   function goToLearn(subject: string, topic: string) {
     if (!plannerState || !openedDay) return;
-    const q = new URLSearchParams({
-      subject, topic,
-      day:   String(openedDay),
-      cycle: String(plannerState.cycle),
-      from:  "planner",
-    });
+    const q = new URLSearchParams({ subject, topic, day: String(openedDay), cycle: String(plannerState.cycle), from: "planner" });
     window.location.href = `/learn?${q.toString()}`;
   }
 
   function goToExam(subject: string, topic: string) {
     if (!plannerState || !openedDay) return;
-    const q = new URLSearchParams({
-      subject, topic,
-      day:   String(openedDay),
-      cycle: String(plannerState.cycle),
-      from:  "planner",
-    });
+    const q = new URLSearchParams({ subject, topic, day: String(openedDay), cycle: String(plannerState.cycle), from: "planner" });
     window.location.href = `/examiner?${q.toString()}`;
   }
 
@@ -146,22 +134,29 @@ export default function PlannerPage() {
     setShowMarksModal(true);
   }
 
-  // Called by ManualMarksModal after AI verification + save
+  /* ── Save result for ALL subjects in the day's plan ── */
   function handleMarksSaved(result: {
     marks: number; total: number; pct: number; errorTopics: string[];
   }) {
-    const day = modalDay ?? openedDay;
+    const day  = modalDay ?? openedDay;
     const plan = THIRTY_DAY_PLAN.find((d) => d.day === day) || planner.currentPlan;
 
-    saveResult({
-      day,
-      cycle:   plannerState!.cycle,
-      subject: plan.topics[0]?.subject || currentSubject,
-      topic:   plan.topics[0]?.topic   || currentTopic,
-      score:   result.marks,
-      total:   result.total,
-      source:  "manual_verified",
-    });
+    // Distribute marks equally across all subjects in the test
+    const topics     = plan.topics;
+    const perSubject = topics.length > 0 ? Math.round(result.total / topics.length) : result.total;
+    const perScore   = topics.length > 0 ? Math.round(result.marks / topics.length) : result.marks;
+
+    saveResultsForDay(
+      topics.map((t) => ({
+        day,
+        cycle:   plannerState!.cycle,
+        subject: t.subject,
+        topic:   t.topic,
+        score:   perScore,
+        total:   perSubject,
+        source:  "manual_verified" as const,
+      }))
+    );
 
     setResultsVersion((v) => v + 1);
     setShowMarksModal(false);
@@ -177,55 +172,44 @@ export default function PlannerPage() {
 
         {/* ── Top nav ── */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
-          <button
-            onClick={() => (window.location.href = "/modes")}
-            style={{ padding: "9px 14px", borderRadius: 10, border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer", fontWeight: 600 }}
-          >
+          <button onClick={() => (window.location.href = "/modes")}
+            style={{ padding: "9px 14px", borderRadius: 10, border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer", fontWeight: 600 }}>
             ← Modes
           </button>
           <div style={{ display: "flex", gap: 8, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 999, padding: 4 }}>
-            <button
-              onClick={() => setModeView("independent")}
-              style={{ padding: "6px 12px", border: "none", borderRadius: 999, cursor: "pointer", background: modeView === "independent" ? "#0f172a" : "transparent", color: modeView === "independent" ? "#fff" : "#334155", fontWeight: 600 }}
-            >
-              🧠 Independent
-            </button>
-            <button
-              onClick={() => setModeView("guided")}
-              style={{ padding: "6px 12px", border: "none", borderRadius: 999, cursor: "pointer", background: modeView === "guided" ? "#0f172a" : "transparent", color: modeView === "guided" ? "#fff" : "#334155", fontWeight: 600 }}
-            >
-              🎯 Guided
-            </button>
+            {(["independent", "guided"] as ModeView[]).map((m) => (
+              <button key={m} onClick={() => setModeView(m)}
+                style={{ padding: "6px 12px", border: "none", borderRadius: 999, cursor: "pointer", background: modeView === m ? "#0f172a" : "transparent", color: modeView === m ? "#fff" : "#334155", fontWeight: 600 }}>
+                {m === "independent" ? "🧠 Independent" : "🎯 Guided"}
+              </button>
+            ))}
           </div>
         </div>
 
         <h1 style={{ margin: 0, fontSize: 30, color: "#f5c842", letterSpacing: 1 }}>CBSE Class X — 90-Day Planner</h1>
         <p style={{ marginTop: 6, color: "#7f8ba3" }}>NCERT full syllabus • Foundation, Building, Mastery</p>
         {feedback && (
-          <p style={{ marginTop: 6, color: "#166534", fontSize: 13, fontWeight: 600 }}>{feedback}</p>
+          <p style={{ marginTop: 6, color: "#166534", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, display: "inline-block" }}>
+            {feedback}
+          </p>
         )}
 
         {/* ── Month tabs + day cards ── */}
         <section style={{ marginTop: 16, background: "#0c0f1e", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, overflow: "hidden" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
             {([
-              { id: "may" as MonthId, label: "MAY", sub: "Days 1-30", col: "#4dc9ff", icon: "🌸" },
+              { id: "may"  as MonthId, label: "MAY",  sub: "Days 1-30",  col: "#4dc9ff", icon: "🌸" },
               { id: "june" as MonthId, label: "JUNE", sub: "Days 31-60", col: "#57e89f", icon: "⚡" },
               { id: "july" as MonthId, label: "JULY", sub: "Days 61-90", col: "#ff8c4b", icon: "🏆" },
             ]).map((m) => (
-              <button
-                key={m.id}
-                onClick={() => setActiveMonth(m.id)}
+              <button key={m.id} onClick={() => setActiveMonth(m.id)}
                 style={{
-                  padding: "12px 10px",
-                  border: "none",
+                  padding: "12px 10px", border: "none",
                   borderBottom: activeMonth === m.id ? `2px solid ${m.col}` : "2px solid transparent",
-                  background: activeMonth === m.id ? "rgba(255,255,255,0.03)" : "transparent",
-                  color: activeMonth === m.id ? m.col : "#7f8ba3",
-                  cursor: "pointer",
-                  fontWeight: 700,
-                }}
-              >
+                  background:   activeMonth === m.id ? "rgba(255,255,255,0.03)" : "transparent",
+                  color:        activeMonth === m.id ? m.col : "#7f8ba3",
+                  cursor: "pointer", fontWeight: 700,
+                }}>
                 <div style={{ fontSize: 18 }}>{m.icon}</div>
                 <div style={{ fontSize: 16, letterSpacing: 1 }}>{m.label}</div>
                 <div style={{ fontSize: 10, opacity: 0.8 }}>{m.sub}</div>
@@ -237,35 +221,34 @@ export default function PlannerPage() {
             {visibleDays.map((dayNum) => {
               const d = THIRTY_DAY_PLAN.find((x) => x.day === dayNum);
               if (!d) return null;
-              const isCurrent = plannerState.current_day === d.day;
+              const isCurrent   = plannerState.current_day === d.day;
               const isCompleted = plannerState.completed_days.includes(d.day);
-              const isSkipped = plannerState.skipped_days.includes(d.day);
-              const isSelected = openedDay === d.day;
+              const isSkipped   = plannerState.skipped_days.includes(d.day);
+              const isSelected  = openedDay === d.day;
               const topCol = d.meta.isMock ? "#ff6060" : d.meta.isRev || d.meta.type === "rev" ? "#f5c842" : "#4dc9ff";
 
               return (
-                <button
-                  key={d.day}
-                  onClick={() => setOpenedDay(d.day)}
+                <button key={d.day} onClick={() => setOpenedDay(d.day)}
                   style={{
-  borderTop: `3px solid ${topCol}`,
-  borderRight: isSelected ? `1px solid ${topCol}` : "1px solid rgba(255,255,255,0.08)",
-  borderBottom: isSelected ? `1px solid ${topCol}` : "1px solid rgba(255,255,255,0.08)",
-  borderLeft: isSelected ? `1px solid ${topCol}` : "1px solid rgba(255,255,255,0.08)",
+                    borderTop:    `3px solid ${topCol}`,
+                    borderRight:  isSelected ? `1px solid ${topCol}` : "1px solid rgba(255,255,255,0.08)",
+                    borderBottom: isSelected ? `1px solid ${topCol}` : "1px solid rgba(255,255,255,0.08)",
+                    borderLeft:   isSelected ? `1px solid ${topCol}` : "1px solid rgba(255,255,255,0.08)",
                     borderRadius: 10,
-                    background: isCurrent
-                      ? "rgba(77,201,255,0.12)"
-                      : isCompleted
-                      ? "rgba(87,232,159,0.10)"
+                    // ── Completed = solid green; current = blue tint; skipped = amber tint ──
+                    background: isCompleted
+                      ? "rgba(87,232,159,0.25)"
+                      : isCurrent
+                      ? "rgba(77,201,255,0.14)"
                       : isSkipped
-                      ? "rgba(245,200,66,0.10)"
+                      ? "rgba(245,200,66,0.14)"
                       : "#111526",
                     color: "#dde4f0",
                     cursor: "pointer",
                     padding: "8px 6px",
                     textAlign: "left",
-                  }}
-                >
+                    position: "relative",
+                  }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span style={{ fontSize: 16, fontWeight: 800 }}>{d.day}</span>
                     <span style={{ fontSize: 9, color: "#8ea0bd" }}>{d.meta.dow.slice(0, 3)}</span>
@@ -273,29 +256,54 @@ export default function PlannerPage() {
                   <div style={{ marginTop: 5, fontSize: 9, color: "#8ea0bd", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {mapDayType(d.meta.type, d.meta.isRev, d.meta.isMock)}
                   </div>
+                  {/* Green checkmark badge for completed days */}
+                  {isCompleted && (
+                    <div style={{ position: "absolute", top: 4, right: 4, width: 14, height: 14, borderRadius: "50%", background: "#57e89f", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, color: "#06080f", fontWeight: 800 }}>
+                      ✓
+                    </div>
+                  )}
+                  {/* Today indicator */}
+                  {isCurrent && !isCompleted && (
+                    <div style={{ position: "absolute", top: 4, right: 4, width: 6, height: 6, borderRadius: "50%", background: "#4dc9ff" }} />
+                  )}
                 </button>
               );
             })}
+          </div>
+
+          {/* Legend */}
+          <div style={{ padding: "8px 12px 12px", display: "flex", gap: 16, flexWrap: "wrap", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+            {[
+              { col: "rgba(87,232,159,0.25)", label: "✓ Completed", border: "#57e89f" },
+              { col: "rgba(77,201,255,0.14)",  label: "Today",       border: "#4dc9ff" },
+              { col: "rgba(245,200,66,0.14)",  label: "Skipped",     border: "#f5c842" },
+              { col: "#111526",                label: "Upcoming",    border: "rgba(255,255,255,0.08)" },
+            ].map((l) => (
+              <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#8ea0bd" }}>
+                <div style={{ width: 12, height: 12, borderRadius: 3, background: l.col, border: `1px solid ${l.border}` }} />
+                {l.label}
+              </div>
+            ))}
           </div>
         </section>
 
         {/* ── Today's plan ── */}
         <section style={{ marginTop: 22, background: "#0c0f1e", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, padding: 18 }}>
           <h2 style={{ margin: "0 0 10px", fontSize: 19, color: "#dde4f0" }}>Today</h2>
-          <div style={{ fontWeight: 700, color: "#1d4ed8", marginBottom: 10 }}>
+          <div style={{ fontWeight: 700, color: "#4dc9ff", marginBottom: 10, fontSize: 15 }}>
             Day {openedDay} (Cycle {plannerState.cycle})
           </div>
           <p style={{ margin: "0 0 10px", color: "#64748b", fontSize: 13 }}>
             {planner.currentPlan.meta.dow} • {mapDayType(planner.currentPlan.meta.type, planner.currentPlan.meta.isRev, planner.currentPlan.meta.isMock)}
           </p>
 
-          <ul style={{ margin: 0, paddingLeft: 18, color: "#334155", lineHeight: 1.7 }}>
+          <ul style={{ margin: 0, paddingLeft: 18, color: "#8ea0bd", lineHeight: 1.7 }}>
             {planner.currentPlan.topics.map((t, idx) => (
               <li key={`${t.subject}-${idx}`}>
-                <span style={{ color: planner.progress.weakSubjects.includes(t.subject) ? "#b91c1c" : "#334155", fontWeight: planner.progress.weakSubjects.includes(t.subject) ? 700 : 500 }}>
+                <span style={{ color: planner.progress.weakSubjects.includes(t.subject) ? "#f87171" : "#dde4f0", fontWeight: planner.progress.weakSubjects.includes(t.subject) ? 700 : 500 }}>
                   {t.subject}
                 </span>
-                : {t.topic}
+                : <span style={{ color: "#8ea0bd" }}>{t.topic}</span>
               </li>
             ))}
           </ul>
@@ -303,11 +311,9 @@ export default function PlannerPage() {
           {/* Subject action buttons */}
           <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
             {planner.currentPlan.topics.map((t, idx) => (
-              <div
-                key={`actions-${idx}`}
-                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "8px 10px" }}
-              >
-                <span style={{ fontSize: 12, color: "#334155", fontWeight: 600 }}>{t.subject}</span>
+              <div key={`actions-${idx}`}
+                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: "8px 10px" }}>
+                <span style={{ fontSize: 12, color: "#dde4f0", fontWeight: 600 }}>{t.subject}</span>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button onClick={() => goToLearn(t.subject, t.topic)} style={btnPrimary}>Start Study</button>
                   <button onClick={() => goToExam(t.subject, t.topic)}  style={btnSecondary}>Take Daily Test</button>
@@ -316,27 +322,22 @@ export default function PlannerPage() {
             ))}
           </div>
 
-          {/* ── Submit Marks — now opens ManualMarksModal ── */}
+          {/* ── Submit Marks ── */}
           <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             {hasSubmittedMarks ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 10 }}>
-                <span style={{ fontSize: 13, color: "#166534", fontWeight: 700 }}>✅ Result submitted</span>
-                <button
-                  onClick={() => openMarksModal(openedDay)}
-                  style={{ fontSize: 11, color: "#64748b", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
-                >
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: "rgba(87,232,159,0.12)", border: "1px solid rgba(87,232,159,0.4)", borderRadius: 10 }}>
+                <span style={{ fontSize: 13, color: "#57e89f", fontWeight: 700 }}>✅ Result submitted</span>
+                <button onClick={() => openMarksModal(openedDay)}
+                  style={{ fontSize: 11, color: "#8ea0bd", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
                   Update
                 </button>
               </div>
             ) : (
-              <button
-                onClick={() => openMarksModal(openedDay)}
-                style={btnSubmitMarks}
-              >
+              <button onClick={() => openMarksModal(openedDay)} style={btnSubmitMarks}>
                 📝 Submit Marks
               </button>
             )}
-            <span style={{ fontSize: 12, color: "#94a3b8" }}>
+            <span style={{ fontSize: 12, color: "#5a6880" }}>
               AI will verify your score against uploaded question paper & answer sheet
             </span>
           </div>
@@ -347,32 +348,33 @@ export default function PlannerPage() {
               onClick={() => {
                 const next = markComplete(plannerState, openedDay);
                 setPlannerState(next);
-                setFeedback("Day marked complete");
+                setOpenedDay(next.current_day);
+                setFeedback(`✅ Day ${openedDay} complete! Now on Day ${next.current_day}`);
               }}
               disabled={!hasSubmittedMarks}
-              title={!hasSubmittedMarks ? "Submit marks first or go to Exam Mode." : ""}
-              style={{ ...btnDone, opacity: hasSubmittedMarks ? 1 : 0.5, cursor: hasSubmittedMarks ? "pointer" : "not-allowed" }}
-            >
-              Mark Complete
+              title={!hasSubmittedMarks ? "Submit marks first." : ""}
+              style={{ ...btnDone, opacity: hasSubmittedMarks ? 1 : 0.5, cursor: hasSubmittedMarks ? "pointer" : "not-allowed" }}>
+              ✓ Mark Complete
             </button>
             <button
               onClick={() => {
                 const next = markSkipped(plannerState, openedDay);
                 setPlannerState(next);
-                setFeedback("Day skipped");
+                setOpenedDay(next.current_day);
+                setFeedback(`⏭ Day ${openedDay} skipped. Now on Day ${next.current_day}`);
               }}
-              style={btnSkip}
-            >
+              style={btnSkip}>
               Skip Today
             </button>
             <button
               onClick={() => {
-                setPlannerState(undoLastAction(plannerState));
-                setFeedback("Last action undone");
+                const prev = undoLastAction(plannerState);
+                setPlannerState(prev);
+                setOpenedDay(prev.current_day);
+                setFeedback("↩ Last action undone");
               }}
               disabled={!plannerState.last_action}
-              style={{ ...btnGhost, opacity: plannerState.last_action ? 1 : 0.5, cursor: plannerState.last_action ? "pointer" : "not-allowed" }}
-            >
+              style={{ ...btnGhost, opacity: plannerState.last_action ? 1 : 0.5, cursor: plannerState.last_action ? "pointer" : "not-allowed" }}>
               Undo
             </button>
           </div>
@@ -388,30 +390,22 @@ export default function PlannerPage() {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                     <div style={{ fontWeight: 700, color: "#b45309" }}>Day {day.day}</div>
                     <div style={{ display: "flex", gap: 8 }}>
-                      <button
-                        onClick={() => {
-                          setPlannerState(reopenPendingDay(plannerState, day.day));
-                          setFeedback(`Day ${day.day} reopened`);
-                        }}
-                        style={btnGhost}
-                      >
+                      <button onClick={() => { setPlannerState(reopenPendingDay(plannerState, day.day)); setFeedback(`Day ${day.day} reopened`); }} style={btnGhost}>
                         Reopen
                       </button>
                       {!hasResultForDayCycle(day.day, plannerState.cycle) ? (
-                        <button
-                          onClick={() => openMarksModal(day.day)}
-                          style={{ ...btnGhost, borderColor: "#f59e0b", color: "#92400e" }}
-                        >
+                        <button onClick={() => openMarksModal(day.day)} style={{ ...btnGhost, borderColor: "#f59e0b", color: "#92400e" }}>
                           Submit Marks
                         </button>
                       ) : (
                         <button
                           onClick={() => {
-                            setPlannerState(markComplete(plannerState, day.day));
+                            const next = markComplete(plannerState, day.day);
+                            setPlannerState(next);
+                            setOpenedDay(next.current_day);
                             setFeedback(`Day ${day.day} completed`);
                           }}
-                          style={{ ...btnGhost, borderColor: "#16a34a", color: "#166534" }}
-                        >
+                          style={{ ...btnGhost, borderColor: "#16a34a", color: "#166534" }}>
                           Mark Done
                         </button>
                       )}
@@ -441,18 +435,26 @@ export default function PlannerPage() {
               {Object.keys(planner.progress.subjectAverages).length === 0 ? (
                 <p style={muted}>No scored activity yet.</p>
               ) : (
-                Object.entries(planner.progress.subjectAverages).map(([subject, score]) => (
-                  <p key={subject} style={{ margin: "6px 0", color: planner.progress.subjectBands[subject] === "weak" ? "#b91c1c" : "#334155" }}>
-                    {subject}: <strong>{score}%</strong> ({planner.progress.subjectBands[subject]})
-                  </p>
-                ))
+                Object.entries(planner.progress.subjectAverages).map(([subject, score]) => {
+                  const band = planner.progress.subjectBands[subject];
+                  const color = band === "weak" ? "#b91c1c" : band === "strong" ? "#059669" : "#d97706";
+                  return (
+                    <div key={subject} style={{ display: "flex", alignItems: "center", gap: 8, margin: "6px 0" }}>
+                      <div style={{ flex: 1, height: 6, background: "#f1f5f9", borderRadius: 4, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${score}%`, background: color, borderRadius: 4 }} />
+                      </div>
+                      <span style={{ fontSize: 12, color, fontWeight: 700, minWidth: 80 }}>{subject}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color }}>{score}%</span>
+                    </div>
+                  );
+                })
               )}
             </div>
             <div>
               <p style={metaTitle}>Weak / Strong Areas</p>
-              <p style={{ margin: "6px 0", color: "#334155" }}>Weak subjects (&lt;50%): {planner.progress.weakSubjects.join(", ") || "None"}</p>
-              <p style={{ margin: "6px 0", color: "#334155" }}>Moderate (50–75%): {planner.progress.moderateSubjects.join(", ") || "None"}</p>
-              <p style={{ margin: "6px 0", color: "#334155" }}>Strong subjects (&gt;75%): {planner.progress.strongSubjects.join(", ") || "None"}</p>
+              <p style={{ margin: "6px 0", color: "#334155" }}>Weak (&lt;50%): <span style={{ color: "#b91c1c", fontWeight: 700 }}>{planner.progress.weakSubjects.join(", ") || "None"}</span></p>
+              <p style={{ margin: "6px 0", color: "#334155" }}>Moderate (50–75%): <span style={{ color: "#d97706", fontWeight: 700 }}>{planner.progress.moderateSubjects.join(", ") || "None"}</span></p>
+              <p style={{ margin: "6px 0", color: "#334155" }}>Strong (&gt;75%): <span style={{ color: "#059669", fontWeight: 700 }}>{planner.progress.strongSubjects.join(", ") || "None"}</span></p>
             </div>
           </div>
         </section>
@@ -465,12 +467,10 @@ export default function PlannerPage() {
           ) : (
             <div style={{ display: "grid", gap: 8 }}>
               {planner.revisionQueue.map((q, i) => (
-                <div
-                  key={`${q.subject}-${q.topic}-${i}`}
-                  style={{ border: "1px solid #e2e8f0", borderRadius: 10, padding: "8px 10px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}
-                >
+                <div key={`${q.subject}-${q.topic}-${i}`}
+                  style={{ border: "1px solid #e2e8f0", borderRadius: 10, padding: "8px 10px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{q.subject}</div>
+                    <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 700 }}>{q.subject}</div>
                     <div style={{ fontSize: 12, color: "#475569", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{q.topic}</div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
@@ -519,28 +519,12 @@ export default function PlannerPage() {
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────
-const btnPrimary: CSSProperties = {
-  padding: "10px 14px", borderRadius: 10, border: "none",
-  cursor: "pointer", background: "#2563eb", color: "#fff", fontWeight: 600,
-};
-const btnSecondary: CSSProperties = { ...btnPrimary, background: "#0d9488" };
-const btnDone:      CSSProperties = { ...btnPrimary, background: "#16a34a" };
-const btnSkip:      CSSProperties = { ...btnPrimary, background: "#f59e0b", color: "#111827" };
-const btnGhost: CSSProperties = {
-  padding: "8px 12px", borderRadius: 10, border: "1px solid #cbd5e1",
-  background: "#fff", color: "#334155", cursor: "pointer", fontWeight: 600,
-};
-const btnSubmitMarks: CSSProperties = {
-  padding: "10px 18px", borderRadius: 10, border: "none",
-  cursor: "pointer", background: "#7c3aed", color: "#fff", fontWeight: 700, fontSize: 14,
-};
-const priorityPill: CSSProperties = {
-  borderRadius: 999, padding: "3px 8px", fontSize: 10,
-  fontWeight: 700, letterSpacing: "0.04em",
-};
-const metaTitle: CSSProperties = {
-  margin: "0 0 8px", fontSize: 12, textTransform: "uppercase",
-  letterSpacing: "0.08em", color: "#64748b", fontWeight: 700,
-};
-const muted: CSSProperties = { margin: 0, color: "#64748b" };
+const btnPrimary:     CSSProperties = { padding: "10px 14px", borderRadius: 10, border: "none", cursor: "pointer", background: "#2563eb", color: "#fff", fontWeight: 600 };
+const btnSecondary:   CSSProperties = { ...btnPrimary, background: "#0d9488" };
+const btnDone:        CSSProperties = { ...btnPrimary, background: "#16a34a" };
+const btnSkip:        CSSProperties = { ...btnPrimary, background: "#f59e0b", color: "#111827" };
+const btnGhost:       CSSProperties = { padding: "8px 12px", borderRadius: 10, border: "1px solid #cbd5e1", background: "#fff", color: "#334155", cursor: "pointer", fontWeight: 600 };
+const btnSubmitMarks: CSSProperties = { padding: "10px 18px", borderRadius: 10, border: "none", cursor: "pointer", background: "#7c3aed", color: "#fff", fontWeight: 700, fontSize: 14 };
+const priorityPill:   CSSProperties = { borderRadius: 999, padding: "3px 8px", fontSize: 10, fontWeight: 700, letterSpacing: "0.04em" };
+const metaTitle:      CSSProperties = { margin: "0 0 8px", fontSize: 12, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b", fontWeight: 700 };
+const muted:          CSSProperties = { margin: 0, color: "#64748b" };

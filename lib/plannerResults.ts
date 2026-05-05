@@ -5,7 +5,7 @@ export type PlannerResult = {
   topic: string;
   score: number;
   total: number;
-  source: "exam" | "manual";
+  source: "exam" | "manual" | "manual_verified";
 };
 
 const RESULTS_KEY = "planner_results";
@@ -27,6 +27,7 @@ export function getAllResults(): PlannerResult[] {
 
 export function savePlannerResult(result: PlannerResult): PlannerResult[] {
   const all = getPlannerResults();
+  // Remove old entry for same day+cycle+subject+topic
   const next = all.filter(
     (r) =>
       !(
@@ -43,6 +44,13 @@ export function savePlannerResult(result: PlannerResult): PlannerResult[] {
 
 export function saveResult(result: PlannerResult): PlannerResult[] {
   return savePlannerResult(result);
+}
+
+/* ── Save results for multiple subjects at once (for multi-subject tests) ── */
+export function saveResultsForDay(results: PlannerResult[]): void {
+  for (const result of results) {
+    savePlannerResult(result);
+  }
 }
 
 export function hasResultForDayCycle(day: number, cycle: number): boolean {
@@ -71,12 +79,8 @@ export function summarizeResults(results: PlannerResult[]): {
     subjectPerformance[subject] = Math.round((val.score / val.total) * 100);
   });
 
-  const weakSubjects = Object.entries(subjectPerformance)
-    .filter(([, pct]) => pct < 50)
-    .map(([subject]) => subject);
-  const strongSubjects = Object.entries(subjectPerformance)
-    .filter(([, pct]) => pct > 75)
-    .map(([subject]) => subject);
+  const weakSubjects   = Object.entries(subjectPerformance).filter(([, pct]) => pct < 50).map(([s]) => s);
+  const strongSubjects = Object.entries(subjectPerformance).filter(([, pct]) => pct > 75).map(([s]) => s);
 
   return { subjectPerformance, weakSubjects, strongSubjects };
 }
@@ -106,16 +110,18 @@ export type RevisionQueueItem = {
 export function analyzeProgress(results: PlannerResult[]): PlannerProgress {
   const bySubject: Record<string, { score: number; total: number }> = {};
   results.forEach((r) => {
+    // Skip "Unknown" subjects
+    if (!r.subject || r.subject.toLowerCase() === "unknown") return;
     if (!bySubject[r.subject]) bySubject[r.subject] = { score: 0, total: 0 };
     bySubject[r.subject].score += r.score;
     bySubject[r.subject].total += r.total;
   });
 
-  const subjectAverages: Record<string, number> = {};
-  const subjectBands: Record<string, ProgressBand> = {};
-  const weakSubjects: string[] = [];
+  const subjectAverages: Record<string, number>  = {};
+  const subjectBands:    Record<string, ProgressBand> = {};
+  const weakSubjects:     string[] = [];
   const moderateSubjects: string[] = [];
-  const strongSubjects: string[] = [];
+  const strongSubjects:   string[] = [];
 
   Object.entries(bySubject).forEach(([subject, stat]) => {
     if (stat.total <= 0) return;
@@ -135,62 +141,61 @@ export function analyzeProgress(results: PlannerResult[]): PlannerProgress {
   });
 
   const suggestions: string[] = [];
-  weakSubjects.forEach((s) => suggestions.push(`High priority: revise ${s} and take one focused test today.`));
+  weakSubjects.forEach((s)     => suggestions.push(`High priority: revise ${s} and take one focused test today.`));
   moderateSubjects.forEach((s) => suggestions.push(`Improve ${s} with one concept recap + one practice set.`));
-  strongSubjects.forEach((s) => suggestions.push(`Maintain ${s} with light revision only.`));
+  strongSubjects.forEach((s)   => suggestions.push(`Maintain ${s} with light revision only.`));
   if (!suggestions.length) suggestions.push("Submit test results to unlock personalized suggestions.");
 
-  return {
-    subjectAverages,
-    subjectBands,
-    weakSubjects,
-    moderateSubjects,
-    strongSubjects,
-    suggestions,
-  };
+  return { subjectAverages, subjectBands, weakSubjects, moderateSubjects, strongSubjects, suggestions };
 }
 
 export function buildRevisionQueue(results: PlannerResult[]): RevisionQueueItem[] {
-  const byTopic: Record<string, { subject: string; topic: string; weightedSum: number; weightSum: number; attempts: number; weightedRecent: number[] }> = {};
+  const byTopic: Record<string, {
+    subject: string; topic: string;
+    weightedSum: number; weightSum: number;
+    attempts: number; weightedRecent: number[];
+  }> = {};
   const maxDay = results.reduce((m, r) => Math.max(m, r.day), 1);
 
   results.forEach((r) => {
     if (!r.total) return;
+    if (!r.subject || r.subject.toLowerCase() === "unknown") return;
     const pct = (r.score / r.total) * 100;
     const recencyWeight = 1 + ((r.day / Math.max(maxDay, 1)) * 0.8);
     const key = `${r.subject.toLowerCase()}::${r.topic.toLowerCase()}`;
     if (!byTopic[key]) {
       byTopic[key] = { subject: r.subject, topic: r.topic, weightedSum: 0, weightSum: 0, attempts: 0, weightedRecent: [] };
     }
-    byTopic[key].weightedSum += pct * recencyWeight;
-    byTopic[key].weightSum += recencyWeight;
-    byTopic[key].attempts += 1;
+    byTopic[key].weightedSum    += pct * recencyWeight;
+    byTopic[key].weightSum      += recencyWeight;
+    byTopic[key].attempts       += 1;
     byTopic[key].weightedRecent.push(pct);
   });
 
   const queue: RevisionQueueItem[] = Object.values(byTopic).map((t) => {
     const average = Math.round(t.weightedSum / Math.max(t.weightSum, 1));
     const recent = t.weightedRecent.slice(-3);
-    const first = recent[0] ?? average;
-    const last = recent[recent.length - 1] ?? average;
-    const delta = last - first;
-    const trend: "improving" | "declining" | "stable" = delta >= 7 ? "improving" : delta <= -7 ? "declining" : "stable";
+    const first  = recent[0] ?? average;
+    const last   = recent[recent.length - 1] ?? average;
+    const delta  = last - first;
+    const trend: "improving" | "declining" | "stable" =
+      delta >= 7 ? "improving" : delta <= -7 ? "declining" : "stable";
 
-    // Higher score = higher revision urgency
-    const scorePenalty = Math.max(0, 100 - average);
+    const scorePenalty   = Math.max(0, 100 - average);
     const attemptPenalty = t.attempts >= 3 ? 15 : t.attempts === 2 ? 8 : 0;
-    const trendPenalty = trend === "declining" ? 18 : trend === "stable" ? 6 : 0;
-    const priorityScore = scorePenalty + attemptPenalty + trendPenalty;
+    const trendPenalty   = trend === "declining" ? 18 : trend === "stable" ? 6 : 0;
+    const priorityScore  = scorePenalty + attemptPenalty + trendPenalty;
 
     let priority: RevisionPriority = "LOW";
-    if (priorityScore >= 78) priority = "CRITICAL";
+    if (priorityScore >= 78)      priority = "CRITICAL";
     else if (priorityScore >= 58) priority = "HIGH";
     else if (priorityScore >= 35) priority = "MEDIUM";
+
     return { subject: t.subject, topic: t.topic, average, attempts: t.attempts, priority, trend, priorityScore };
   });
 
   const rank: Record<RevisionPriority, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
   return queue
     .sort((a, b) => rank[a.priority] - rank[b.priority] || b.priorityScore - a.priorityScore || a.average - b.average)
-    .slice(0, 3);
+    .slice(0, 5);
 }
