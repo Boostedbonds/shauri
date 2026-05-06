@@ -27,7 +27,7 @@ if (TOTAL_DAYS < 30) {
 }
 
 type ActivityRecord = {
-  mode?: "learn" | "oral" | "examiner" | string;
+  mode?: "teacher" | "oral" | "examiner" | string;
   subject?: string;
   topics?: string[];
   chapters?: string[];
@@ -128,7 +128,7 @@ function isTopicCovered(
 ): boolean {
   return dayPlan.topics.some((topic) =>
     logs.some((log) => {
-      if (normText(log.mode) !== "learn") return false;
+      if (normText(log.mode) !== "teacher") return false;
       return (
         includesLoose(log.subject || "", topic.subject) ||
         (log.topics || []).some((t) => includesLoose(t, topic.topic))
