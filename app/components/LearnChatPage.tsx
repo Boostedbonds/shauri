@@ -160,7 +160,7 @@ function SavedBanner({ subject, elapsed, quizScore }: {
 export default function LearnChatPage({
   mode,
   accentColor = "#16a34a",
-  greeting = "Hi! 👋 I'm SHAURI — your AI learning companion.",
+  greeting = "Hi! 👋 I'm SHAURI — What are we learning today?",
   title = "🧠 Learn Mode",
   icon = "🧠",
 }: LearnChatPageProps) {
@@ -188,9 +188,11 @@ export default function LearnChatPage({
   const quizShownRef     = useRef(false);
   const autoTriggeredRef = useRef(false);
 
-  useEffect(() => { msgsRef.current = messages; }, [messages]);
-useEffect(() => {
-  setMessages([{ role: "assistant", content: greeting }]);
+  useEffect(() => {
+  setMessages((prev) => {
+    if (prev.length > 0) return prev;
+    return [{ role: "assistant", content: greeting }];
+  });
 }, [greeting]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
   useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
