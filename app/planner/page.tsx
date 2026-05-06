@@ -138,7 +138,9 @@ export default function PlannerPage() {
   function handleMarksSaved(result: {
     marks: number; total: number; pct: number; errorTopics: string[];
   }) {
-    const day  = modalDay ?? openedDay;
+    if (!planner) return; // ← FIXED: null guard added
+
+    const day  = modalDay ?? openedDay ?? 1;
     const plan = THIRTY_DAY_PLAN.find((d) => d.day === day) || planner.currentPlan;
 
     // Distribute marks equally across all subjects in the test
@@ -235,7 +237,6 @@ export default function PlannerPage() {
                     borderBottom: isSelected ? `1px solid ${topCol}` : "1px solid rgba(255,255,255,0.08)",
                     borderLeft:   isSelected ? `1px solid ${topCol}` : "1px solid rgba(255,255,255,0.08)",
                     borderRadius: 10,
-                    // ── Completed = solid green; current = blue tint; skipped = amber tint ──
                     background: isCompleted
                       ? "rgba(87,232,159,0.25)"
                       : isCurrent
@@ -256,13 +257,11 @@ export default function PlannerPage() {
                   <div style={{ marginTop: 5, fontSize: 9, color: "#8ea0bd", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {mapDayType(d.meta.type, d.meta.isRev, d.meta.isMock)}
                   </div>
-                  {/* Green checkmark badge for completed days */}
                   {isCompleted && (
                     <div style={{ position: "absolute", top: 4, right: 4, width: 14, height: 14, borderRadius: "50%", background: "#57e89f", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, color: "#06080f", fontWeight: 800 }}>
                       ✓
                     </div>
                   )}
-                  {/* Today indicator */}
                   {isCurrent && !isCompleted && (
                     <div style={{ position: "absolute", top: 4, right: 4, width: 6, height: 6, borderRadius: "50%", background: "#4dc9ff" }} />
                   )}

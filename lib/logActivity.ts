@@ -6,7 +6,7 @@
  * Falls back to localStorage offline queue if network fails.
  */
 
-export type ActivityMode  = "examiner" | "learn" | "oral" | "writing";
+export type ActivityMode  = "teacher" | "examiner" | "learn" | "oral" | "writing";
 export type ScoreSource   = "ai" | "manual_verified" | "manual_unverified" | "none";
 
 export interface LogActivityParams {

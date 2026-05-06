@@ -155,6 +155,7 @@ export default function OralPage() {
   const startTsRef     = useRef<number>(0);
   const elapsedRef     = useRef(0);
   const msgsRef        = useRef<Message[]>([]);
+  const listeningRef   = useRef(false);
 
   useEffect(() => { msgsRef.current = messages; }, [messages]);
   const isHindi = lang === "hi-IN";
@@ -181,7 +182,7 @@ export default function OralPage() {
   const saveSession = useCallback(async () => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     const secs    = elapsedRef.current;
-    if (secs < 30) return; // Don't save trivially short sessions
+    if (secs < 30) return;
     const msgs    = msgsRef.current;
     const subject = extractSubjectFromMessages(msgs);
     const topics  = extractTopicsFromMessages(msgs);
@@ -192,12 +193,12 @@ export default function OralPage() {
       subject,
       topics,
       timeTakenSeconds: secs,
-      // No percentage for oral — no quiz scoring currently
+      score_source:     "none",   // ← FIXED: required field added
       evaluation_text:  `Oral session: ${topics.join(", ") || "general practice"}`,
     });
   }, []);
 
-  // Cleanup on unmount: save session
+  // Cleanup on unmount
   useEffect(() => () => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     stop();
@@ -244,27 +245,51 @@ export default function OralPage() {
     const r = new SR();
     r.continuous = true; r.interimResults = true;
     r.lang = lang === "auto" ? "en-IN" : lang;
-    let lastFinalIdx = -1;
-    const finalisedTexts = new Set<string>();
+
+    const seenFinals = new Set<string>();
+
     r.onresult = (e: any) => {
       let fin = "", int = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
-        const t = e.results[i][0].transcript;
+        const t = e.results[i][0].transcript.trim();
         if (e.results[i].isFinal) {
-          const key = `${i}:${t.trim()}`;
-          if (i > lastFinalIdx && !finalisedTexts.has(key)) { fin += t; lastFinalIdx = i; finalisedTexts.add(key); }
+          if (!seenFinals.has(t)) { seenFinals.add(t); fin += t + " "; }
         } else { int += t; }
       }
-      if (fin) { transcriptRef.current += fin; setTranscript(transcriptRef.current); }
+      if (fin.trim()) { transcriptRef.current += fin; setTranscript(transcriptRef.current); }
       else if (int) setTranscript(transcriptRef.current + int);
     };
-    r.onend = () => { lastFinalIdx = -1; finalisedTexts.clear(); setListening(false); };
-    r.onerror = () => setListening(false);
+
+    r.onend = () => {
+      if (listeningRef.current) {
+        try { r.start(); } catch {
+          setListening(false);
+          listeningRef.current = false;
+        }
+      } else {
+        setListening(false);
+      }
+    };
+
+    r.onerror = (e: any) => {
+      if (e.error === "not-allowed") {
+        alert("Microphone permission denied. Please allow mic access in your browser settings and reload the page.");
+      }
+      setListening(false);
+      listeningRef.current = false;
+    };
+
     recogRef.current = r;
-    return () => { try { r.stop(); } catch {} r.onresult = null; };
+    return () => {
+      listeningRef.current = false;
+      try { r.stop(); } catch {}
+      r.onresult = null;
+      r.onend = null;
+      r.onerror = null;
+    };
   }, [lang]);
 
-  function toggleMic() {
+  async function toggleMic() {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) {
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
@@ -273,15 +298,31 @@ export default function OralPage() {
         : "Voice input requires Chrome browser.");
       return;
     }
+
     if (listening) {
-      recogRef.current?.stop(); setListening(false);
+      listeningRef.current = false;
+      recogRef.current?.stop();
+      setListening(false);
       const t = transcriptRef.current.trim();
       if (t) { sendMessage(t); transcriptRef.current = ""; setTranscript(""); }
     } else {
       stop(); setSpeaking(false);
       transcriptRef.current = ""; setTranscript("");
       recogRef.current.lang = lang === "auto" ? "en-IN" : lang;
-      try { recogRef.current.start(); setListening(true); } catch {}
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(t => t.stop());
+        recogRef.current.start();
+        setListening(true);
+        listeningRef.current = true;
+      } catch (err: any) {
+        alert(
+          err.name === "NotAllowedError"
+            ? "Microphone permission denied. Check your browser settings and reload."
+            : "Could not start microphone: " + err.message
+        );
+      }
     }
   }
 
@@ -290,7 +331,6 @@ export default function OralPage() {
     if (!trimmed || sendingRef.current) return;
     sendingRef.current = true;
 
-    // Start timer on first user message
     if (!sessionOn) startSession();
 
     const userMsg: Message = { role: "user", content: trimmed };
@@ -366,7 +406,6 @@ export default function OralPage() {
           <div style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, background: speaking ? "#fbbf24" : listening ? "#4ade80" : "rgba(255,255,255,0.35)", boxShadow: speaking ? "0 0 6px #fbbf24" : listening ? "0 0 6px #4ade80" : "none", transition: "all 0.3s" }} />
           <span style={{ color: "#fff", fontWeight: 700, fontSize: 14 }}>🎙 {isHindi ? "हिंदी मोड" : "Oral Mode"}</span>
           {speaking && <Waveform active color="#fbbf24" />}
-          {/* Session timer */}
           {sessionOn && (
             <span style={{ fontFamily: "monospace", fontSize: 11, color: "rgba(255,255,255,0.85)", background: "rgba(0,0,0,0.2)", padding: "2px 8px", borderRadius: 6, marginLeft: 4 }}>
               ⏱ {elapsedDisplay}
@@ -375,7 +414,6 @@ export default function OralPage() {
         </div>
 
         <div style={{ display: "flex", gap: 5 }}>
-          {/* End session button */}
           {sessionOn && !sessionSaved && (
             <button onClick={saveSession} style={{ padding: "4px 10px", background: "rgba(255,255,255,0.9)", color: "#0f172a", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
               ✓ Save
