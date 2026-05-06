@@ -120,7 +120,7 @@ export default function PlannerPage() {
   function goToLearn(subject: string, topic: string) {
     if (!plannerState || !openedDay) return;
     const q = new URLSearchParams({ subject, topic, day: String(openedDay), cycle: String(plannerState.cycle), from: "planner" });
-    window.location.href = `/learn?${q.toString()}`;
+    window.location.href = `/teacher?${q.toString()}`;
   }
 
   function goToExam(subject: string, topic: string) {
