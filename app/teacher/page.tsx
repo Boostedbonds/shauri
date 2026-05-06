@@ -223,7 +223,7 @@ export default function LearnPage() {
     setSessionSaved(true);
 
     await logActivity({
-      mode:             "learn",
+      mode: "teacher",
       score_source: "ai",
       subject:          subject || "General",
       chapters:         topicsRef.current.length ? [topicsRef.current[0]] : [],
