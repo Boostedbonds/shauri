@@ -5,10 +5,10 @@ import { logActivity } from "@/lib/logActivity";
 // ─── Types ────────────────────────────────────────────────────
 type Message   = { role: "user" | "assistant"; content: string };
 type QuizState = "none" | "pending" | "done";
-type ActivityMode = "learn" | "teacher";
+type ActivityMode = "teacher";
 
 export interface LearnChatPageProps {
-  mode:        "learn" | "teacher";
+  mode:        "teacher";
   accentColor?: string;
   greeting?:   string;
   title?:      string;
@@ -160,11 +160,12 @@ function SavedBanner({ subject, elapsed, quizScore }: {
 export default function LearnChatPage({
   mode,
   accentColor = "#16a34a",
-  greeting    = "Hey! 🧠 I'm your CBSE Learn Mode tutor.\n\nTell me:\n• Which **subject** you're studying (Science, Maths, English, Hindi, SST…)\n• Which **chapter or topic** you want to understand\n\nI'll explain it clearly with examples, diagrams in text, and check your understanding with a quick quiz!",
-  title       = "🧠 Learn Mode",
-  icon        = "🧠",
+  greeting = "Hi! 👋 I'm SHAURI — your AI learning companion.",
+  title = "🧠 Learn Mode",
+  icon = "🧠",
 }: LearnChatPageProps) {
-  const [messages,       setMessages]       = useState<Message[]>([{ role: "assistant", content: greeting }]);
+
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputText,      setInputText]      = useState("");
   const [loading,        setLoading]        = useState(false);
   const [subject,        setSubject]        = useState("");
@@ -188,6 +189,9 @@ export default function LearnChatPage({
   const autoTriggeredRef = useRef(false);
 
   useEffect(() => { msgsRef.current = messages; }, [messages]);
+useEffect(() => {
+  setMessages([{ role: "assistant", content: greeting }]);
+}, [greeting]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
   useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
 

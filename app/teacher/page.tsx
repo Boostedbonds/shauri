@@ -155,10 +155,39 @@ function SavedBanner({ subject, elapsed, quizScore }: {
 }
 
 // ─── Main Page ────────────────────────────────────────────────
-export default function LearnPage() {
-  const GREETING = "Hey! 🧠 I'm your CBSE Learn Mode tutor.\n\nTell me:\n• Which **subject** you're studying (Science, Maths, English, Hindi, SST…)\n• Which **chapter or topic** you want to understand\n\nI'll explain it clearly with examples, diagrams in text, and check your understanding with a quick quiz!";
+export default function TeacherPage() {
+  const [greeting, setGreeting] = useState(
+  "Hi! 👋 I'm SHAURI — your AI learning companion."
+);
 
-  const [messages,   setMessages]   = useState<Message[]>([{ role: "assistant", content: GREETING }]);
+useEffect(() => {
+  try {
+    const stored = localStorage.getItem("shauri_student");
+
+    if (stored) {
+      const student = JSON.parse(stored);
+
+      const name = student?.name || "Student";
+      const cls = student?.class || "";
+
+      setGreeting(
+        `Hi ${name}${cls ? `, Class ${cls}` : ""}! 👋
+
+I'm SHAURI — your AI learning companion.
+
+Tell me:
+• Which subject you're studying
+• Which chapter, topic, or concept you'd like help with
+
+I can explain concepts step-by-step, simplify difficult topics, help with revision, generate quick quizzes, and support your daily learning journey.`
+      );
+    }
+  } catch {
+    // fallback greeting
+  }
+}, []);
+
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputText,  setInputText]  = useState("");
   const [loading,    setLoading]    = useState(false);
   const [subject,    setSubject]    = useState("");
@@ -184,6 +213,9 @@ export default function LearnPage() {
   const autoTriggeredRef = useRef(false);
 
   useEffect(() => { msgsRef.current = messages; }, [messages]);
+useEffect(() => {
+  setMessages([{ role: "assistant", content: greeting }]);
+}, [greeting]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
   useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
 
@@ -223,7 +255,7 @@ export default function LearnPage() {
     setSessionSaved(true);
 
     await logActivity({
-      mode: "teacher",
+      mode:    "teacher",
       score_source: "ai",
       subject:          subject || "General",
       chapters:         topicsRef.current.length ? [topicsRef.current[0]] : [],
@@ -300,7 +332,7 @@ export default function LearnPage() {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          mode:    "learn",
+          mode:    "teacher",
           message: trimmed,
           history: updated.slice(1, -1).map(m => ({ role: m.role, content: m.content })),
           student: { name: student?.name || "Student", class: student?.class || "", board: student?.board || "CBSE" },

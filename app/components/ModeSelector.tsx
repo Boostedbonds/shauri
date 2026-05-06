@@ -1230,7 +1230,7 @@ export default function ModeSelector() {
         <p className="choose-sub">SELECT YOUR PATH TO BEGIN THE ASCENT</p>
 
         <div className="cards-grid">
-          <ModeCard icon="🧠" title="LEARN MODE"         desc="Learn concepts with clear CBSE-aligned explanations and examples."  href="/learn"    cta="BEGIN LEARNING" />
+          <ModeCard icon="🧠" title="LEARN MODE"         desc="Learn concepts with clear CBSE-aligned explanations and examples."  href="/teacher"    cta="BEGIN LEARNING" />
           <ModeCard icon="🧪" title="EXAMINER MODE"      desc="Practice full-length question papers in real exam conditions."       href="/examiner" cta="BEGIN TEST" />
           <ModeCard icon="🗣️" title="ORAL MODE"          desc="Strengthen recall, fluency, and spoken confidence."                  href="/oral"     cta="BEGIN SPEAKING" />
           <ModeCard icon="📊" title="PROGRESS DASHBOARD" desc="Review strengths, identify gaps, and track your growth."             href="/progress" cta="VIEW PROGRESS" />
