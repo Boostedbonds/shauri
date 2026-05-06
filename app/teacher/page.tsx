@@ -224,6 +224,7 @@ export default function LearnPage() {
 
     await logActivity({
       mode:             "learn",
+      score_source: "ai",
       subject:          subject || "General",
       chapters:         topicsRef.current.length ? [topicsRef.current[0]] : [],
       topics:           topicsRef.current,
