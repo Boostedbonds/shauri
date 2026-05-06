@@ -367,9 +367,7 @@ const CAREER_STREAMS: {
         ],
       },
       { name: "NATA", icon: "🏗️", desc: "National Aptitude Test for Architecture", dates: "Apr–Jun every year", link: "https://nata.in",
-        books: [
-          { title: "NATA Previous Year Papers", freeLink: "https://www.selfstudys.com/books/nata-previous-year-papers", linkLabel: "Free Papers" },
-        ],
+        books: [{ title: "NATA Previous Year Papers", freeLink: "https://www.selfstudys.com/books/nata-previous-year-papers", linkLabel: "Free Papers" }],
       },
       { name: "VITEEE", icon: "🎓", desc: "VIT University entrance", dates: "Apr–May every year", link: "https://vit.ac.in/viteee",
         books: [
@@ -378,9 +376,7 @@ const CAREER_STREAMS: {
         ],
       },
       { name: "IMU CET", icon: "🚢", desc: "Indian Maritime University — Merchant Navy", dates: "May every year", link: "https://imu.edu.in",
-        books: [
-          { title: "IMU CET Previous Papers", freeLink: "https://www.selfstudys.com/books/imu-cet-previous-year-papers", linkLabel: "Free Papers" },
-        ],
+        books: [{ title: "IMU CET Previous Papers", freeLink: "https://www.selfstudys.com/books/imu-cet-previous-year-papers", linkLabel: "Free Papers" }],
       },
     ],
   },
@@ -405,14 +401,10 @@ const CAREER_STREAMS: {
         ],
       },
       { name: "AIIMS", icon: "🔬", desc: "Top medical college — via NEET only", dates: "Via NEET score", link: "https://www.aiims.edu",
-        books: [
-          { title: "NCERT Biology (read 5+ times)", freeLink: "https://ncert.nic.in/textbook.php", linkLabel: "Free Official NCERT PDF" },
-        ],
+        books: [{ title: "NCERT Biology (read 5+ times)", freeLink: "https://ncert.nic.in/textbook.php", linkLabel: "Free Official NCERT PDF" }],
       },
       { name: "JIPMER", icon: "💊", desc: "Premier government medical institute", dates: "Via NEET score", link: "https://jipmer.edu.in",
-        books: [
-          { title: "NEET Prep + JIPMER Past Papers", freeLink: "https://www.selfstudys.com/books/jipmer-previous-year-papers", linkLabel: "Free Papers" },
-        ],
+        books: [{ title: "NEET Prep + JIPMER Past Papers", freeLink: "https://www.selfstudys.com/books/jipmer-previous-year-papers", linkLabel: "Free Papers" }],
       },
       { name: "CUET UG", icon: "📚", desc: "Central Universities for B.Sc programs", dates: "May–June every year", link: "https://cuet.samarth.ac.in",
         books: [
@@ -441,9 +433,7 @@ const CAREER_STREAMS: {
         ],
       },
       { name: "CS Foundation", icon: "⚖️", desc: "Company Secretary — corporate law & governance", dates: "June & Dec every year", link: "https://icsi.edu",
-        books: [
-          { title: "ICSI Official Study Material (Free PDF)", freeLink: "https://www.icsi.edu/student/foundation-programme/study-material/", linkLabel: "Free Official ICSI PDF" },
-        ],
+        books: [{ title: "ICSI Official Study Material (Free PDF)", freeLink: "https://www.icsi.edu/student/foundation-programme/study-material/", linkLabel: "Free Official ICSI PDF" }],
       },
       { name: "CUET UG", icon: "🎓", desc: "Central Universities — B.Com, BA Economics etc", dates: "May–June every year", link: "https://cuet.samarth.ac.in",
         books: [
@@ -452,9 +442,7 @@ const CAREER_STREAMS: {
         ],
       },
       { name: "IPM IIM", icon: "💼", desc: "5-year Integrated Management Programme at IIMs", dates: "May every year", link: "https://iimidr.ac.in/ipm",
-        books: [
-          { title: "Quantitative Aptitude — Arun Sharma", freeLink: "https://archive.org/search?query=arun+sharma+quantitative+aptitude", linkLabel: "Free on Archive.org" },
-        ],
+        books: [{ title: "Quantitative Aptitude — Arun Sharma", freeLink: "https://archive.org/search?query=arun+sharma+quantitative+aptitude", linkLabel: "Free on Archive.org" }],
       },
       { name: "CLAT", icon: "🏛️", desc: "Law entrance for National Law Universities", dates: "Dec every year", link: "https://consortiumofnlus.ac.in",
         books: [
@@ -737,6 +725,7 @@ function SectionHeader({ label, dividerColor }: { label: string; dividerColor: s
     </div>
   );
 }
+
 function NoticeBanner({ text, link, linkText }: { text: string; link: string; linkText: string }) {
   return (
     <p style={{ fontSize: 12, color: "#92400e", background: "rgba(254,243,199,0.8)", padding: "8px 14px", borderRadius: 8, marginBottom: 10 }}>
@@ -755,10 +744,11 @@ function AboutTab() {
       </p>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
         {[
-          { icon: "🧠", title: "Learn Mode",        desc: "AI-powered CBSE concept explanations" },
-          { icon: "🧪", title: "Examiner Mode",      desc: "Full mock papers with AI evaluation" },
-          { icon: "🗣️", title: "Oral Mode",          desc: "Spoken practice & fluency building" },
-          { icon: "📊", title: "Progress Dashboard", desc: "Track growth across subjects over time" },
+          { icon: "🧠", title: "Learn Mode",           desc: "AI-powered CBSE concept explanations" },
+          { icon: "🧪", title: "Examiner Mode",         desc: "Full mock papers with AI evaluation" },
+          { icon: "🗣️", title: "Oral Mode",             desc: "Spoken practice & fluency building" },
+          { icon: "🎬", title: "Audio-Visual Mode",     desc: "Best teacher videos + AI explanation" },
+          { icon: "📊", title: "Progress Dashboard",    desc: "Track growth across subjects over time" },
         ].map(f => (
           <div key={f.title} style={{ background: "rgba(255,255,255,0.6)", borderRadius: 10, padding: "12px 14px", border: "1px solid rgba(212,175,55,0.25)" }}>
             <p style={{ fontSize: 18, marginBottom: 5 }}>{f.icon}</p>
@@ -1151,7 +1141,6 @@ export default function ModeSelector() {
 
   if (!student) return null;
 
-  // ── Only show Study Planner tab for Class 10 students ──
   const isClass10 = getClassNum(student.class) === 10;
 
   const TABS: { key: Tab; label: string; icon: string }[] = [
@@ -1181,10 +1170,11 @@ export default function ModeSelector() {
         .choose-sub { text-align: center; font-size: clamp(9px,2vw,14px); letter-spacing: clamp(0.05em,1vw,0.18em); color: #5c6f82; margin-bottom: clamp(20px,4vw,44px); }
         .cards-grid { display: grid; gap: clamp(12px,3vw,28px); grid-template-columns: 1fr; }
         @media (min-width:560px) { .cards-grid { grid-template-columns: repeat(2,1fr); } }
-        @media (min-width:1100px) { .cards-grid { grid-template-columns: repeat(4,1fr); } }
+        @media (min-width:1100px) { .cards-grid { grid-template-columns: repeat(5,1fr); } }
         .mode-card { background: rgba(255,255,255,0.55); backdrop-filter: blur(10px); border-radius: 18px; border: 1px solid rgba(212,175,55,0.35); text-decoration: none; display: flex; flex-direction: row; align-items: center; gap: 16px; padding: clamp(16px,3vw,22px) clamp(14px,3vw,20px); transition: transform 0.15s, box-shadow 0.15s; -webkit-tap-highlight-color: transparent; }
         .mode-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.1); }
         .mode-card:active { transform: scale(0.97); }
+        .mode-card.highlight { border: 1.5px solid rgba(212,175,55,0.7); background: rgba(255,255,255,0.75); box-shadow: 0 4px 20px rgba(212,175,55,0.15); }
         @media (min-width:1100px) { .mode-card { flex-direction: column; align-items: flex-start; justify-content: space-between; min-height: 280px; padding: 28px 24px; } }
         .card-icon { font-size: clamp(32px,7vw,44px); flex-shrink: 0; line-height: 1; }
         .card-body { flex: 1; min-width: 0; }
@@ -1205,7 +1195,6 @@ export default function ModeSelector() {
               {tab.icon} {tab.label}
             </button>
           ))}
-          {/* ── Study Planner link: only shown to Class 10 students ── */}
           {isClass10 && (
             <a className="tab-btn" href="/planner" style={{ textDecoration: "none" }}>
               🗓️ 30-Day Planner
@@ -1229,11 +1218,13 @@ export default function ModeSelector() {
         <h2 className="choose-h2">CHOOSE YOUR LEARNING MODE</h2>
         <p className="choose-sub">SELECT YOUR PATH TO BEGIN THE ASCENT</p>
 
+        {/* ── 5 MODE CARDS ── */}
         <div className="cards-grid">
-          <ModeCard icon="🧠" title="LEARN MODE"         desc="Learn concepts with clear CBSE-aligned explanations and examples."  href="/teacher"    cta="BEGIN LEARNING" />
-          <ModeCard icon="🧪" title="EXAMINER MODE"      desc="Practice full-length question papers in real exam conditions."       href="/examiner" cta="BEGIN TEST" />
-          <ModeCard icon="🗣️" title="ORAL MODE"          desc="Strengthen recall, fluency, and spoken confidence."                  href="/oral"     cta="BEGIN SPEAKING" />
-          <ModeCard icon="📊" title="PROGRESS DASHBOARD" desc="Review strengths, identify gaps, and track your growth."             href="/progress" cta="VIEW PROGRESS" />
+          <ModeCard icon="🧠" title="LEARN MODE"            desc="Learn concepts with clear CBSE-aligned explanations and examples."                          href="/teacher"  cta="BEGIN LEARNING" />
+          <ModeCard icon="🧪" title="EXAMINER MODE"         desc="Practice full-length question papers in real exam conditions."                              href="/examiner" cta="BEGIN TEST" />
+          <ModeCard icon="🗣️" title="ORAL MODE"             desc="Strengthen recall, fluency, and spoken confidence."                                         href="/oral"     cta="BEGIN SPEAKING" />
+          <ModeCard icon="🎬" title="AUDIO-VISUAL MODE"     desc="Watch the best teacher videos with AI explanation, quiz & Q&A for any topic." href="/av"       cta="BEGIN WATCHING" highlight />
+          <ModeCard icon="📊" title="PROGRESS DASHBOARD"    desc="Review strengths, identify gaps, and track your growth."                                    href="/progress" cta="VIEW PROGRESS" />
         </div>
 
         <p className="privacy">Your learning data remains private and stays on this device unless you explicitly export or share it.</p>
@@ -1242,9 +1233,9 @@ export default function ModeSelector() {
   );
 }
 
-function ModeCard({ icon, title, desc, href, cta }: { icon: string; title: string; desc: string; href: string; cta: string }) {
+function ModeCard({ icon, title, desc, href, cta, highlight }: { icon: string; title: string; desc: string; href: string; cta: string; highlight?: boolean }) {
   return (
-    <a href={href} className="mode-card">
+    <a href={href} className={`mode-card${highlight ? " highlight" : ""}`}>
       <div className="card-icon">{icon}</div>
       <div className="card-body">
         <h3 className="card-title">{title}</h3>
