@@ -24,6 +24,94 @@ function mdToJsx(text: string) {
   });
 }
 
+// ─────────────────────────────────────────────────────────────
+// BEST INDIAN CBSE TEACHER CHANNELS — curated & tiered
+// ─────────────────────────────────────────────────────────────
+
+// TIER 1: India's most trusted CBSE/JEE/NEET educators
+// These are the channels students and parents swear by.
+const TIER1_INDIAN = [
+  "physics wallah",
+  "pw",                        // Physics Wallah short name
+  "alakh pandey",              // Physics Wallah founder
+  "vedantu",
+  "vedantu math",
+  "vedantu science",
+  "vedantu class 9 and 10",
+  "unacademy",
+  "unacademy class 9 and 10",
+  "magnet brains",             // Huge CBSE channel, all subjects
+  "doubtnut",
+  "khan sir",                  // Khan GS Research Centre
+  "khan sir patna",
+  "byju's",
+  "byjus",
+  "byju",
+  "class 9 10",
+  "cbse class 10",
+];
+
+// TIER 2: Excellent subject-specific Indian educators
+const TIER2_INDIAN = [
+  "dronstudy",
+  "learnohub",
+  "meritnation",
+  "toppr",
+  "exam fear",                 // Ekeeda / ExamFear Education — loved for science
+  "examfear",
+  "aakash",
+  "allen career",
+  "motion education",
+  "arvind academy",            // Great for Maths
+  "ncert wallah",
+  "science and fun",
+  "infinity learn",
+  "oswaal",
+  "cbse",
+  "ncert",
+  "hindi medium",
+  "success roar",
+  "tiwari academy",
+  "amrit pal singh",           // Great science educator
+  "science sir",
+  "let's learn india",
+  "letslearn",
+  "green board",
+  "next door engineer",        // Physics
+  "prashant kirad",            // Maths
+  "amit sengupta",
+  "pmt corner",
+  "bright tutee",
+];
+
+// TIER 3: Global quality fallback (only if no Indian teacher found)
+const TIER3_GLOBAL = [
+  "khan academy",
+  "3blue1brown",
+  "veritasium",
+  "crashcourse",
+  "ted-ed",
+  "organic chemistry tutor",
+  "professor leonard",
+  "bozeman science",
+  "kurzgesagt",
+];
+
+function scoreVideo(item: any): number {
+  const ch = (item.snippet.channelTitle || "").toLowerCase();
+  const title = (item.snippet.title || "").toLowerCase();
+  const desc = (item.snippet.description || "").toLowerCase();
+  const combined = `${ch} ${title} ${desc}`;
+
+  // Bonus signals in title/description
+  const cbseBonus = /cbse|ncert|class 10|class 9|board exam|10th|9th/.test(combined) ? 1 : 0;
+
+  if (TIER1_INDIAN.some(t => combined.includes(t))) return 10 + cbseBonus;
+  if (TIER2_INDIAN.some(t => combined.includes(t))) return  5 + cbseBonus;
+  if (TIER3_GLOBAL.some(t => combined.includes(t))) return  2;
+  return cbseBonus; // Unknown channel but has CBSE context
+}
+
 export default function AVPage() {
   const [student, setStudent] = useState<{ name: string; class: string; board: string } | null>(null);
   const [topic, setTopic] = useState("");
@@ -139,27 +227,61 @@ KEY_TAKEAWAYS and RELATED must be valid JSON arrays. QUIZ must be valid JSON obj
 
   async function fetchVideo(t: string) {
     if (!ytKey) return;
-    try {
-      const q = encodeURIComponent(t + " explained tutorial");
-      const res = await fetch(
-        `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${q}&type=video&videoEmbeddable=true&maxResults=8&key=${ytKey}`
-      );
-      const data = await res.json();
-      if (data.error || !data.items?.length) return;
 
-      const preferred = ["khan academy", "3blue1brown", "veritasium", "kurzgesagt",
-        "crashcourse", "ted-ed", "organic chemistry tutor", "professor leonard", "bozeman"];
-      let best = data.items[0];
-      for (const item of data.items) {
-        if (preferred.some(ch => item.snippet.channelTitle.toLowerCase().includes(ch))) {
-          best = item; break;
+    // Run TWO searches in parallel:
+    // Search 1 — Indian CBSE specific (highest chance of Vedantu/PW/Magnet Brains)
+    // Search 2 — Broader topic search (catches any great video we might miss)
+    const queries = [
+      `${t} CBSE class ${student?.class} explained`,
+      `${t} class ${student?.class} in english India`,
+    ];
+
+    try {
+      const results = await Promise.all(
+        queries.map(q =>
+          fetch(
+            `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(q)}&type=video&videoEmbeddable=true&relevanceLanguage=en&regionCode=IN&maxResults=10&key=${ytKey}`
+          ).then(r => r.json())
+        )
+      );
+
+      // Merge all items, deduplicate by videoId
+      const seen = new Set<string>();
+      const allItems: any[] = [];
+      for (const data of results) {
+        if (data.error || !data.items?.length) continue;
+        for (const item of data.items) {
+          const vid = item?.id?.videoId;
+          if (vid && !seen.has(vid)) {
+            seen.add(vid);
+            allItems.push(item);
+          }
         }
       }
+
+      if (!allItems.length) return;
+
+      // Score every candidate
+      const scored = allItems.map(item => ({ item, score: scoreVideo(item) }));
+
+      // Sort descending by score
+      scored.sort((a, b) => b.score - a.score);
+
+      // Pick the best
+      const best = scored[0].item;
+
+      console.log("🎯 Top video picks:");
+      scored.slice(0, 5).forEach((s, i) =>
+        console.log(`  ${i + 1}. [${s.score}] ${s.item.snippet.channelTitle} — ${s.item.snippet.title}`)
+      );
 
       setVideoId(best.id.videoId);
       setVideoTitle(best.snippet.title);
       setVideoChannel(best.snippet.channelTitle);
-    } catch (e) { console.error(e); }
+
+    } catch (e) {
+      console.error("fetchVideo error:", e);
+    }
   }
 
   async function askQuestion() {
@@ -277,13 +399,17 @@ KEY_TAKEAWAYS and RELATED must be valid JSON arrays. QUIZ must be valid JSON obj
                   <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#E24B4A", display: "inline-block" }} />
                   BEST TEACHER VIDEO
                 </div>
-                {videoChannel && <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, border: "1px solid #F09595", background: "#FCEBEB", color: "#A32D2D" }}>{videoChannel}</span>}
+                {videoChannel && (
+                  <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, border: "1px solid #F09595", background: "#FCEBEB", color: "#A32D2D" }}>
+                    {videoChannel}
+                  </span>
+                )}
               </div>
 
               {loading && !videoId ? (
                 <div style={{ aspectRatio: "16/9", background: "#0a0a0a", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8 }}>
                   <div style={{ fontSize: 28 }}>🔍</div>
-                  <div style={{ fontSize: 12, color: "#555" }}>Finding best video...</div>
+                  <div style={{ fontSize: 12, color: "#555" }}>Finding best Indian teacher video...</div>
                 </div>
               ) : videoId ? (
                 <>

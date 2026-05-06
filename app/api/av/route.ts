@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
         Authorization: `Bearer ${groqKey}`,
       },
       body: JSON.stringify({
-        model: "llama3-8b-8192",
+        model: "llama-3.3-70b-versatile",
         max_tokens: 1200,
         messages: system
           ? [{ role: "system", content: system }, ...messages]
