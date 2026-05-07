@@ -1,5 +1,5 @@
 ﻿import { NextResponse } from "next/server";
-import { readDB } from "@/app/lib/hawkeyeStore";
+import { readDB } from "../../../../lib/db";
 
 export async function GET() {
   const db = await readDB();

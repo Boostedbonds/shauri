@@ -1,13 +1,10 @@
 ﻿import { NextResponse } from "next/server";
-import { readDB } from "@/app/lib/hawkeyeStore";
+import { readDB } from "../../../../lib/db";
 
 export async function GET() {
   const db = await readDB();
-  return NextResponse.json({ knowledge: db.knowledge.map((d) => ({
-    id: d.id,
-    fileName: d.fileName,
-    mimeType: d.mimeType,
-    uploadedAt: d.uploadedAt,
-    chunks: d.chunks.length,
-  })) });
+  const light = db.knowledge.map(({ id, fileName, mimeType, uploadedAt, chunks }) => ({
+    id, fileName, mimeType, uploadedAt, chunks: chunks.length,
+  }));
+  return NextResponse.json({ knowledge: light });
 }
