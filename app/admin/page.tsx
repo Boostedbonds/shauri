@@ -1,134 +1,377 @@
 ﻿"use client";
 import AdminGate from "../components/AdminGate";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { createClient } from "@supabase/supabase-js";
 
-interface User {
-  name: string;
-  class: string;
-  code: string;
-  joinedAt?: string;
-}
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
-interface KnowledgeEntry {
-  title?: string;
-  name?: string;
-  subject?: string;
-  class?: string;
-}
+const SUBJECTS = ["General","Mathematics","Science","Physics","Chemistry","Biology","English","Hindi","SST","History","Geography","Civics","Economics"];
+const CLASSES  = ["All","6","7","8","9","10","11","12"];
 
-interface ActivityEntry {
-  message?: string;
-  timestamp?: string;
-}
+type Student  = { student_name: string; class: string; board: string; attempts: number; avg_score: number; last_active: string; subjects: string[]; };
+type Attempt  = { id: string; created_at: string; student_name: string; class: string; subject: string; marks_obtained: number; total_marks: number; percentage: number; mode: string; };
+type KBEntry  = { id: string; title: string; subject: string; class_level: string; tags: string[]; file_name?: string; created_at: string; active: boolean; };
+
+const S: Record<string,string> = {
+  bg: "#fdf6e3", bgCard: "#ffffff", bgMuted: "#fdf9f0",
+  border: "#e8d5a3", borderLight: "#f0e6c8",
+  text: "#1a3a4a", textMuted: "#8a7a5a", textLight: "#b0a080",
+  gold: "#c9a227", purple: "#5b6fa5", green: "#2d6a4f",
+  red: "#c0392b", amber: "#b5830a",
+  font: "'Courier New', monospace",
+};
+
+function scoreColor(p: number) { return p >= 70 ? S.green : p >= 45 ? S.amber : S.red; }
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState("users");
-  const [users, setUsers] = useState<User[]>([]);
-  const [knowledge, setKnowledge] = useState<KnowledgeEntry[]>([]);
-  const [activity, setActivity] = useState<ActivityEntry[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [tab, setTab]               = useState("overview");
+  const [students, setStudents]     = useState<Student[]>([]);
+  const [attempts, setAttempts]     = useState<Attempt[]>([]);
+  const [kb, setKb]                 = useState<KBEntry[]>([]);
+  const [loading, setLoading]       = useState(false);
+  const [search, setSearch]         = useState("");
+  const [stats, setStats]           = useState({ total: 0, avgScore: 0, todayActive: 0, totalAttempts: 0 });
 
-  useEffect(() => {
-    fetchData();
-  }, [activeTab]);
+  // KB form state
+  const [kbTitle, setKbTitle]       = useState("");
+  const [kbSubject, setKbSubject]   = useState("General");
+  const [kbClass, setKbClass]       = useState("All");
+  const [kbContent, setKbContent]   = useState("");
+  const [kbTags, setKbTags]         = useState("");
+  const [kbFile, setKbFile]         = useState<File|null>(null);
+  const [kbSaving, setKbSaving]     = useState(false);
+  const [kbMsg, setKbMsg]           = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  async function fetchData() {
+  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => { if (tab === "knowledge") fetchKB(); }, [tab]);
+
+  async function fetchAll() {
     setLoading(true);
-    try {
-      if (activeTab === "users") {
-        const res = await fetch("/api/admin/users");
-        const data = await res.json();
-        setUsers(Array.isArray(data) ? data : data.users || data.data || []);
-      } else if (activeTab === "knowledge") {
-        const res = await fetch("/api/admin/knowledge");
-        const data = await res.json();
-        setKnowledge(Array.isArray(data) ? data : data.knowledge || data.data || []);
-      } else if (activeTab === "activity") {
-        const res = await fetch("/api/admin/activity");
-        const data = await res.json();
-        setActivity(Array.isArray(data) ? data : data.activity || data.data || []);
-      }
-    } catch (e) {
-      console.error(e);
-    }
+    const { data } = await supabase
+      .from("exam_attempts")
+      .select("student_name,class,board,subject,marks_obtained,total_marks,percentage,created_at,mode,id")
+      .order("created_at", { ascending: false })
+      .limit(1000);
+    const rows = data || [];
+    setAttempts(rows as Attempt[]);
+    const map: Record<string,Student> = {};
+    const today = new Date().toDateString();
+    const todaySet = new Set<string>();
+    rows.forEach((r: any) => {
+      const k = `${r.student_name}__${r.class}`;
+      if (!map[k]) map[k] = { student_name: r.student_name, class: r.class, board: r.board||"CBSE", attempts: 0, avg_score: 0, last_active: r.created_at, subjects: [] };
+      map[k].attempts++;
+      if (r.percentage) map[k].avg_score += r.percentage;
+      if (r.subject && !map[k].subjects.includes(r.subject)) map[k].subjects.push(r.subject);
+      if (new Date(r.created_at).toDateString() === today) todaySet.add(k);
+    });
+    const list = Object.values(map).map(s => ({ ...s, avg_score: s.attempts > 0 ? Math.round(s.avg_score/s.attempts) : 0 }));
+    setStudents(list);
+    setStats({ total: list.length, avgScore: list.length > 0 ? Math.round(list.reduce((a,s)=>a+s.avg_score,0)/list.length) : 0, todayActive: todaySet.size, totalAttempts: rows.length });
     setLoading(false);
   }
 
+  async function fetchKB() {
+    const res = await fetch("/api/admin/knowledge");
+    const d   = await res.json();
+    setKb(d.knowledge || []);
+  }
+
+  async function saveKB() {
+    if (!kbTitle.trim()) { setKbMsg("Title is required"); return; }
+    if (!kbContent.trim() && !kbFile) { setKbMsg("Content or file is required"); return; }
+    setKbSaving(true); setKbMsg("");
+    try {
+      const form = new FormData();
+      form.append("title",       kbTitle);
+      form.append("subject",     kbSubject);
+      form.append("class_level", kbClass);
+      form.append("tags",        kbTags);
+      if (kbFile)    form.append("file",    kbFile);
+      else           form.append("content", kbContent);
+      const res = await fetch("/api/admin/knowledge", { method: "POST", body: form });
+      const d   = await res.json();
+      if (d.ok) {
+        setKbMsg("Saved! AI will now use this knowledge.");
+        setKbTitle(""); setKbContent(""); setKbTags(""); setKbFile(null);
+        if (fileRef.current) fileRef.current.value = "";
+        fetchKB();
+      } else {
+        setKbMsg("Error: " + (d.error || "unknown"));
+      }
+    } catch(e: any) { setKbMsg("Error: " + e.message); }
+    setKbSaving(false);
+  }
+
+  async function deleteKB(id: string) {
+    if (!confirm("Remove this entry from KB?")) return;
+    await fetch(`/api/admin/knowledge?id=${id}`, { method: "DELETE" });
+    fetchKB();
+  }
+
+  const filtered = students.filter(s =>
+    (s.student_name||"").toLowerCase().includes(search.toLowerCase()) ||
+    (s.class||"").toLowerCase().includes(search.toLowerCase())
+  );
+
+  const tabs = [
+    { id: "overview",  label: "Overview"   },
+    { id: "students",  label: "Students"   },
+    { id: "activity",  label: "Activity"   },
+    { id: "knowledge", label: "Knowledge Base" },
+  ];
+
+  const card = { background: S.bgCard, border: `1px solid ${S.border}`, borderRadius: 16, padding: 24, boxShadow: "0 2px 12px rgba(0,0,0,0.04)" };
+  const th   = { textAlign: "left" as const, padding: "10px 14px", fontSize: 10, letterSpacing: 2, color: S.textMuted, fontWeight: 600 };
+  const td   = (extra={}) => ({ padding: "11px 14px", ...extra });
+
   return (
     <AdminGate>
-      <div className="min-h-screen bg-slate-950 text-white">
-        <div className="border-b border-slate-800 px-8 py-4 flex items-center justify-between">
+      <div style={{ minHeight: "100vh", background: `linear-gradient(135deg,${S.bg} 0%,#fef9f0 50%,${S.bg} 100%)`, fontFamily: S.font }}>
+
+        {/* Header */}
+        <div style={{ background: "rgba(255,255,255,0.75)", backdropFilter: "blur(12px)", borderBottom: `1px solid ${S.border}`, padding: "18px 40px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
-            <h1 className="text-2xl font-bold text-yellow-400 tracking-widest">SHAURI</h1>
-            <p className="text-slate-400 text-xs">Admin Panel</p>
+            <h1 style={{ fontSize: 34, fontWeight: 900, letterSpacing: 8, color: S.text, margin: 0 }}>SHAURI</h1>
+            <p style={{ fontSize: 11, letterSpacing: 4, color: S.textMuted, margin: "2px 0 0" }}>ADMIN CONTROL PANEL</p>
           </div>
-          <button
-            onClick={() => { sessionStorage.clear(); window.location.reload(); }}
-            className="text-sm text-slate-400 hover:text-red-400 transition"
-          >
-            Logout
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+            <span style={{ fontSize: 11, letterSpacing: 2, color: S.textMuted }}>{new Date().toLocaleDateString("en-IN",{weekday:"short",day:"numeric",month:"short",year:"numeric"}).toUpperCase()}</span>
+            <button onClick={()=>{sessionStorage.clear();window.location.reload();}}
+              style={{ background:"transparent", border:`1px solid ${S.red}`, color:S.red, fontSize:11, letterSpacing:2, padding:"6px 16px", borderRadius:20, cursor:"pointer" }}>
+              LOGOUT
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2 px-8 pt-6">
-          {["users", "knowledge", "activity"].map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={"px-5 py-2 rounded-lg text-sm font-semibold capitalize transition " + (activeTab === tab ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-400 hover:bg-slate-700")}
-            >
-              {tab}
+
+        {/* Tabs */}
+        <div style={{ background:"rgba(255,255,255,0.5)", borderBottom:`1px solid ${S.border}`, padding:"0 40px", display:"flex" }}>
+          {tabs.map(t => (
+            <button key={t.id} onClick={()=>setTab(t.id)}
+              style={{ padding:"13px 24px", fontSize:11, letterSpacing:3, fontFamily:S.font, background:"transparent", border:"none",
+                borderBottom: tab===t.id ? `3px solid ${S.gold}` : "3px solid transparent",
+                color: tab===t.id ? S.text : S.textMuted, fontWeight: tab===t.id ? 700 : 400, cursor:"pointer" }}>
+              {t.label.toUpperCase()}
             </button>
           ))}
         </div>
-        <div className="px-8 py-6">
-          {loading && <p className="text-slate-400">Loading...</p>}
-          {!loading && activeTab === "users" && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr className="text-slate-400 border-b border-slate-800">
-                    <th className="text-left py-2 pr-6">Name</th>
-                    <th className="text-left py-2 pr-6">Class</th>
-                    <th className="text-left py-2 pr-6">Code</th>
-                    <th className="text-left py-2">Joined</th>
-                  </tr>
-                </thead>
+
+        <div style={{ padding:"28px 40px" }}>
+          {loading && <div style={{ display:"flex", justifyContent:"center", padding:80 }}><p style={{ color:S.textMuted, letterSpacing:4, fontSize:12 }}>LOADING DATA...</p></div>}
+
+          {/* ── OVERVIEW ── */}
+          {!loading && tab==="overview" && (
+            <div>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:18, marginBottom:28 }}>
+                {[{l:"Total Students",v:stats.total,c:S.gold},{l:"Total Attempts",v:stats.totalAttempts,c:S.purple},{l:"Active Today",v:stats.todayActive,c:S.green},{l:"Avg Score",v:stats.avgScore+"%",c:"#8a4fa5"}].map((s,i)=>(
+                  <div key={i} style={{...card, padding:22}}>
+                    <p style={{ fontSize:10, letterSpacing:3, color:S.textMuted, margin:"0 0 8px" }}>{s.l.toUpperCase()}</p>
+                    <p style={{ fontSize:38, fontWeight:900, color:s.c, margin:0 }}>{s.v}</p>
+                  </div>
+                ))}
+              </div>
+              <div style={card}>
+                <p style={{ fontSize:11, letterSpacing:3, color:S.textMuted, margin:"0 0 18px" }}>RECENT ACTIVITY</p>
+                <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+                  <thead><tr style={{ borderBottom:`1px solid ${S.borderLight}` }}>
+                    {["Student","Class","Subject","Score","Date"].map(h=><th key={h} style={th}>{h.toUpperCase()}</th>)}
+                  </tr></thead>
+                  <tbody>
+                    {attempts.slice(0,15).map((a,i)=>(
+                      <tr key={i} style={{ borderBottom:`1px solid ${S.bgMuted}` }}>
+                        <td style={td({color:S.text,fontWeight:600})}>{a.student_name}</td>
+                        <td style={td({color:S.purple})}>Class {a.class}</td>
+                        <td style={td({color:S.textMuted})}>{a.subject}</td>
+                        <td style={td()}>{a.percentage!=null ? <span style={{color:scoreColor(a.percentage),fontWeight:700}}>{a.percentage}%</span> : <span style={{color:S.borderLight}}>—</span>}</td>
+                        <td style={td({color:S.textMuted,fontSize:11})}>{new Date(a.created_at).toLocaleDateString("en-IN",{day:"numeric",month:"short"})}</td>
+                      </tr>
+                    ))}
+                    {!attempts.length && <tr><td colSpan={5} style={td({color:S.textMuted})}>No activity yet.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ── STUDENTS ── */}
+          {!loading && tab==="students" && (
+            <div>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
+                <p style={{ fontSize:11, letterSpacing:3, color:S.textMuted, margin:0 }}>{filtered.length} STUDENTS ENROLLED</p>
+                <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search name or class..."
+                  style={{ background:"white", border:`1px solid ${S.border}`, color:S.text, borderRadius:24, padding:"9px 18px", fontSize:13, width:250, outline:"none", fontFamily:S.font }} />
+              </div>
+              <div style={{...card, padding:0, overflow:"hidden"}}>
+                <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+                  <thead><tr style={{ borderBottom:`1px solid ${S.borderLight}`, background:S.bgMuted }}>
+                    {["Student","Class","Board","Attempts","Avg Score","Subjects","Last Active"].map(h=><th key={h} style={th}>{h.toUpperCase()}</th>)}
+                  </tr></thead>
+                  <tbody>
+                    {!filtered.length && <tr><td colSpan={7} style={td({color:S.textMuted})}>No students found.</td></tr>}
+                    {filtered.map((s,i)=>(
+                      <tr key={i} style={{ borderBottom:`1px solid ${S.bgMuted}` }}>
+                        <td style={td({color:S.text,fontWeight:700})}>{s.student_name}</td>
+                        <td style={td({color:S.purple,fontWeight:600})}>Class {s.class}</td>
+                        <td style={td({color:S.textMuted})}>{s.board}</td>
+                        <td style={td({color:S.gold,fontWeight:700})}>{s.attempts}</td>
+                        <td style={td()}><span style={{color:scoreColor(s.avg_score),fontWeight:700,fontSize:14}}>{s.avg_score}%</span></td>
+                        <td style={td({color:S.textMuted,fontSize:11})}>{s.subjects.slice(0,2).join(", ")}{s.subjects.length>2?` +${s.subjects.length-2}`:""}</td>
+                        <td style={td({color:S.textMuted,fontSize:11})}>{new Date(s.last_active).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"})}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ── ACTIVITY ── */}
+          {!loading && tab==="activity" && (
+            <div style={{...card, padding:0, overflow:"hidden"}}>
+              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+                <thead><tr style={{ borderBottom:`1px solid ${S.borderLight}`, background:S.bgMuted }}>
+                  {["Student","Class","Subject","Marks","Score %","Mode","Date"].map(h=><th key={h} style={th}>{h.toUpperCase()}</th>)}
+                </tr></thead>
                 <tbody>
-                  {users.length === 0 && (
-                    <tr><td colSpan={4} className="text-slate-500 py-4">No users yet.</td></tr>
-                  )}
-                  {users.map((u, i) => (
-                    <tr key={i} className="border-b border-slate-800 hover:bg-slate-900">
-                      <td className="py-2 pr-6">{u.name}</td>
-                      <td className="py-2 pr-6">{u.class}</td>
-                      <td className="py-2 pr-6">{u.code}</td>
-                      <td className="py-2">{u.joinedAt ? new Date(u.joinedAt).toLocaleDateString() : "-"}</td>
+                  {!attempts.length && <tr><td colSpan={7} style={td({color:S.textMuted})}>No exam attempts yet.</td></tr>}
+                  {attempts.map((a,i)=>(
+                    <tr key={i} style={{ borderBottom:`1px solid ${S.bgMuted}` }}>
+                      <td style={td({color:S.text,fontWeight:600})}>{a.student_name}</td>
+                      <td style={td({color:S.purple})}>Class {a.class}</td>
+                      <td style={td({color:S.textMuted})}>{a.subject}</td>
+                      <td style={td({color:S.text})}>{a.marks_obtained!=null?`${a.marks_obtained}/${a.total_marks}`:"—"}</td>
+                      <td style={td()}>{a.percentage!=null?<span style={{color:scoreColor(a.percentage),fontWeight:700}}>{a.percentage}%</span>:<span style={{color:S.borderLight}}>—</span>}</td>
+                      <td style={td()}>
+                        <span style={{background:S.bgMuted,border:`1px solid ${S.border}`,color:S.textMuted,fontSize:10,letterSpacing:1,padding:"2px 8px",borderRadius:20}}>
+                          {(a.mode||"examiner").toUpperCase()}
+                        </span>
+                      </td>
+                      <td style={td({color:S.textMuted,fontSize:11})}>{new Date(a.created_at).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"})}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           )}
-          {!loading && activeTab === "knowledge" && (
-            <div className="space-y-3">
-              {knowledge.length === 0 && <p className="text-slate-500">No knowledge entries yet.</p>}
-              {knowledge.map((k, i) => (
-                <div key={i} className="bg-slate-900 border border-slate-700 rounded-lg p-4">
-                  <p className="font-semibold text-white">{k.title || k.name || "Entry " + (i+1)}</p>
-                  <p className="text-slate-400 text-sm mt-1">{k.subject} -- Class {k.class}</p>
+
+          {/* ── KNOWLEDGE BASE ── */}
+          {tab==="knowledge" && (
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:24 }}>
+
+              {/* Upload Form */}
+              <div style={card}>
+                <p style={{ fontSize:11, letterSpacing:3, color:S.textMuted, margin:"0 0 20px" }}>ADD TO KNOWLEDGE BASE</p>
+                <p style={{ fontSize:12, color:S.textMuted, margin:"0 0 18px", lineHeight:1.6 }}>
+                  Anything you add here is automatically picked up by the AI in every chat session.
+                  Upload notes, chapter summaries, custom explanations, or any reference material.
+                </p>
+
+                {/* Title */}
+                <div style={{ marginBottom:14 }}>
+                  <label style={{ fontSize:10, letterSpacing:2, color:S.textMuted, display:"block", marginBottom:6 }}>TITLE *</label>
+                  <input value={kbTitle} onChange={e=>setKbTitle(e.target.value)} placeholder="e.g. Real Numbers - HCF/LCM Notes"
+                    style={{ width:"100%", background:S.bgMuted, border:`1px solid ${S.border}`, borderRadius:10, padding:"10px 14px", fontSize:13, fontFamily:S.font, color:S.text, outline:"none", boxSizing:"border-box" }} />
                 </div>
-              ))}
-            </div>
-          )}
-          {!loading && activeTab === "activity" && (
-            <div className="space-y-3">
-              {activity.length === 0 && <p className="text-slate-500">No activity yet.</p>}
-              {activity.map((a, i) => (
-                <div key={i} className="bg-slate-900 border border-slate-700 rounded-lg p-4">
-                  <p className="text-white text-sm">{a.message || JSON.stringify(a)}</p>
-                  <p className="text-slate-500 text-xs mt-1">{a.timestamp ? new Date(a.timestamp).toLocaleString() : ""}</p>
+
+                {/* Subject + Class */}
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:14 }}>
+                  <div>
+                    <label style={{ fontSize:10, letterSpacing:2, color:S.textMuted, display:"block", marginBottom:6 }}>SUBJECT</label>
+                    <select value={kbSubject} onChange={e=>setKbSubject(e.target.value)}
+                      style={{ width:"100%", background:S.bgMuted, border:`1px solid ${S.border}`, borderRadius:10, padding:"10px 14px", fontSize:13, fontFamily:S.font, color:S.text, outline:"none" }}>
+                      {SUBJECTS.map(s=><option key={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize:10, letterSpacing:2, color:S.textMuted, display:"block", marginBottom:6 }}>CLASS</label>
+                    <select value={kbClass} onChange={e=>setKbClass(e.target.value)}
+                      style={{ width:"100%", background:S.bgMuted, border:`1px solid ${S.border}`, borderRadius:10, padding:"10px 14px", fontSize:13, fontFamily:S.font, color:S.text, outline:"none" }}>
+                      {CLASSES.map(c=><option key={c}>{c}</option>)}
+                    </select>
+                  </div>
                 </div>
-              ))}
+
+                {/* Tags */}
+                <div style={{ marginBottom:14 }}>
+                  <label style={{ fontSize:10, letterSpacing:2, color:S.textMuted, display:"block", marginBottom:6 }}>TAGS (comma separated)</label>
+                  <input value={kbTags} onChange={e=>setKbTags(e.target.value)} placeholder="e.g. hcf, lcm, real numbers, chapter 1"
+                    style={{ width:"100%", background:S.bgMuted, border:`1px solid ${S.border}`, borderRadius:10, padding:"10px 14px", fontSize:13, fontFamily:S.font, color:S.text, outline:"none", boxSizing:"border-box" }} />
+                </div>
+
+                {/* File Upload */}
+                <div style={{ marginBottom:14 }}>
+                  <label style={{ fontSize:10, letterSpacing:2, color:S.textMuted, display:"block", marginBottom:6 }}>UPLOAD FILE (txt, md, csv) — OR paste text below</label>
+                  <input ref={fileRef} type="file" accept=".txt,.md,.csv,.text"
+                    onChange={e=>{ setKbFile(e.target.files?.[0]||null); if(e.target.files?.[0]) setKbContent(""); }}
+                    style={{ fontSize:12, color:S.textMuted, fontFamily:S.font }} />
+                  {kbFile && <p style={{ fontSize:11, color:S.green, marginTop:6 }}>File selected: {kbFile.name}</p>}
+                </div>
+
+                {/* Text Content */}
+                <div style={{ marginBottom:18 }}>
+                  <label style={{ fontSize:10, letterSpacing:2, color:S.textMuted, display:"block", marginBottom:6 }}>OR PASTE CONTENT DIRECTLY *</label>
+                  <textarea value={kbContent} onChange={e=>{ setKbContent(e.target.value); if(e.target.value) setKbFile(null); }}
+                    placeholder="Paste notes, chapter summaries, explanations, custom rules, or any text the AI should know..."
+                    rows={8}
+                    style={{ width:"100%", background:S.bgMuted, border:`1px solid ${S.border}`, borderRadius:10, padding:"10px 14px", fontSize:13, fontFamily:S.font, color:S.text, outline:"none", resize:"vertical", boxSizing:"border-box" }} />
+                </div>
+
+                {kbMsg && (
+                  <p style={{ fontSize:12, color: kbMsg.startsWith("Error") ? S.red : S.green, marginBottom:12, fontWeight:600 }}>{kbMsg}</p>
+                )}
+
+                <button onClick={saveKB} disabled={kbSaving}
+                  style={{ width:"100%", background: kbSaving ? S.borderLight : S.text, color:"white", border:"none", borderRadius:24, padding:"13px 0", fontSize:11, letterSpacing:3, fontFamily:S.font, cursor: kbSaving ? "not-allowed" : "pointer", fontWeight:700 }}>
+                  {kbSaving ? "SAVING..." : "ADD TO KNOWLEDGE BASE"}
+                </button>
+              </div>
+
+              {/* KB Entries List */}
+              <div style={card}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
+                  <p style={{ fontSize:11, letterSpacing:3, color:S.textMuted, margin:0 }}>KNOWLEDGE BASE ({kb.filter(k=>k.active).length} ACTIVE)</p>
+                  <button onClick={fetchKB}
+                    style={{ background:"transparent", border:`1px solid ${S.border}`, color:S.textMuted, fontSize:10, letterSpacing:2, padding:"4px 12px", borderRadius:12, cursor:"pointer", fontFamily:S.font }}>
+                    REFRESH
+                  </button>
+                </div>
+
+                {kb.length === 0 && (
+                  <div style={{ textAlign:"center", padding:"40px 20px" }}>
+                    <p style={{ fontSize:32, marginBottom:8 }}>📚</p>
+                    <p style={{ color:S.textMuted, fontSize:13 }}>No entries yet.</p>
+                    <p style={{ color:S.textLight, fontSize:12 }}>Add your first entry on the left — the AI will start using it immediately.</p>
+                  </div>
+                )}
+
+                <div style={{ display:"flex", flexDirection:"column", gap:10, maxHeight:520, overflowY:"auto" }}>
+                  {kb.filter(k=>k.active).map(k=>(
+                    <div key={k.id} style={{ background:S.bgMuted, border:`1px solid ${S.borderLight}`, borderRadius:12, padding:"14px 16px", display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+                      <div style={{ flex:1, marginRight:12 }}>
+                        <p style={{ color:S.text, fontWeight:700, fontSize:13, margin:"0 0 4px" }}>{k.title}</p>
+                        <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:4 }}>
+                          <span style={{ background:S.bgCard, border:`1px solid ${S.border}`, color:S.purple, fontSize:10, padding:"2px 8px", borderRadius:10 }}>{k.subject}</span>
+                          <span style={{ background:S.bgCard, border:`1px solid ${S.border}`, color:S.textMuted, fontSize:10, padding:"2px 8px", borderRadius:10 }}>Class {k.class_level}</span>
+                          {k.file_name && <span style={{ background:S.bgCard, border:`1px solid ${S.border}`, color:S.green, fontSize:10, padding:"2px 8px", borderRadius:10 }}>📄 {k.file_name}</span>}
+                        </div>
+                        {k.tags?.length > 0 && (
+                          <p style={{ color:S.textLight, fontSize:10, margin:0 }}>#{k.tags.join(" #")}</p>
+                        )}
+                        <p style={{ color:S.textLight, fontSize:10, margin:"4px 0 0" }}>{new Date(k.created_at).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"})}</p>
+                      </div>
+                      <button onClick={()=>deleteKB(k.id)}
+                        style={{ background:"transparent", border:`1px solid ${S.red}`, color:S.red, fontSize:10, padding:"4px 10px", borderRadius:10, cursor:"pointer", fontFamily:S.font, flexShrink:0 }}>
+                        REMOVE
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
             </div>
           )}
         </div>
