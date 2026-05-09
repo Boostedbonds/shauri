@@ -1,8 +1,10 @@
-﻿"use client";
+"use client";
 import { useState, useRef, useCallback } from "react";
-const orbitronClassName = "font-orbitron-fallback";
+import { Orbitron } from "next/font/google";
 
-// â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const orbitron = Orbitron({ subsets: ["latin"], weight: ["400", "700", "900"] });
+
+// ── Types ────────────────────────────────────────────────────
 interface BreakdownItem {
   q: number;
   detected: string;
@@ -21,7 +23,7 @@ interface OMRResult {
 const GOLD = "#FFD700";
 const DARK = "#0a0f1e";
 
-// â”€â”€ Styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Styles ───────────────────────────────────────────────────
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap');
 
@@ -493,7 +495,7 @@ const css = `
   }
 `;
 
-// â”€â”€ Grade helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Grade helper ─────────────────────────────────────────────
 function getGrade(pct: number) {
   if (pct >= 91) return { grade: "A1", cls: "excellent" };
   if (pct >= 81) return { grade: "A2", cls: "excellent" };
@@ -505,7 +507,7 @@ function getGrade(pct: number) {
   return { grade: "E", cls: "poor" };
 }
 
-// â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Main Component ───────────────────────────────────────────
 export default function OMRPage() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [imageDataUrl, setImageDataUrl] = useState<string>("");
@@ -518,7 +520,7 @@ export default function OMRPage() {
   const [error, setError]               = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // â”€â”€ Image handling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Image handling ─────────────────────────────────────────
   const handleFile = useCallback((file: File) => {
     if (!file.type.startsWith("image/")) return;
     const reader = new FileReader();
@@ -536,7 +538,7 @@ export default function OMRPage() {
     if (file) handleFile(file);
   };
 
-  // â”€â”€ Answer key helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Answer key helpers ────────────────────────────────────
   const setAnswer = (q: number, ans: string) => {
     setAnswerKey(prev => ({ ...prev, [q]: ans }));
   };
@@ -550,12 +552,12 @@ export default function OMRPage() {
     setAnswerKey(newKey);
   };
 
-  // â”€â”€ Scan â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Scan ─────────────────────────────────────────────────
   const scan = async () => {
     setLoading(true);
     setError("");
 
-    // Build answer key â€” fill blanks with "" (will be skipped in scoring)
+    // Build answer key — fill blanks with "" (will be skipped in scoring)
     const key: Record<string, string> = {};
     for (let i = 1; i <= numQ; i++) {
       key[String(i)] = answerKey[i] || "";
@@ -594,7 +596,7 @@ export default function OMRPage() {
     setAnswerKey({});
   };
 
-  // â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Render ────────────────────────────────────────────────
   const answeredCount = Object.values(answerKey).filter(v => v && v !== "").length;
   const canScan = imageDataUrl && answeredCount > 0;
 
@@ -608,9 +610,9 @@ export default function OMRPage() {
 
         {/* Header */}
         <div className="omr-header">
-          <button className="omr-back" onClick={() => window.history.back()}>â† Back</button>
+          <button className="omr-back" onClick={() => window.history.back()}>← Back</button>
           <div className="omr-title-block">
-            <div className={`omr-title ${orbitronClassName}`}>OMR SCANNER</div>
+            <div className={`omr-title ${orbitron.className}`}>OMR SCANNER</div>
             <div className="omr-subtitle">Instant bubble sheet evaluation</div>
           </div>
         </div>
@@ -620,12 +622,12 @@ export default function OMRPage() {
           {/* Steps */}
           <div className="steps">
             <div className={`step ${step >= 1 ? (step > 1 ? "done" : "active") : ""}`}>
-              <div className="step-dot">{step > 1 ? "âœ“" : "1"}</div>
+              <div className="step-dot">{step > 1 ? "✓" : "1"}</div>
               <div className="step-label">Upload</div>
             </div>
             <div className="step-line" />
             <div className={`step ${step >= 2 ? (step > 2 ? "done" : "active") : ""}`}>
-              <div className="step-dot">{step > 2 ? "âœ“" : "2"}</div>
+              <div className="step-dot">{step > 2 ? "✓" : "2"}</div>
               <div className="step-label">Answer Key</div>
             </div>
             <div className="step-line" />
@@ -635,7 +637,7 @@ export default function OMRPage() {
             </div>
           </div>
 
-          {/* â”€â”€ STEP 1: Upload â”€â”€ */}
+          {/* ── STEP 1: Upload ── */}
           {step === 1 && (
             <>
               <div
@@ -647,9 +649,9 @@ export default function OMRPage() {
               >
                 {!imageDataUrl ? (
                   <>
-                    <div className="upload-icon">ðŸ“·</div>
+                    <div className="upload-icon">📷</div>
                     <div className="upload-text">Photograph or upload OMR sheet</div>
-                    <div className="upload-hint">JPG â€¢ PNG â€¢ WEBP â€” tap to browse or drag &amp; drop</div>
+                    <div className="upload-hint">JPG • PNG • WEBP — tap to browse or drag &amp; drop</div>
                   </>
                 ) : (
                   <>
@@ -672,13 +674,13 @@ export default function OMRPage() {
 
               {imageDataUrl && (
                 <button className="scan-btn" onClick={() => setStep(2)}>
-                  Continue â†’ Set Answer Key
+                  Continue → Set Answer Key
                 </button>
               )}
             </>
           )}
 
-          {/* â”€â”€ STEP 2: Answer Key â”€â”€ */}
+          {/* ── STEP 2: Answer Key ── */}
           {step === 2 && (
             <>
               {/* Preview thumbnail */}
@@ -718,7 +720,7 @@ export default function OMRPage() {
                     <div className={`toggle-track ${negMarking ? "on" : ""}`}>
                       <div className="toggle-thumb" />
                     </div>
-                    <span className="toggle-label">{negMarking ? "Â¼ mark" : "Off"}</span>
+                    <span className="toggle-label">{negMarking ? "¼ mark" : "Off"}</span>
                   </div>
                 </div>
               </div>
@@ -743,7 +745,7 @@ export default function OMRPage() {
                       value={answerKey[q] || ""}
                       onChange={(e) => setAnswer(q, e.target.value)}
                     >
-                      <option value="">â€”</option>
+                      <option value="">—</option>
                       <option value="A">A</option>
                       <option value="B">B</option>
                       <option value="C">C</option>
@@ -758,19 +760,19 @@ export default function OMRPage() {
                 {answeredCount} / {numQ} answers entered
               </div>
 
-              {error && <div className="error-box">âš  {error}</div>}
+              {error && <div className="error-box">⚠ {error}</div>}
 
               <button
                 className={`scan-btn ${loading ? "loading" : ""}`}
                 onClick={scan}
                 disabled={!canScan || loading}
               >
-                {loading ? "ðŸ” Scanning OMR Sheetâ€¦" : "âš¡ Evaluate Now"}
+                {loading ? "🔍 Scanning OMR Sheet…" : "⚡ Evaluate Now"}
               </button>
             </>
           )}
 
-          {/* â”€â”€ STEP 3: Result â”€â”€ */}
+          {/* ── STEP 3: Result ── */}
           {step === 3 && result && (
             <>
               <div className="result-card">
@@ -816,7 +818,7 @@ export default function OMRPage() {
                         <div className="bk-q">Q{item.q}</div>
                         <div className="bk-ans">{item.detected}</div>
                         {item.status === "wrong" && (
-                          <div className="bk-correct-ans">âœ“{item.correct}</div>
+                          <div className="bk-correct-ans">✓{item.correct}</div>
                         )}
                       </div>
                     ))}
@@ -840,7 +842,7 @@ export default function OMRPage() {
               </div>
 
               <div className="scan-again">
-                <button onClick={reset}>â†© Scan Another Sheet</button>
+                <button onClick={reset}>↩ Scan Another Sheet</button>
               </div>
             </>
           )}
