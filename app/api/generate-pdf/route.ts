@@ -1,133 +1,253 @@
-import { NextRequest, NextResponse } from "next/server";
-import { PDFDocument, StandardFonts, PDFFont } from "pdf-lib";
+﻿import { NextRequest, NextResponse } from "next/server";
+import { PDFDocument, StandardFonts, type PDFPage, type PDFFont } from "pdf-lib";
 
-// ─── Constants ────────────────────────────────────────────────
-const PAGE_WIDTH     = 595;   // A4
-const PAGE_HEIGHT    = 842;
-const MARGIN         = 40;
-const FONT_SIZE      = 11;
-const LINE_HEIGHT    = 16;
-const MAX_LINE_WIDTH = PAGE_WIDTH - MARGIN * 2; // 515pt usable width
+const PAGE_WIDTH = 595; // A4
+const PAGE_HEIGHT = 842;
+const MARGIN_X = 48;
+const MARGIN_TOP = 54;
+const MARGIN_BOTTOM = 44;
+const BODY_WIDTH = PAGE_WIDTH - MARGIN_X * 2;
 
-// ─── Types ────────────────────────────────────────────────────
+const LEAK_MARKERS = [
+  "GENERATION_PROMPT_CONTEXT:",
+  "DRAFT_PAPER:",
+  "AUDIT_RESULT:",
+  "ISSUES:",
+  "KNOWLEDGE BASE CONTEXT",
+  "RANKED RETRIEVAL:",
+  "MANDATORY PIPELINE:",
+  "AUDIT CHECKS",
+];
+
+const COMMON_MOJIBAKE: Array<[RegExp, string]> = [
+  [/â€”/g, "—"],
+  [/â€“/g, "–"],
+  [/â€˜/g, "‘"],
+  [/â€™/g, "’"],
+  [/â€œ/g, "“"],
+  [/â€/g, "”"],
+  [/â€¦/g, "…"],
+  [/Â·/g, "·"],
+  [/Â/g, ""],
+  [/Ã—/g, "×"],
+  [/Î±/g, "α"],
+  [/Î²/g, "β"],
+  [/Î³/g, "γ"],
+  [/âˆš/g, "√"],
+  [/â‰ /g, "≠"],
+  [/â†’/g, "→"],
+  [/â†/g, "←"],
+  [/âœ…/g, "✓"],
+];
+
+type RenderLine = {
+  text: string;
+  size: number;
+  bold: boolean;
+  gapBefore: number;
+  gapAfter: number;
+};
+
 interface RequestBody {
   content?: string;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────
+function fixMojibake(input: string): string {
+  let out = input;
+  for (const [pattern, replacement] of COMMON_MOJIBAKE) out = out.replace(pattern, replacement);
+  return out;
+}
 
-/**
- * Strip non-Latin-1 characters (emoji, Devanagari, etc.) that
- * Helvetica cannot render, then word-wrap to fit MAX_LINE_WIDTH.
- */
-function wrapLine(text: string, font: PDFFont, size: number): string[] {
-  const safe  = text.replace(/[^\x00-\xFF]/g, " ");
-  const words = safe.split(" ");
+function sanitizePaper(raw: string): string {
+  let text = fixMojibake(raw || "");
+
+  for (const marker of LEAK_MARKERS) {
+    const idx = text.indexOf(marker);
+    if (idx !== -1) {
+      text = text.slice(0, idx);
+      break;
+    }
+  }
+
+  text = text
+    .replace(/<w:[^>]+>/g, "")
+    .replace(/<\\\/w:[^>]+>/g, "")
+    .replace(/^\s*--\s*\d+\s+of\s+\d+\s*--\s*$/gim, "")
+    .replace(/^\s*S\s*H\s*A\s*U\s*R\s*I[\sA-Z·\-]*$/gim, "")
+    .replace(/\t/g, " ")
+    .replace(/[ \u00A0]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return text;
+}
+
+function normalizeForPdf(text: string): string {
+  return text
+    .replace(/[^\x20-\x7E\nαβγ√×·→←–—’“”…]/g, " ")
+    .replace(/[ ]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
+  const words = text.split(" ");
   const lines: string[] = [];
-  let   current         = "";
+  let current = "";
 
   for (const word of words) {
     const candidate = current ? `${current} ${word}` : word;
-    let   width     = 0;
-
-    try {
-      width = font.widthOfTextAtSize(candidate, size);
-    } catch {
-      width = candidate.length * size * 0.5; // rough fallback
-    }
-
-    if (width > MAX_LINE_WIDTH && current) {
+    const width = font.widthOfTextAtSize(candidate, size);
+    if (width > maxWidth && current) {
       lines.push(current);
       current = word;
     } else {
       current = candidate;
     }
   }
-
   if (current) lines.push(current);
-  return lines.length > 0 ? lines : [""];
+  return lines.length ? lines : [""];
 }
 
-/** Returns true for lines that should be rendered in bold. */
-function isBoldLine(raw: string): boolean {
-  const t = raw.trim();
-  return (
-    /^(SECTION|Subject|Class|Board|Time|Maximum|━|─|Q\d+[–—])/.test(t) ||
-    t.startsWith("📋") ||
-    t.startsWith("📊")
-  );
+function classifyLine(rawLine: string): RenderLine {
+  const line = rawLine.trim();
+
+  if (!line) return { text: "", size: 11, bold: false, gapBefore: 0, gapAfter: 8 };
+
+  if (/^SHAURI\b|^DAILY\s+TEST\b|^CBSE\b/i.test(line)) {
+    return { text: line, size: 15, bold: true, gapBefore: 2, gapAfter: 6 };
+  }
+
+  if (/^SECTION\s+[A-E]\b/i.test(line)) {
+    return { text: line, size: 12, bold: true, gapBefore: 10, gapAfter: 5 };
+  }
+
+  if (/^(GENERAL INSTRUCTIONS|Marks Summary|Vocabulary Test|Writing Task)\b/i.test(line)) {
+    return { text: line, size: 11, bold: true, gapBefore: 8, gapAfter: 4 };
+  }
+
+  if (/^Q\d+[\.).]/i.test(line) || /^\(\d+\)/.test(line)) {
+    return { text: line, size: 11, bold: true, gapBefore: 6, gapAfter: 2 };
+  }
+
+  if (/^\(?[A-D]\)/.test(line) || /^[A-D]\)/.test(line)) {
+    return { text: `   ${line}`, size: 10.8, bold: false, gapBefore: 1, gapAfter: 1 };
+  }
+
+  if (/^Day\s*\d+|^Time Allowed:|^Maximum Marks:|^Subject:|^Class:/i.test(line)) {
+    return { text: line, size: 10.5, bold: false, gapBefore: 1, gapAfter: 2 };
+  }
+
+  return { text: line, size: 11, bold: false, gapBefore: 1, gapAfter: 2 };
 }
 
-// ─── Route Handler ────────────────────────────────────────────
+function drawHeader(page: PDFPage, boldFont: PDFFont, regularFont: PDFFont): number {
+  let y = PAGE_HEIGHT - MARGIN_TOP;
+
+  page.drawText("SHAURI — CBSE ALIGNED QUESTION PAPER", {
+    x: MARGIN_X,
+    y,
+    size: 13,
+    font: boldFont,
+  });
+  y -= 15;
+  page.drawText("Board-style daily/revision assessment", {
+    x: MARGIN_X,
+    y,
+    size: 9.8,
+    font: regularFont,
+  });
+  y -= 10;
+
+  page.drawLine({
+    start: { x: MARGIN_X, y },
+    end: { x: PAGE_WIDTH - MARGIN_X, y },
+    thickness: 0.8,
+  });
+
+  return y - 16;
+}
+
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
-    const body        = (await req.json()) as RequestBody;
-    const content     = body?.content ?? "No content";
+    const body = (await req.json()) as RequestBody;
+    const input = body?.content ?? "";
 
-    const pdfDoc      = await PDFDocument.create();
-    const font        = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const boldFont    = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
-    // ── Page state ──────────────────────────────────────────
-    let page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-    let y    = PAGE_HEIGHT - MARGIN;
-
-    const newPage = (): void => {
-      page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-      y    = PAGE_HEIGHT - MARGIN;
-    };
-
-    const ensureSpace = (): void => {
-      if (y < MARGIN + LINE_HEIGHT) newPage();
-    };
-
-    // ── Render lines ────────────────────────────────────────
-    for (const rawLine of content.split("\n")) {
-      const bold         = isBoldLine(rawLine);
-      const wrappedLines = wrapLine(rawLine, font, FONT_SIZE);
-
-      for (const line of wrappedLines) {
-        ensureSpace();
-        try {
-          page.drawText(line, {
-            x:    MARGIN,
-            y,
-            size: FONT_SIZE,
-            font: bold ? boldFont : font,
-          });
-        } catch {
-          // Skip lines that still contain un-renderable characters
-        }
-        y -= LINE_HEIGHT;
-      }
+    const cleaned = normalizeForPdf(sanitizePaper(input));
+    if (!cleaned) {
+      return NextResponse.json({ error: "No paper content available for PDF rendering." }, { status: 400 });
     }
 
-    // ── Page numbers ────────────────────────────────────────
+    const pdfDoc = await PDFDocument.create();
+    const regular = await pdfDoc.embedFont(StandardFonts.TimesRoman);
+    const bold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
+
+    let page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+    let y = drawHeader(page, bold, regular);
+
+    const newPage = () => {
+      page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+      y = drawHeader(page, bold, regular);
+    };
+
+    const ensure = (needed: number) => {
+      if (y - needed < MARGIN_BOTTOM) newPage();
+    };
+
+    const lines = cleaned.split("\n");
+    for (const rawLine of lines) {
+      const style = classifyLine(rawLine);
+
+      if (!style.text) {
+        y -= style.gapAfter;
+        continue;
+      }
+
+      y -= style.gapBefore;
+      const font = style.bold ? bold : regular;
+      const wrapped = wrapText(style.text, font, style.size, BODY_WIDTH);
+
+      for (const w of wrapped) {
+        ensure(style.size + 5);
+        page.drawText(w, {
+          x: MARGIN_X,
+          y,
+          size: style.size,
+          font,
+        });
+        y -= style.size + 3.2;
+      }
+
+      y -= style.gapAfter;
+    }
+
     const pageCount = pdfDoc.getPageCount();
     for (let i = 0; i < pageCount; i++) {
-      pdfDoc.getPage(i).drawText(`Page ${i + 1} of ${pageCount}`, {
-        x:    PAGE_WIDTH / 2 - 30,
-        y:    20,
+      const p = pdfDoc.getPage(i);
+      const footer = `Page ${i + 1} of ${pageCount}`;
+      p.drawLine({
+        start: { x: MARGIN_X, y: 30 },
+        end: { x: PAGE_WIDTH - MARGIN_X, y: 30 },
+        thickness: 0.5,
+      });
+      p.drawText(footer, {
+        x: PAGE_WIDTH / 2 - 24,
+        y: 18,
         size: 9,
-        font,
+        font: regular,
       });
     }
 
-    // ── Respond ─────────────────────────────────────────────
     const pdfBytes = await pdfDoc.save();
 
     return new NextResponse(Buffer.from(pdfBytes), {
       headers: {
-        "Content-Type":        "application/pdf",
+        "Content-Type": "application/pdf",
         "Content-Disposition": 'attachment; filename="shauri-exam-paper.pdf"',
       },
     });
-
-  } catch (error: unknown) {
+  } catch (error) {
     console.error("PDF API Error:", error);
-    return NextResponse.json(
-      { error: "Failed to generate PDF" },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Failed to generate PDF" }, { status: 500 });
   }
 }
