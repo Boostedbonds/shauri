@@ -1,9 +1,7 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Orbitron } from "next/font/google";
-
-const orbitron = Orbitron({ subsets: ["latin"], weight: ["400", "600", "700"] });
+const orbitronClassName = "font-orbitron-fallback";
 
 type Tab = "explain" | "summary" | "quiz";
 type LessonData = {
@@ -24,9 +22,9 @@ function mdToJsx(text: string) {
   });
 }
 
-// ─────────────────────────────────────────────────────────────
-// BEST INDIAN CBSE TEACHER CHANNELS — curated & tiered
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// BEST INDIAN CBSE TEACHER CHANNELS â€” curated & tiered
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // TIER 1: India's most trusted CBSE/JEE/NEET educators
 // These are the channels students and parents swear by.
@@ -57,7 +55,7 @@ const TIER2_INDIAN = [
   "learnohub",
   "meritnation",
   "toppr",
-  "exam fear",                 // Ekeeda / ExamFear Education — loved for science
+  "exam fear",                 // Ekeeda / ExamFear Education â€” loved for science
   "examfear",
   "aakash",
   "allen career",
@@ -229,8 +227,8 @@ KEY_TAKEAWAYS and RELATED must be valid JSON arrays. QUIZ must be valid JSON obj
     if (!ytKey) return;
 
     // Run TWO searches in parallel:
-    // Search 1 — Indian CBSE specific (highest chance of Vedantu/PW/Magnet Brains)
-    // Search 2 — Broader topic search (catches any great video we might miss)
+    // Search 1 â€” Indian CBSE specific (highest chance of Vedantu/PW/Magnet Brains)
+    // Search 2 â€” Broader topic search (catches any great video we might miss)
     const queries = [
       `${t} CBSE class ${student?.class} explained`,
       `${t} class ${student?.class} in english India`,
@@ -270,9 +268,9 @@ KEY_TAKEAWAYS and RELATED must be valid JSON arrays. QUIZ must be valid JSON obj
       // Pick the best
       const best = scored[0].item;
 
-      console.log("🎯 Top video picks:");
+      console.log("ðŸŽ¯ Top video picks:");
       scored.slice(0, 5).forEach((s, i) =>
-        console.log(`  ${i + 1}. [${s.score}] ${s.item.snippet.channelTitle} — ${s.item.snippet.title}`)
+        console.log(`  ${i + 1}. [${s.score}] ${s.item.snippet.channelTitle} â€” ${s.item.snippet.title}`)
       );
 
       setVideoId(best.id.videoId);
@@ -307,7 +305,7 @@ KEY_TAKEAWAYS and RELATED must be valid JSON arrays. QUIZ must be valid JSON obj
       setChatHistory([...newHistory, { role: "assistant", content: answer }]);
       setFollowups(prev => [...prev, { q, a: answer }]);
     } catch {
-      setFollowups(prev => [...prev, { q, a: "⚠️ Network error. Please try again." }]);
+      setFollowups(prev => [...prev, { q, a: "âš ï¸ Network error. Please try again." }]);
     } finally {
       setQaLoading(false);
       setTimeout(() => aiRef.current?.scrollTo({ top: aiRef.current.scrollHeight, behavior: "smooth" }), 100);
@@ -324,7 +322,7 @@ KEY_TAKEAWAYS and RELATED must be valid JSON arrays. QUIZ must be valid JSON obj
   ];
 
   return (
-    <div className={orbitron.className} style={{ minHeight: "100vh", background: BG, display: "flex", flexDirection: "column" }}>
+    <div className={orbitronClassName} style={{ minHeight: "100vh", background: BG, display: "flex", flexDirection: "column" }}>
       <style>{`
         * { box-sizing: border-box; }
         .av-tab { padding: 8px 14px; font-size: 11px; letter-spacing: 0.1em; font-weight: 600; cursor: pointer; border: none; background: none; font-family: inherit; color: #8a9bb0; border-bottom: 2px solid transparent; transition: all 0.12s; }
@@ -345,14 +343,14 @@ KEY_TAKEAWAYS and RELATED must be valid JSON arrays. QUIZ must be valid JSON obj
       <div style={{ height: 54, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", background: "linear-gradient(90deg, #0a2540, #1a3a5c)", boxShadow: "0 2px 10px rgba(0,0,0,0.2)", flexShrink: 0 }}>
         <button onClick={() => window.location.href = "/modes"}
           style={{ padding: "6px 14px", background: "rgba(255,255,255,0.1)", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em", fontFamily: "inherit" }}>
-          ← BACK
+          â† BACK
         </button>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 16 }}>🎬</span>
+          <span style={{ fontSize: 16 }}>ðŸŽ¬</span>
           <span style={{ color: GOLD, fontWeight: 700, fontSize: 13, letterSpacing: "0.18em" }}>AUDIO-VISUAL MODE</span>
         </div>
         <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", letterSpacing: "0.1em" }}>
-          {student.name.toUpperCase()} · CLASS {student.class}
+          {student.name.toUpperCase()} Â· CLASS {student.class}
         </div>
       </div>
 
@@ -371,7 +369,7 @@ KEY_TAKEAWAYS and RELATED must be valid JSON arrays. QUIZ must be valid JSON obj
             />
             <button onClick={() => startLesson()} disabled={loading || !topic.trim()}
               style={{ padding: "11px 24px", background: loading ? "#9FE1CB" : "#1D9E75", color: "white", border: "none", borderRadius: 10, fontFamily: "inherit", fontWeight: 600, fontSize: 12, cursor: loading ? "not-allowed" : "pointer", letterSpacing: "0.12em", whiteSpace: "nowrap" }}>
-              {loading ? "LOADING..." : "▶ START LESSON"}
+              {loading ? "LOADING..." : "â–¶ START LESSON"}
             </button>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -384,7 +382,7 @@ KEY_TAKEAWAYS and RELATED must be valid JSON arrays. QUIZ must be valid JSON obj
         {/* NO YT KEY WARNING */}
         {!ytKey && (
           <div style={{ background: "#FAEEDA", border: "1px solid #FAC775", borderRadius: 10, padding: "10px 16px", fontSize: 11, color: "#633806", marginBottom: 16, letterSpacing: "0.06em" }}>
-            ⚠️ Add <strong>NEXT_PUBLIC_YOUTUBE_API_KEY</strong> to your .env.local to enable video search.
+            âš ï¸ Add <strong>NEXT_PUBLIC_YOUTUBE_API_KEY</strong> to your .env.local to enable video search.
           </div>
         )}
 
@@ -408,7 +406,7 @@ KEY_TAKEAWAYS and RELATED must be valid JSON arrays. QUIZ must be valid JSON obj
 
               {loading && !videoId ? (
                 <div style={{ aspectRatio: "16/9", background: "#0a0a0a", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8 }}>
-                  <div style={{ fontSize: 28 }}>🔍</div>
+                  <div style={{ fontSize: 28 }}>ðŸ”</div>
                   <div style={{ fontSize: 12, color: "#555" }}>Finding best Indian teacher video...</div>
                 </div>
               ) : videoId ? (
@@ -426,7 +424,7 @@ KEY_TAKEAWAYS and RELATED must be valid JSON arrays. QUIZ must be valid JSON obj
                 </>
               ) : (
                 <div style={{ aspectRatio: "16/9", background: "#0a0a0a", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8 }}>
-                  <div style={{ fontSize: 28 }}>📺</div>
+                  <div style={{ fontSize: 28 }}>ðŸ“º</div>
                   <div style={{ fontSize: 12, color: "#555" }}>Add YouTube API key to enable videos</div>
                 </div>
               )}
@@ -439,7 +437,7 @@ KEY_TAKEAWAYS and RELATED must be valid JSON arrays. QUIZ must be valid JSON obj
                   <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#1D9E75", display: "inline-block" }} />
                   AI TEACHER
                 </div>
-                <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, background: "#FAECE7", color: "#7A2E0C", border: "1px solid #F0997B" }}>⚡ GROQ · LLAMA3</span>
+                <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, background: "#FAECE7", color: "#7A2E0C", border: "1px solid #F0997B" }}>âš¡ GROQ Â· LLAMA3</span>
               </div>
 
               {/* TABS */}
@@ -455,11 +453,11 @@ KEY_TAKEAWAYS and RELATED must be valid JSON arrays. QUIZ must be valid JSON obj
               <div ref={aiRef} style={{ padding: 16, minHeight: 260, maxHeight: 400, overflowY: "auto", fontSize: 13, lineHeight: 1.8, color: "#0a2540" }}>
                 {loading && !lesson ? (
                   <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#8a9bb0", fontSize: 12, padding: "8px 0" }}>
-                    <span>⚡ Groq is preparing your lesson...</span>
+                    <span>âš¡ Groq is preparing your lesson...</span>
                   </div>
                 ) : !lesson ? (
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 200, color: "#aaa", textAlign: "center", gap: 8 }}>
-                    <div style={{ fontSize: 28 }}>🏫</div>
+                    <div style={{ fontSize: 28 }}>ðŸ«</div>
                     <div style={{ fontSize: 12, letterSpacing: "0.08em" }}>YOUR AI TEACHER IS READY</div>
                   </div>
                 ) : tab === "explain" ? (
@@ -473,14 +471,14 @@ KEY_TAKEAWAYS and RELATED must be valid JSON arrays. QUIZ must be valid JSON obj
                       </div>
                     ))}
                     {qaLoading && (
-                      <div style={{ marginTop: 12, fontSize: 12, color: "#8a9bb0", letterSpacing: "0.06em" }}>⚡ THINKING...</div>
+                      <div style={{ marginTop: 12, fontSize: 12, color: "#8a9bb0", letterSpacing: "0.06em" }}>âš¡ THINKING...</div>
                     )}
                   </div>
                 ) : tab === "summary" ? (
                   <div>
                     {lesson.summary.map((s, i) => (
                       <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 10 }}>
-                        <span style={{ color: GOLD, fontSize: 14, marginTop: 1 }}>✦</span>
+                        <span style={{ color: GOLD, fontSize: 14, marginTop: 1 }}>âœ¦</span>
                         <span style={{ fontSize: 12, letterSpacing: "0.04em" }}>{s}</span>
                       </div>
                     ))}
@@ -498,7 +496,7 @@ KEY_TAKEAWAYS and RELATED must be valid JSON arrays. QUIZ must be valid JSON obj
                     ))}
                     {quizAnswered !== null && (
                       <div style={{ marginTop: 10, fontSize: 12, letterSpacing: "0.06em", color: quizAnswered === lesson.quiz.correct ? "#085041" : "#4A1B0C", fontWeight: 600 }}>
-                        {quizAnswered === lesson.quiz.correct ? "✅ CORRECT! WELL DONE." : `❌ NOT QUITE. THE ANSWER IS: ${lesson.quiz.opts[lesson.quiz.correct]}`}
+                        {quizAnswered === lesson.quiz.correct ? "âœ… CORRECT! WELL DONE." : `âŒ NOT QUITE. THE ANSWER IS: ${lesson.quiz.opts[lesson.quiz.correct]}`}
                       </div>
                     )}
                   </div>
@@ -516,7 +514,7 @@ KEY_TAKEAWAYS and RELATED must be valid JSON arrays. QUIZ must be valid JSON obj
                 />
                 <button onClick={askQuestion} disabled={qaLoading || !qaInput.trim()}
                   style={{ padding: "8px 14px", background: qaLoading || !qaInput.trim() ? "#e2e8f0" : "#1D9E75", color: qaLoading || !qaInput.trim() ? "#94a3b8" : "white", border: "none", borderRadius: 8, fontFamily: "inherit", fontSize: 12, cursor: "pointer", letterSpacing: "0.08em", fontWeight: 600 }}>
-                  ASK ↗
+                  ASK â†—
                 </button>
               </div>
             </div>
@@ -526,11 +524,11 @@ KEY_TAKEAWAYS and RELATED must be valid JSON arrays. QUIZ must be valid JSON obj
 
               {/* KEY TAKEAWAYS */}
               <div style={{ background: "rgba(255,255,255,0.6)", backdropFilter: "blur(10px)", borderRadius: 14, border: "1px solid rgba(212,175,55,0.3)", padding: 14 }}>
-                <div style={{ fontSize: 11, letterSpacing: "0.14em", color: "#8a9bb0", fontWeight: 600, marginBottom: 10 }}>✦ KEY TAKEAWAYS</div>
+                <div style={{ fontSize: 11, letterSpacing: "0.14em", color: "#8a9bb0", fontWeight: 600, marginBottom: 10 }}>âœ¦ KEY TAKEAWAYS</div>
                 {!lesson ? <div style={{ fontSize: 11, color: "#aaa", textAlign: "center", padding: "12px 0" }}>Loads with lesson</div> :
                   lesson.summary.map((s, i) => (
                     <div key={i} style={{ display: "flex", gap: 7, fontSize: 11, color: "#0a2540", marginBottom: 7, lineHeight: 1.5, letterSpacing: "0.02em" }}>
-                      <span style={{ color: GOLD, flexShrink: 0 }}>✦</span><span>{s}</span>
+                      <span style={{ color: GOLD, flexShrink: 0 }}>âœ¦</span><span>{s}</span>
                     </div>
                   ))
                 }
@@ -556,11 +554,11 @@ KEY_TAKEAWAYS and RELATED must be valid JSON arrays. QUIZ must be valid JSON obj
 
               {/* RELATED TOPICS */}
               <div style={{ background: "rgba(255,255,255,0.6)", backdropFilter: "blur(10px)", borderRadius: 14, border: "1px solid rgba(212,175,55,0.3)", padding: 14 }}>
-                <div style={{ fontSize: 11, letterSpacing: "0.14em", color: "#8a9bb0", fontWeight: 600, marginBottom: 10 }}>→ RELATED TOPICS</div>
+                <div style={{ fontSize: 11, letterSpacing: "0.14em", color: "#8a9bb0", fontWeight: 600, marginBottom: 10 }}>â†’ RELATED TOPICS</div>
                 {!lesson?.related?.length ? <div style={{ fontSize: 11, color: "#aaa", textAlign: "center", padding: "12px 0" }}>Loads with lesson</div> :
                   lesson.related.map((t, i) => (
                     <button key={i} className="av-related" onClick={() => startLesson(t)}>
-                      <span style={{ color: GOLD }}>→</span>{t}
+                      <span style={{ color: GOLD }}>â†’</span>{t}
                     </button>
                   ))
                 }

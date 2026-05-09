@@ -1,15 +1,13 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import Header from "./Header";
-import { Orbitron } from "next/font/google";
-
-const orbitron = Orbitron({ subsets: ["latin"], weight: ["400", "600", "700"] });
+const orbitronClassName = "font-orbitron-fallback";
 
 type StudentContext = { name: string; class: string; board: string };
 type Tab = "about" | "lastYears" | "checkResult" | "career" | "timetable" | "importantDates";
 
-// ─── HELPERS ──────────────────────────────────────────────────
+// â”€â”€â”€ HELPERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function getClassNum(cls: string): number {
   const n = parseInt(cls.replace(/\D/g, ""));
   return isNaN(n) ? 0 : n;
@@ -19,12 +17,12 @@ function isClass12(cls: string): boolean {
   return n === 11 || n === 12;
 }
 
-// ─── PAPER DATA ────────────────────────────────────────────────
+// â”€â”€â”€ PAPER DATA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const BASE = "https://cbseacademic.nic.in";
 
 type SubjectLinks = { sqp?: string; ms?: string; board?: string };
 
-// ── CLASS 10 ──────────────────────────────────────────────────
+// â”€â”€ CLASS 10 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 type YearData10 = {
   year: string; label: string; badge?: string; badgeColor?: string;
   type: "sqp" | "board"; listingUrl: string;
@@ -33,7 +31,7 @@ type YearData10 = {
 
 const YEAR_DATA_10: YearData10[] = [
   {
-    year: "2025-26", label: "SQP 2025–26", badge: "LATEST SQP", badgeColor: "#22c55e",
+    year: "2025-26", label: "SQP 2025â€“26", badge: "LATEST SQP", badgeColor: "#22c55e",
     type: "sqp", listingUrl: `${BASE}/sqp_classx_2025-26.html`,
     subjects: {
       "Science":         { sqp: `${BASE}/web_material/SQP/ClassX_2025_26/Science-SQP.pdf`,       ms: `${BASE}/web_material/SQP/ClassX_2025_26/Science-MS.pdf` },
@@ -47,7 +45,7 @@ const YEAR_DATA_10: YearData10[] = [
     },
   },
   {
-    year: "2024-25", label: "SQP 2024–25", badge: "SQP", badgeColor: "#6b7280",
+    year: "2024-25", label: "SQP 2024â€“25", badge: "SQP", badgeColor: "#6b7280",
     type: "sqp", listingUrl: `${BASE}/sqp_classx_2024-25.html`,
     subjects: {
       "Science":         { sqp: `${BASE}/web_material/SQP/ClassX_2024_25/Science-SQP.pdf`,           ms: `${BASE}/web_material/SQP/ClassX_2024_25/Science-MS.pdf` },
@@ -61,7 +59,7 @@ const YEAR_DATA_10: YearData10[] = [
     },
   },
   {
-    year: "2023-24", label: "SQP 2023–24", badge: "SQP", badgeColor: "#6b7280",
+    year: "2023-24", label: "SQP 2023â€“24", badge: "SQP", badgeColor: "#6b7280",
     type: "sqp", listingUrl: `${BASE}/SQP_CLASSX_2023-24.html`,
     subjects: {
       "Science":         { sqp: `${BASE}/web_material/SQP/ClassX_2023_24/Science-SQP.pdf`,           ms: `${BASE}/web_material/SQP/ClassX_2023_24/Science-MS.pdf` },
@@ -122,7 +120,7 @@ const YEAR_DATA_10: YearData10[] = [
   },
 ];
 
-// ── CLASS 12 ──────────────────────────────────────────────────
+// â”€â”€ CLASS 12 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 type YearData12 = {
   year: string; label: string; badge?: string; badgeColor?: string;
   type: "sqp" | "board"; listingUrl: string;
@@ -131,30 +129,30 @@ type YearData12 = {
 
 const YEAR_DATA_12: YearData12[] = [
   {
-    year: "2025-26", label: "SQP 2025–26", badge: "LATEST SQP", badgeColor: "#22c55e",
+    year: "2025-26", label: "SQP 2025â€“26", badge: "LATEST SQP", badgeColor: "#22c55e",
     type: "sqp", listingUrl: `${BASE}/sqp_classxii_2025-26.html`,
     streams: [
-      { name: "Science", icon: "🔭", color: "#2563EB", subjects: {
+      { name: "Science", icon: "ðŸ”­", color: "#2563EB", subjects: {
         "Physics":     { sqp: `${BASE}/web_material/SQP/ClassXII_2025_26/Physics-SQP.pdf`,     ms: `${BASE}/web_material/SQP/ClassXII_2025_26/Physics-MS.pdf` },
         "Chemistry":   { sqp: `${BASE}/web_material/SQP/ClassXII_2025_26/Chemistry-SQP.pdf`,   ms: `${BASE}/web_material/SQP/ClassXII_2025_26/Chemistry-MS.pdf` },
         "Biology":     { sqp: `${BASE}/web_material/SQP/ClassXII_2025_26/Biology-SQP.pdf`,     ms: `${BASE}/web_material/SQP/ClassXII_2025_26/Biology-MS.pdf` },
         "Maths":       { sqp: `${BASE}/web_material/SQP/ClassXII_2025_26/Mathematics-SQP.pdf`, ms: `${BASE}/web_material/SQP/ClassXII_2025_26/Mathematics-MS.pdf` },
         "Computer Sc": { sqp: `${BASE}/web_material/SQP/ClassXII_2025_26/ComputerScience-SQP.pdf`, ms: `${BASE}/web_material/SQP/ClassXII_2025_26/ComputerScience-MS.pdf` },
       }},
-      { name: "Commerce", icon: "📊", color: "#D97706", subjects: {
+      { name: "Commerce", icon: "ðŸ“Š", color: "#D97706", subjects: {
         "Accountancy":      { sqp: `${BASE}/web_material/SQP/ClassXII_2025_26/Accountancy-SQP.pdf`,     ms: `${BASE}/web_material/SQP/ClassXII_2025_26/Accountancy-MS.pdf` },
         "Business Studies": { sqp: `${BASE}/web_material/SQP/ClassXII_2025_26/BusinessStudies-SQP.pdf`, ms: `${BASE}/web_material/SQP/ClassXII_2025_26/BusinessStudies-MS.pdf` },
         "Economics":        { sqp: `${BASE}/web_material/SQP/ClassXII_2025_26/Economics-SQP.pdf`,       ms: `${BASE}/web_material/SQP/ClassXII_2025_26/Economics-MS.pdf` },
         "Maths":            { sqp: `${BASE}/web_material/SQP/ClassXII_2025_26/Mathematics-SQP.pdf`,     ms: `${BASE}/web_material/SQP/ClassXII_2025_26/Mathematics-MS.pdf` },
       }},
-      { name: "Arts / Humanities", icon: "🏛️", color: "#7C3AED", subjects: {
+      { name: "Arts / Humanities", icon: "ðŸ›ï¸", color: "#7C3AED", subjects: {
         "History":           { sqp: `${BASE}/web_material/SQP/ClassXII_2025_26/History-SQP.pdf`,          ms: `${BASE}/web_material/SQP/ClassXII_2025_26/History-MS.pdf` },
         "Political Science": { sqp: `${BASE}/web_material/SQP/ClassXII_2025_26/PoliticalScience-SQP.pdf`, ms: `${BASE}/web_material/SQP/ClassXII_2025_26/PoliticalScience-MS.pdf` },
         "Geography":         { sqp: `${BASE}/web_material/SQP/ClassXII_2025_26/Geography-SQP.pdf`,        ms: `${BASE}/web_material/SQP/ClassXII_2025_26/Geography-MS.pdf` },
         "Sociology":         { sqp: `${BASE}/web_material/SQP/ClassXII_2025_26/Sociology-SQP.pdf`,        ms: `${BASE}/web_material/SQP/ClassXII_2025_26/Sociology-MS.pdf` },
         "Psychology":        { sqp: `${BASE}/web_material/SQP/ClassXII_2025_26/Psychology-SQP.pdf`,       ms: `${BASE}/web_material/SQP/ClassXII_2025_26/Psychology-MS.pdf` },
       }},
-      { name: "Common / Languages", icon: "📝", color: "#0891b2", subjects: {
+      { name: "Common / Languages", icon: "ðŸ“", color: "#0891b2", subjects: {
         "English (Core)":   { sqp: `${BASE}/web_material/SQP/ClassXII_2025_26/EnglishCore-SQP.pdf`,      ms: `${BASE}/web_material/SQP/ClassXII_2025_26/EnglishCore-MS.pdf` },
         "Hindi (Core)":     { sqp: `${BASE}/web_material/SQP/ClassXII_2025_26/HindiCore-SQP.pdf`,        ms: `${BASE}/web_material/SQP/ClassXII_2025_26/HindiCore-MS.pdf` },
         "Hindi (Elective)": { sqp: `${BASE}/web_material/SQP/ClassXII_2025_26/HindiElective-SQP.pdf`,    ms: `${BASE}/web_material/SQP/ClassXII_2025_26/HindiElective-MS.pdf` },
@@ -163,30 +161,30 @@ const YEAR_DATA_12: YearData12[] = [
     ],
   },
   {
-    year: "2024-25", label: "SQP 2024–25", badge: "SQP", badgeColor: "#6b7280",
+    year: "2024-25", label: "SQP 2024â€“25", badge: "SQP", badgeColor: "#6b7280",
     type: "sqp", listingUrl: `${BASE}/SQP_CLASSXii_2024-25.html`,
     streams: [
-      { name: "Science", icon: "🔭", color: "#2563EB", subjects: {
+      { name: "Science", icon: "ðŸ”­", color: "#2563EB", subjects: {
         "Physics":     { sqp: `${BASE}/web_material/SQP/ClassXII_2024_25/Physics-SQP.pdf`,     ms: `${BASE}/web_material/SQP/ClassXII_2024_25/Physics-MS.pdf` },
         "Chemistry":   { sqp: `${BASE}/web_material/SQP/ClassXII_2024_25/Chemistry-SQP.pdf`,   ms: `${BASE}/web_material/SQP/ClassXII_2024_25/Chemistry-MS.pdf` },
         "Biology":     { sqp: `${BASE}/web_material/SQP/ClassXII_2024_25/Biology-SQP.pdf`,     ms: `${BASE}/web_material/SQP/ClassXII_2024_25/Biology-MS.pdf` },
         "Maths":       { sqp: `${BASE}/web_material/SQP/ClassXII_2024_25/Mathematics-SQP.pdf`, ms: `${BASE}/web_material/SQP/ClassXII_2024_25/Mathematics-MS.pdf` },
         "Computer Sc": { sqp: `${BASE}/web_material/SQP/ClassXII_2024_25/ComputerScience-SQP.pdf`, ms: `${BASE}/web_material/SQP/ClassXII_2024_25/ComputerScience-MS.pdf` },
       }},
-      { name: "Commerce", icon: "📊", color: "#D97706", subjects: {
+      { name: "Commerce", icon: "ðŸ“Š", color: "#D97706", subjects: {
         "Accountancy":      { sqp: `${BASE}/web_material/SQP/ClassXII_2024_25/Accountancy-SQP.pdf`,     ms: `${BASE}/web_material/SQP/ClassXII_2024_25/Accountancy-MS.pdf` },
         "Business Studies": { sqp: `${BASE}/web_material/SQP/ClassXII_2024_25/BusinessStudies-SQP.pdf`, ms: `${BASE}/web_material/SQP/ClassXII_2024_25/BusinessStudies-MS.pdf` },
         "Economics":        { sqp: `${BASE}/web_material/SQP/ClassXII_2024_25/Economics-SQP.pdf`,       ms: `${BASE}/web_material/SQP/ClassXII_2024_25/Economics-MS.pdf` },
         "Maths":            { sqp: `${BASE}/web_material/SQP/ClassXII_2024_25/Mathematics-SQP.pdf`,     ms: `${BASE}/web_material/SQP/ClassXII_2024_25/Mathematics-MS.pdf` },
       }},
-      { name: "Arts / Humanities", icon: "🏛️", color: "#7C3AED", subjects: {
+      { name: "Arts / Humanities", icon: "ðŸ›ï¸", color: "#7C3AED", subjects: {
         "History":           { sqp: `${BASE}/web_material/SQP/ClassXII_2024_25/History-SQP.pdf`,          ms: `${BASE}/web_material/SQP/ClassXII_2024_25/History-MS.pdf` },
         "Political Science": { sqp: `${BASE}/web_material/SQP/ClassXII_2024_25/PoliticalScience-SQP.pdf`, ms: `${BASE}/web_material/SQP/ClassXII_2024_25/PoliticalScience-MS.pdf` },
         "Geography":         { sqp: `${BASE}/web_material/SQP/ClassXII_2024_25/Geography-SQP.pdf`,        ms: `${BASE}/web_material/SQP/ClassXII_2024_25/Geography-MS.pdf` },
         "Sociology":         { sqp: `${BASE}/web_material/SQP/ClassXII_2024_25/Sociology-SQP.pdf`,        ms: `${BASE}/web_material/SQP/ClassXII_2024_25/Sociology-MS.pdf` },
         "Psychology":        { sqp: `${BASE}/web_material/SQP/ClassXII_2024_25/Psychology-SQP.pdf`,       ms: `${BASE}/web_material/SQP/ClassXII_2024_25/Psychology-MS.pdf` },
       }},
-      { name: "Common / Languages", icon: "📝", color: "#0891b2", subjects: {
+      { name: "Common / Languages", icon: "ðŸ“", color: "#0891b2", subjects: {
         "English (Core)": { sqp: `${BASE}/web_material/SQP/ClassXII_2024_25/EnglishCore-SQP.pdf`,       ms: `${BASE}/web_material/SQP/ClassXII_2024_25/EnglishCore-MS.pdf` },
         "Hindi (Core)":   { sqp: `${BASE}/web_material/SQP/ClassXII_2024_25/HindiCore-SQP.pdf`,         ms: `${BASE}/web_material/SQP/ClassXII_2024_25/HindiCore-MS.pdf` },
         "Physical Ed.":   { sqp: `${BASE}/web_material/SQP/ClassXII_2024_25/PhysicalEducation-SQP.pdf`, ms: `${BASE}/web_material/SQP/ClassXII_2024_25/PhysicalEducation-MS.pdf` },
@@ -195,26 +193,26 @@ const YEAR_DATA_12: YearData12[] = [
     ],
   },
   {
-    year: "2023-24", label: "SQP 2023–24", badge: "SQP", badgeColor: "#6b7280",
+    year: "2023-24", label: "SQP 2023â€“24", badge: "SQP", badgeColor: "#6b7280",
     type: "sqp", listingUrl: `${BASE}/SQP_CLASSXII_2023-24.html`,
     streams: [
-      { name: "Science", icon: "🔭", color: "#2563EB", subjects: {
+      { name: "Science", icon: "ðŸ”­", color: "#2563EB", subjects: {
         "Physics":   { sqp: `${BASE}/web_material/SQP/ClassXII_2023_24/Physics-SQP.pdf`,     ms: `${BASE}/web_material/SQP/ClassXII_2023_24/Physics-MS.pdf` },
         "Chemistry": { sqp: `${BASE}/web_material/SQP/ClassXII_2023_24/Chemistry-SQP.pdf`,   ms: `${BASE}/web_material/SQP/ClassXII_2023_24/Chemistry-MS.pdf` },
         "Biology":   { sqp: `${BASE}/web_material/SQP/ClassXII_2023_24/Biology-SQP.pdf`,     ms: `${BASE}/web_material/SQP/ClassXII_2023_24/Biology-MS.pdf` },
         "Maths":     { sqp: `${BASE}/web_material/SQP/ClassXII_2023_24/Mathematics-SQP.pdf`, ms: `${BASE}/web_material/SQP/ClassXII_2023_24/Mathematics-MS.pdf` },
       }},
-      { name: "Commerce", icon: "📊", color: "#D97706", subjects: {
+      { name: "Commerce", icon: "ðŸ“Š", color: "#D97706", subjects: {
         "Accountancy":      { sqp: `${BASE}/web_material/SQP/ClassXII_2023_24/Accountancy-SQP.pdf`,     ms: `${BASE}/web_material/SQP/ClassXII_2023_24/Accountancy-MS.pdf` },
         "Business Studies": { sqp: `${BASE}/web_material/SQP/ClassXII_2023_24/BusinessStudies-SQP.pdf`, ms: `${BASE}/web_material/SQP/ClassXII_2023_24/BusinessStudies-MS.pdf` },
         "Economics":        { sqp: `${BASE}/web_material/SQP/ClassXII_2023_24/Economics-SQP.pdf`,       ms: `${BASE}/web_material/SQP/ClassXII_2023_24/Economics-MS.pdf` },
       }},
-      { name: "Arts / Humanities", icon: "🏛️", color: "#7C3AED", subjects: {
+      { name: "Arts / Humanities", icon: "ðŸ›ï¸", color: "#7C3AED", subjects: {
         "History":           { sqp: `${BASE}/web_material/SQP/ClassXII_2023_24/History-SQP.pdf`,          ms: `${BASE}/web_material/SQP/ClassXII_2023_24/History-MS.pdf` },
         "Political Science": { sqp: `${BASE}/web_material/SQP/ClassXII_2023_24/PoliticalScience-SQP.pdf`, ms: `${BASE}/web_material/SQP/ClassXII_2023_24/PoliticalScience-MS.pdf` },
         "Geography":         { sqp: `${BASE}/web_material/SQP/ClassXII_2023_24/Geography-SQP.pdf`,        ms: `${BASE}/web_material/SQP/ClassXII_2023_24/Geography-MS.pdf` },
       }},
-      { name: "Common / Languages", icon: "📝", color: "#0891b2", subjects: {
+      { name: "Common / Languages", icon: "ðŸ“", color: "#0891b2", subjects: {
         "English (Core)": { sqp: `${BASE}/web_material/SQP/ClassXII_2023_24/EnglishCore-SQP.pdf`, ms: `${BASE}/web_material/SQP/ClassXII_2023_24/EnglishCore-MS.pdf` },
         "Hindi (Core)":   { sqp: `${BASE}/web_material/SQP/ClassXII_2023_24/HindiCore-SQP.pdf`,   ms: `${BASE}/web_material/SQP/ClassXII_2023_24/HindiCore-MS.pdf` },
       }},
@@ -224,24 +222,24 @@ const YEAR_DATA_12: YearData12[] = [
     year: "2024-board", label: "Board Exam 2024", badge: "ACTUAL PAPER", badgeColor: "#2563EB",
     type: "board", listingUrl: `${BASE}/qbclassxii.html`,
     streams: [
-      { name: "Science", icon: "🔭", color: "#2563EB", subjects: {
+      { name: "Science", icon: "ðŸ”­", color: "#2563EB", subjects: {
         "Physics":   { board: `${BASE}/web_material/Qpapers/2024/classXII/Physics.pdf` },
         "Chemistry": { board: `${BASE}/web_material/Qpapers/2024/classXII/Chemistry.pdf` },
         "Biology":   { board: `${BASE}/web_material/Qpapers/2024/classXII/Biology.pdf` },
         "Maths":     { board: `${BASE}/web_material/Qpapers/2024/classXII/Mathematics.pdf` },
       }},
-      { name: "Commerce", icon: "📊", color: "#D97706", subjects: {
+      { name: "Commerce", icon: "ðŸ“Š", color: "#D97706", subjects: {
         "Accountancy":      { board: `${BASE}/web_material/Qpapers/2024/classXII/Accountancy.pdf` },
         "Business Studies": { board: `${BASE}/web_material/Qpapers/2024/classXII/Business_Studies.pdf` },
         "Economics":        { board: `${BASE}/web_material/Qpapers/2024/classXII/Economics.pdf` },
       }},
-      { name: "Arts / Humanities", icon: "🏛️", color: "#7C3AED", subjects: {
+      { name: "Arts / Humanities", icon: "ðŸ›ï¸", color: "#7C3AED", subjects: {
         "History":           { board: `${BASE}/web_material/Qpapers/2024/classXII/History.pdf` },
         "Political Science": { board: `${BASE}/web_material/Qpapers/2024/classXII/Political_Science.pdf` },
         "Geography":         { board: `${BASE}/web_material/Qpapers/2024/classXII/Geography.pdf` },
         "Sociology":         { board: `${BASE}/web_material/Qpapers/2024/classXII/Sociology.pdf` },
       }},
-      { name: "Common / Languages", icon: "📝", color: "#0891b2", subjects: {
+      { name: "Common / Languages", icon: "ðŸ“", color: "#0891b2", subjects: {
         "English (Core)": { board: `${BASE}/web_material/Qpapers/2024/classXII/English_Core.pdf` },
         "Hindi (Core)":   { board: `${BASE}/web_material/Qpapers/2024/classXII/Hindi_Core.pdf` },
         "Physical Ed.":   { board: `${BASE}/web_material/Qpapers/2024/classXII/Physical_Education.pdf` },
@@ -252,23 +250,23 @@ const YEAR_DATA_12: YearData12[] = [
     year: "2023-board", label: "Board Exam 2023", badge: "ACTUAL PAPER", badgeColor: "#2563EB",
     type: "board", listingUrl: `${BASE}/qbclassxii.html`,
     streams: [
-      { name: "Science", icon: "🔭", color: "#2563EB", subjects: {
+      { name: "Science", icon: "ðŸ”­", color: "#2563EB", subjects: {
         "Physics":   { board: `${BASE}/web_material/Qpapers/2023/classXII/Physics.pdf` },
         "Chemistry": { board: `${BASE}/web_material/Qpapers/2023/classXII/Chemistry.pdf` },
         "Biology":   { board: `${BASE}/web_material/Qpapers/2023/classXII/Biology.pdf` },
         "Maths":     { board: `${BASE}/web_material/Qpapers/2023/classXII/Mathematics.pdf` },
       }},
-      { name: "Commerce", icon: "📊", color: "#D97706", subjects: {
+      { name: "Commerce", icon: "ðŸ“Š", color: "#D97706", subjects: {
         "Accountancy":      { board: `${BASE}/web_material/Qpapers/2023/classXII/Accountancy.pdf` },
         "Business Studies": { board: `${BASE}/web_material/Qpapers/2023/classXII/Business_Studies.pdf` },
         "Economics":        { board: `${BASE}/web_material/Qpapers/2023/classXII/Economics.pdf` },
       }},
-      { name: "Arts / Humanities", icon: "🏛️", color: "#7C3AED", subjects: {
+      { name: "Arts / Humanities", icon: "ðŸ›ï¸", color: "#7C3AED", subjects: {
         "History":           { board: `${BASE}/web_material/Qpapers/2023/classXII/History.pdf` },
         "Political Science": { board: `${BASE}/web_material/Qpapers/2023/classXII/Political_Science.pdf` },
         "Geography":         { board: `${BASE}/web_material/Qpapers/2023/classXII/Geography.pdf` },
       }},
-      { name: "Common / Languages", icon: "📝", color: "#0891b2", subjects: {
+      { name: "Common / Languages", icon: "ðŸ“", color: "#0891b2", subjects: {
         "English (Core)": { board: `${BASE}/web_material/Qpapers/2023/classXII/English_Core.pdf` },
         "Hindi (Core)":   { board: `${BASE}/web_material/Qpapers/2023/classXII/Hindi_Core.pdf` },
       }},
@@ -278,23 +276,23 @@ const YEAR_DATA_12: YearData12[] = [
     year: "2020-board", label: "Board Exam 2020", badge: "ACTUAL PAPER", badgeColor: "#2563EB",
     type: "board", listingUrl: `${BASE}/qbclassxii.html`,
     streams: [
-      { name: "Science", icon: "🔭", color: "#2563EB", subjects: {
+      { name: "Science", icon: "ðŸ”­", color: "#2563EB", subjects: {
         "Physics":   { board: `${BASE}/web_material/Qpapers/2020/classXII/Physics.pdf` },
         "Chemistry": { board: `${BASE}/web_material/Qpapers/2020/classXII/Chemistry.pdf` },
         "Biology":   { board: `${BASE}/web_material/Qpapers/2020/classXII/Biology.pdf` },
         "Maths":     { board: `${BASE}/web_material/Qpapers/2020/classXII/Mathematics.pdf` },
       }},
-      { name: "Commerce", icon: "📊", color: "#D97706", subjects: {
+      { name: "Commerce", icon: "ðŸ“Š", color: "#D97706", subjects: {
         "Accountancy":      { board: `${BASE}/web_material/Qpapers/2020/classXII/Accountancy.pdf` },
         "Business Studies": { board: `${BASE}/web_material/Qpapers/2020/classXII/Business_Studies.pdf` },
         "Economics":        { board: `${BASE}/web_material/Qpapers/2020/classXII/Economics.pdf` },
       }},
-      { name: "Arts / Humanities", icon: "🏛️", color: "#7C3AED", subjects: {
+      { name: "Arts / Humanities", icon: "ðŸ›ï¸", color: "#7C3AED", subjects: {
         "History":           { board: `${BASE}/web_material/Qpapers/2020/classXII/History.pdf` },
         "Political Science": { board: `${BASE}/web_material/Qpapers/2020/classXII/Political_Science.pdf` },
         "Geography":         { board: `${BASE}/web_material/Qpapers/2020/classXII/Geography.pdf` },
       }},
-      { name: "Common / Languages", icon: "📝", color: "#0891b2", subjects: {
+      { name: "Common / Languages", icon: "ðŸ“", color: "#0891b2", subjects: {
         "English (Core)": { board: `${BASE}/web_material/Qpapers/2020/classXII/English_Core.pdf` },
         "Hindi (Core)":   { board: `${BASE}/web_material/Qpapers/2020/classXII/Hindi_Core.pdf` },
       }},
@@ -302,21 +300,21 @@ const YEAR_DATA_12: YearData12[] = [
   },
 ];
 
-// ─── FUTURE DATES ─────────────────────────────────────────────
+// â”€â”€â”€ FUTURE DATES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const FUTURE_DATES = [
-  { event: "CBSE Result Declaration (Expected)", date: "May 2026",       icon: "🏆", link: "https://results.cbse.nic.in" },
-  { event: "Compartment Exams",                  date: "July 2026",      icon: "📝", link: "https://www.cbse.gov.in" },
-  { event: "Class 11 Admission",                 date: "May–June 2026",  icon: "🎓", link: "https://www.cbse.gov.in" },
-  { event: "NTSE Stage 2",                       date: "June 2026",      icon: "🧠", link: "https://ncert.nic.in/ntse.php" },
-  { event: "Board Exam Registration 2026–27",    date: "Aug–Oct 2026",   icon: "📋", link: "https://www.cbse.gov.in" },
-  { event: "JEE Main Session 1",                 date: "Jan–Feb 2027",   icon: "🔭", link: "https://jeemain.nta.ac.in" },
-  { event: "NEET UG",                            date: "May 2027",       icon: "🧬", link: "https://neet.nta.nic.in" },
-  { event: "CUET UG",                            date: "May–June 2027",  icon: "📚", link: "https://cuet.samarth.ac.in" },
-  { event: "UPSC CSE Prelims",                   date: "June 2027",      icon: "🇮🇳", link: "https://upsc.gov.in" },
-  { event: "CA Foundation",                      date: "June & Dec 2026",icon: "📒", link: "https://icai.org" },
+  { event: "CBSE Result Declaration (Expected)", date: "May 2026",       icon: "ðŸ†", link: "https://results.cbse.nic.in" },
+  { event: "Compartment Exams",                  date: "July 2026",      icon: "ðŸ“", link: "https://www.cbse.gov.in" },
+  { event: "Class 11 Admission",                 date: "Mayâ€“June 2026",  icon: "ðŸŽ“", link: "https://www.cbse.gov.in" },
+  { event: "NTSE Stage 2",                       date: "June 2026",      icon: "ðŸ§ ", link: "https://ncert.nic.in/ntse.php" },
+  { event: "Board Exam Registration 2026â€“27",    date: "Augâ€“Oct 2026",   icon: "ðŸ“‹", link: "https://www.cbse.gov.in" },
+  { event: "JEE Main Session 1",                 date: "Janâ€“Feb 2027",   icon: "ðŸ”­", link: "https://jeemain.nta.ac.in" },
+  { event: "NEET UG",                            date: "May 2027",       icon: "ðŸ§¬", link: "https://neet.nta.nic.in" },
+  { event: "CUET UG",                            date: "Mayâ€“June 2027",  icon: "ðŸ“š", link: "https://cuet.samarth.ac.in" },
+  { event: "UPSC CSE Prelims",                   date: "June 2027",      icon: "ðŸ‡®ðŸ‡³", link: "https://upsc.gov.in" },
+  { event: "CA Foundation",                      date: "June & Dec 2026",icon: "ðŸ“’", link: "https://icai.org" },
 ];
 
-// ─── CAREER DATA ──────────────────────────────────────────────
+// â”€â”€â”€ CAREER DATA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 type Book   = { title: string; freeLink: string; linkLabel: string };
 type Exam   = { name: string; icon: string; desc: string; dates: string; link: string; books: Book[] };
 type Career = { name: string; icon: string; exams: string[] };
@@ -326,87 +324,87 @@ const CAREER_STREAMS: {
   subjects: string[]; careers: Career[]; exams: Exam[];
 }[] = [
   {
-    stream: "Science (PCM)", color: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE", icon: "🔭",
+    stream: "Science (PCM)", color: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE", icon: "ðŸ”­",
     subjects: ["Physics", "Chemistry", "Mathematics"],
     careers: [
-      { name: "Engineering",   icon: "⚙️", exams: ["JEE Main", "JEE Advanced", "BITSAT", "VITEEE"] },
-      { name: "Architecture",  icon: "🏛️", exams: ["JEE Main", "NATA"] },
-      { name: "Defence",       icon: "🪖", exams: ["NDA"] },
-      { name: "Data Science",  icon: "📊", exams: ["JEE Main", "BITSAT", "VITEEE"] },
-      { name: "Aviation",      icon: "✈️", exams: ["NDA", "JEE Main"] },
-      { name: "Merchant Navy", icon: "🚢", exams: ["JEE Main", "IMU CET"] },
+      { name: "Engineering",   icon: "âš™ï¸", exams: ["JEE Main", "JEE Advanced", "BITSAT", "VITEEE"] },
+      { name: "Architecture",  icon: "ðŸ›ï¸", exams: ["JEE Main", "NATA"] },
+      { name: "Defence",       icon: "ðŸª–", exams: ["NDA"] },
+      { name: "Data Science",  icon: "ðŸ“Š", exams: ["JEE Main", "BITSAT", "VITEEE"] },
+      { name: "Aviation",      icon: "âœˆï¸", exams: ["NDA", "JEE Main"] },
+      { name: "Merchant Navy", icon: "ðŸš¢", exams: ["JEE Main", "IMU CET"] },
     ],
     exams: [
-      { name: "JEE Main", icon: "⚙️", desc: "Gateway to NITs, IIITs & GFTIs", dates: "Jan & Apr every year", link: "https://jeemain.nta.ac.in",
+      { name: "JEE Main", icon: "âš™ï¸", desc: "Gateway to NITs, IIITs & GFTIs", dates: "Jan & Apr every year", link: "https://jeemain.nta.ac.in",
         books: [
-          { title: "HC Verma — Concepts of Physics", freeLink: "https://archive.org/search?query=HC+Verma+physics", linkLabel: "Free on Archive.org" },
-          { title: "RD Sharma — Mathematics", freeLink: "https://www.selfstudys.com/books/rd-sharma/english/class-11/mathematics", linkLabel: "Free on SelfStudys" },
+          { title: "HC Verma â€” Concepts of Physics", freeLink: "https://archive.org/search?query=HC+Verma+physics", linkLabel: "Free on Archive.org" },
+          { title: "RD Sharma â€” Mathematics", freeLink: "https://www.selfstudys.com/books/rd-sharma/english/class-11/mathematics", linkLabel: "Free on SelfStudys" },
           { title: "NCERT Chemistry XI & XII", freeLink: "https://ncert.nic.in/textbook.php", linkLabel: "Free Official NCERT PDF" },
           { title: "Arihant 41 Years JEE Papers", freeLink: "https://www.selfstudys.com/books/jee-main-previous-year-papers", linkLabel: "Free Previous Papers" },
         ],
       },
-      { name: "JEE Advanced", icon: "🏆", desc: "Gateway to IITs — top 2.5L JEE Main qualifiers only", dates: "May–June every year", link: "https://jeeadv.ac.in",
+      { name: "JEE Advanced", icon: "ðŸ†", desc: "Gateway to IITs â€” top 2.5L JEE Main qualifiers only", dates: "Mayâ€“June every year", link: "https://jeeadv.ac.in",
         books: [
-          { title: "Irodov — Problems in Physics", freeLink: "https://archive.org/search?query=irodov+problems+physics", linkLabel: "Free on Archive.org" },
-          { title: "Morrison Boyd — Organic Chemistry", freeLink: "https://archive.org/search?query=morrison+boyd+organic+chemistry", linkLabel: "Free on Archive.org" },
-          { title: "SL Loney — Trigonometry", freeLink: "https://archive.org/search?query=SL+Loney+trigonometry", linkLabel: "Free on Archive.org" },
+          { title: "Irodov â€” Problems in Physics", freeLink: "https://archive.org/search?query=irodov+problems+physics", linkLabel: "Free on Archive.org" },
+          { title: "Morrison Boyd â€” Organic Chemistry", freeLink: "https://archive.org/search?query=morrison+boyd+organic+chemistry", linkLabel: "Free on Archive.org" },
+          { title: "SL Loney â€” Trigonometry", freeLink: "https://archive.org/search?query=SL+Loney+trigonometry", linkLabel: "Free on Archive.org" },
           { title: "JEE Advanced Previous Papers", freeLink: "https://jeeadv.ac.in/pastqpppr.html", linkLabel: "Free Official Papers" },
         ],
       },
-      { name: "BITSAT", icon: "💡", desc: "BITS Pilani, Goa, Hyderabad", dates: "May–June every year", link: "https://bitsadmission.com",
+      { name: "BITSAT", icon: "ðŸ’¡", desc: "BITS Pilani, Goa, Hyderabad", dates: "Mayâ€“June every year", link: "https://bitsadmission.com",
         books: [
           { title: "NCERT Physics, Chemistry, Maths", freeLink: "https://ncert.nic.in/textbook.php", linkLabel: "Free Official NCERT PDFs" },
           { title: "BITSAT Previous Year Papers", freeLink: "https://www.selfstudys.com/books/bitsat-previous-year-papers", linkLabel: "Free Papers" },
         ],
       },
-      { name: "NDA", icon: "🪖", desc: "National Defence Academy", dates: "Apr & Sep every year", link: "https://upsc.gov.in",
+      { name: "NDA", icon: "ðŸª–", desc: "National Defence Academy", dates: "Apr & Sep every year", link: "https://upsc.gov.in",
         books: [
           { title: "NDA Previous Year Papers (Official)", freeLink: "https://upsc.gov.in/examinations/previous-question-papers", linkLabel: "Free Official Papers" },
-          { title: "NCERT Maths Class 11–12", freeLink: "https://ncert.nic.in/textbook.php", linkLabel: "Free Official NCERT PDF" },
-          { title: "Wren & Martin — English Grammar", freeLink: "https://archive.org/search?query=wren+martin+english+grammar", linkLabel: "Free on Archive.org" },
+          { title: "NCERT Maths Class 11â€“12", freeLink: "https://ncert.nic.in/textbook.php", linkLabel: "Free Official NCERT PDF" },
+          { title: "Wren & Martin â€” English Grammar", freeLink: "https://archive.org/search?query=wren+martin+english+grammar", linkLabel: "Free on Archive.org" },
         ],
       },
-      { name: "NATA", icon: "🏗️", desc: "National Aptitude Test for Architecture", dates: "Apr–Jun every year", link: "https://nata.in",
+      { name: "NATA", icon: "ðŸ—ï¸", desc: "National Aptitude Test for Architecture", dates: "Aprâ€“Jun every year", link: "https://nata.in",
         books: [{ title: "NATA Previous Year Papers", freeLink: "https://www.selfstudys.com/books/nata-previous-year-papers", linkLabel: "Free Papers" }],
       },
-      { name: "VITEEE", icon: "🎓", desc: "VIT University entrance", dates: "Apr–May every year", link: "https://vit.ac.in/viteee",
+      { name: "VITEEE", icon: "ðŸŽ“", desc: "VIT University entrance", dates: "Aprâ€“May every year", link: "https://vit.ac.in/viteee",
         books: [
           { title: "NCERT Physics, Chemistry, Maths", freeLink: "https://ncert.nic.in/textbook.php", linkLabel: "Free Official NCERT PDFs" },
           { title: "VITEEE Previous Year Papers", freeLink: "https://www.selfstudys.com/books/viteee-previous-year-papers", linkLabel: "Free Papers" },
         ],
       },
-      { name: "IMU CET", icon: "🚢", desc: "Indian Maritime University — Merchant Navy", dates: "May every year", link: "https://imu.edu.in",
+      { name: "IMU CET", icon: "ðŸš¢", desc: "Indian Maritime University â€” Merchant Navy", dates: "May every year", link: "https://imu.edu.in",
         books: [{ title: "IMU CET Previous Papers", freeLink: "https://www.selfstudys.com/books/imu-cet-previous-year-papers", linkLabel: "Free Papers" }],
       },
     ],
   },
   {
-    stream: "Science (PCB)", color: "#16A34A", bg: "#F0FDF4", border: "#BBF7D0", icon: "🧬",
+    stream: "Science (PCB)", color: "#16A34A", bg: "#F0FDF4", border: "#BBF7D0", icon: "ðŸ§¬",
     subjects: ["Physics", "Chemistry", "Biology"],
     careers: [
-      { name: "Medicine (MBBS)", icon: "🏥", exams: ["NEET UG", "AIIMS", "JIPMER"] },
-      { name: "Dentistry (BDS)", icon: "🦷", exams: ["NEET UG"] },
-      { name: "Pharmacy",        icon: "💊", exams: ["NEET UG", "CUET UG"] },
-      { name: "Nursing",         icon: "🩺", exams: ["CUET UG"] },
-      { name: "Biotechnology",   icon: "🔬", exams: ["NEET UG", "CUET UG"] },
-      { name: "Veterinary",      icon: "🐾", exams: ["NEET UG"] },
+      { name: "Medicine (MBBS)", icon: "ðŸ¥", exams: ["NEET UG", "AIIMS", "JIPMER"] },
+      { name: "Dentistry (BDS)", icon: "ðŸ¦·", exams: ["NEET UG"] },
+      { name: "Pharmacy",        icon: "ðŸ’Š", exams: ["NEET UG", "CUET UG"] },
+      { name: "Nursing",         icon: "ðŸ©º", exams: ["CUET UG"] },
+      { name: "Biotechnology",   icon: "ðŸ”¬", exams: ["NEET UG", "CUET UG"] },
+      { name: "Veterinary",      icon: "ðŸ¾", exams: ["NEET UG"] },
     ],
     exams: [
-      { name: "NEET UG", icon: "🏥", desc: "Only gateway to MBBS, BDS, BAMS, BHMS in India", dates: "May every year", link: "https://neet.nta.nic.in",
+      { name: "NEET UG", icon: "ðŸ¥", desc: "Only gateway to MBBS, BDS, BAMS, BHMS in India", dates: "May every year", link: "https://neet.nta.nic.in",
         books: [
           { title: "NCERT Biology XI & XII", freeLink: "https://ncert.nic.in/textbook.php", linkLabel: "Free Official NCERT PDF" },
-          { title: "DC Pandey — Physics for NEET", freeLink: "https://www.selfstudys.com/books/dc-pandey-physics-neet", linkLabel: "Free on SelfStudys" },
-          { title: "OP Tandon — Chemistry", freeLink: "https://archive.org/search?query=op+tandon+chemistry", linkLabel: "Free on Archive.org" },
+          { title: "DC Pandey â€” Physics for NEET", freeLink: "https://www.selfstudys.com/books/dc-pandey-physics-neet", linkLabel: "Free on SelfStudys" },
+          { title: "OP Tandon â€” Chemistry", freeLink: "https://archive.org/search?query=op+tandon+chemistry", linkLabel: "Free on Archive.org" },
           { title: "NEET Previous Year Papers", freeLink: "https://neet.nta.nic.in/previous-papers", linkLabel: "Free Official Papers" },
         ],
       },
-      { name: "AIIMS", icon: "🔬", desc: "Top medical college — via NEET only", dates: "Via NEET score", link: "https://www.aiims.edu",
+      { name: "AIIMS", icon: "ðŸ”¬", desc: "Top medical college â€” via NEET only", dates: "Via NEET score", link: "https://www.aiims.edu",
         books: [{ title: "NCERT Biology (read 5+ times)", freeLink: "https://ncert.nic.in/textbook.php", linkLabel: "Free Official NCERT PDF" }],
       },
-      { name: "JIPMER", icon: "💊", desc: "Premier government medical institute", dates: "Via NEET score", link: "https://jipmer.edu.in",
+      { name: "JIPMER", icon: "ðŸ’Š", desc: "Premier government medical institute", dates: "Via NEET score", link: "https://jipmer.edu.in",
         books: [{ title: "NEET Prep + JIPMER Past Papers", freeLink: "https://www.selfstudys.com/books/jipmer-previous-year-papers", linkLabel: "Free Papers" }],
       },
-      { name: "CUET UG", icon: "📚", desc: "Central Universities for B.Sc programs", dates: "May–June every year", link: "https://cuet.samarth.ac.in",
+      { name: "CUET UG", icon: "ðŸ“š", desc: "Central Universities for B.Sc programs", dates: "Mayâ€“June every year", link: "https://cuet.samarth.ac.in",
         books: [
           { title: "NCERT XII Science", freeLink: "https://ncert.nic.in/textbook.php", linkLabel: "Free Official NCERT PDFs" },
           { title: "CUET Previous Papers", freeLink: "https://cuet.samarth.ac.in/index.php/site/previousyearqp", linkLabel: "Free Official Papers" },
@@ -415,76 +413,76 @@ const CAREER_STREAMS: {
     ],
   },
   {
-    stream: "Commerce", color: "#D97706", bg: "#FFFBEB", border: "#FDE68A", icon: "📊",
+    stream: "Commerce", color: "#D97706", bg: "#FFFBEB", border: "#FDE68A", icon: "ðŸ“Š",
     subjects: ["Accountancy", "Business Studies", "Economics", "Mathematics (optional)"],
     careers: [
-      { name: "Chartered Accountancy", icon: "📒", exams: ["CA Foundation"] },
-      { name: "Company Secretary",     icon: "⚖️", exams: ["CS Foundation"] },
-      { name: "Banking / Finance",     icon: "🏦", exams: ["CUET UG", "CA Foundation"] },
-      { name: "MBA",                   icon: "💼", exams: ["IPM IIM", "CUET UG"] },
-      { name: "Stock Market/Trading",  icon: "📈", exams: ["CA Foundation", "CUET UG"] },
-      { name: "Law",                   icon: "🏛️", exams: ["CLAT"] },
+      { name: "Chartered Accountancy", icon: "ðŸ“’", exams: ["CA Foundation"] },
+      { name: "Company Secretary",     icon: "âš–ï¸", exams: ["CS Foundation"] },
+      { name: "Banking / Finance",     icon: "ðŸ¦", exams: ["CUET UG", "CA Foundation"] },
+      { name: "MBA",                   icon: "ðŸ’¼", exams: ["IPM IIM", "CUET UG"] },
+      { name: "Stock Market/Trading",  icon: "ðŸ“ˆ", exams: ["CA Foundation", "CUET UG"] },
+      { name: "Law",                   icon: "ðŸ›ï¸", exams: ["CLAT"] },
     ],
     exams: [
-      { name: "CA Foundation", icon: "📒", desc: "Chartered Accountancy — most respected finance career", dates: "June & Dec every year", link: "https://icai.org",
+      { name: "CA Foundation", icon: "ðŸ“’", desc: "Chartered Accountancy â€” most respected finance career", dates: "June & Dec every year", link: "https://icai.org",
         books: [
           { title: "ICAI Official Study Material (Free PDF)", freeLink: "https://www.icai.org/post/ca-foundation-study-material", linkLabel: "Free Official ICAI PDF" },
           { title: "ICAI Past Papers", freeLink: "https://www.icai.org/post/past-examination-papers", linkLabel: "Free Official Papers" },
         ],
       },
-      { name: "CS Foundation", icon: "⚖️", desc: "Company Secretary — corporate law & governance", dates: "June & Dec every year", link: "https://icsi.edu",
+      { name: "CS Foundation", icon: "âš–ï¸", desc: "Company Secretary â€” corporate law & governance", dates: "June & Dec every year", link: "https://icsi.edu",
         books: [{ title: "ICSI Official Study Material (Free PDF)", freeLink: "https://www.icsi.edu/student/foundation-programme/study-material/", linkLabel: "Free Official ICSI PDF" }],
       },
-      { name: "CUET UG", icon: "🎓", desc: "Central Universities — B.Com, BA Economics etc", dates: "May–June every year", link: "https://cuet.samarth.ac.in",
+      { name: "CUET UG", icon: "ðŸŽ“", desc: "Central Universities â€” B.Com, BA Economics etc", dates: "Mayâ€“June every year", link: "https://cuet.samarth.ac.in",
         books: [
           { title: "NCERT XII Commerce", freeLink: "https://ncert.nic.in/textbook.php", linkLabel: "Free Official NCERT PDFs" },
           { title: "CUET Previous Papers", freeLink: "https://cuet.samarth.ac.in/index.php/site/previousyearqp", linkLabel: "Free Official Papers" },
         ],
       },
-      { name: "IPM IIM", icon: "💼", desc: "5-year Integrated Management Programme at IIMs", dates: "May every year", link: "https://iimidr.ac.in/ipm",
-        books: [{ title: "Quantitative Aptitude — Arun Sharma", freeLink: "https://archive.org/search?query=arun+sharma+quantitative+aptitude", linkLabel: "Free on Archive.org" }],
+      { name: "IPM IIM", icon: "ðŸ’¼", desc: "5-year Integrated Management Programme at IIMs", dates: "May every year", link: "https://iimidr.ac.in/ipm",
+        books: [{ title: "Quantitative Aptitude â€” Arun Sharma", freeLink: "https://archive.org/search?query=arun+sharma+quantitative+aptitude", linkLabel: "Free on Archive.org" }],
       },
-      { name: "CLAT", icon: "🏛️", desc: "Law entrance for National Law Universities", dates: "Dec every year", link: "https://consortiumofnlus.ac.in",
+      { name: "CLAT", icon: "ðŸ›ï¸", desc: "Law entrance for National Law Universities", dates: "Dec every year", link: "https://consortiumofnlus.ac.in",
         books: [
           { title: "CLAT Previous Year Papers (Official)", freeLink: "https://consortiumofnlus.ac.in/clat-2025/previous-years-question-papers.html", linkLabel: "Free Official Papers" },
-          { title: "Current Affairs (Daily)", freeLink: "https://www.thehindu.com", linkLabel: "The Hindu — Free" },
+          { title: "Current Affairs (Daily)", freeLink: "https://www.thehindu.com", linkLabel: "The Hindu â€” Free" },
         ],
       },
     ],
   },
   {
-    stream: "Arts / Humanities", color: "#7C3AED", bg: "#F5F3FF", border: "#DDD6FE", icon: "🏛️",
+    stream: "Arts / Humanities", color: "#7C3AED", bg: "#F5F3FF", border: "#DDD6FE", icon: "ðŸ›ï¸",
     subjects: ["History", "Political Science", "Geography", "Psychology", "Sociology"],
     careers: [
-      { name: "IAS / IPS (UPSC)", icon: "🇮🇳", exams: ["UPSC CSE"] },
-      { name: "Law",              icon: "⚖️",  exams: ["CLAT"] },
-      { name: "Journalism",       icon: "📰",  exams: ["CUET UG"] },
-      { name: "Psychology",       icon: "🧠",  exams: ["CUET UG"] },
-      { name: "Teaching",         icon: "🏫",  exams: ["CUET UG", "SSC CGL"] },
-      { name: "Government Jobs",  icon: "👮",  exams: ["SSC CGL", "UPSC CSE"] },
+      { name: "IAS / IPS (UPSC)", icon: "ðŸ‡®ðŸ‡³", exams: ["UPSC CSE"] },
+      { name: "Law",              icon: "âš–ï¸",  exams: ["CLAT"] },
+      { name: "Journalism",       icon: "ðŸ“°",  exams: ["CUET UG"] },
+      { name: "Psychology",       icon: "ðŸ§ ",  exams: ["CUET UG"] },
+      { name: "Teaching",         icon: "ðŸ«",  exams: ["CUET UG", "SSC CGL"] },
+      { name: "Government Jobs",  icon: "ðŸ‘®",  exams: ["SSC CGL", "UPSC CSE"] },
     ],
     exams: [
-      { name: "UPSC CSE", icon: "🇮🇳", desc: "Civil Services — IAS, IPS, IFS and 20+ services", dates: "Prelims: June | Mains: Sep", link: "https://upsc.gov.in",
+      { name: "UPSC CSE", icon: "ðŸ‡®ðŸ‡³", desc: "Civil Services â€” IAS, IPS, IFS and 20+ services", dates: "Prelims: June | Mains: Sep", link: "https://upsc.gov.in",
         books: [
-          { title: "NCERT 6–12 All Subjects (Free)", freeLink: "https://ncert.nic.in/textbook.php", linkLabel: "Free Official NCERT PDFs" },
-          { title: "Lakshmikant — Indian Polity", freeLink: "https://archive.org/search?query=lakshmikant+indian+polity", linkLabel: "Free on Archive.org" },
-          { title: "Spectrum — Modern History", freeLink: "https://archive.org/search?query=spectrum+modern+history", linkLabel: "Free on Archive.org" },
+          { title: "NCERT 6â€“12 All Subjects (Free)", freeLink: "https://ncert.nic.in/textbook.php", linkLabel: "Free Official NCERT PDFs" },
+          { title: "Lakshmikant â€” Indian Polity", freeLink: "https://archive.org/search?query=lakshmikant+indian+polity", linkLabel: "Free on Archive.org" },
+          { title: "Spectrum â€” Modern History", freeLink: "https://archive.org/search?query=spectrum+modern+history", linkLabel: "Free on Archive.org" },
           { title: "UPSC Previous Year Papers", freeLink: "https://upsc.gov.in/examinations/previous-question-papers", linkLabel: "Free Official Papers" },
         ],
       },
-      { name: "CLAT", icon: "⚖️", desc: "Law entrance for top NLUs", dates: "Dec every year", link: "https://consortiumofnlus.ac.in",
+      { name: "CLAT", icon: "âš–ï¸", desc: "Law entrance for top NLUs", dates: "Dec every year", link: "https://consortiumofnlus.ac.in",
         books: [
           { title: "CLAT Previous Year Papers (Official)", freeLink: "https://consortiumofnlus.ac.in/clat-2025/previous-years-question-papers.html", linkLabel: "Free Official Papers" },
-          { title: "Current Affairs — The Hindu", freeLink: "https://www.thehindu.com", linkLabel: "Free Daily" },
+          { title: "Current Affairs â€” The Hindu", freeLink: "https://www.thehindu.com", linkLabel: "Free Daily" },
         ],
       },
-      { name: "CUET UG", icon: "📚", desc: "Central Universities — BA programs", dates: "May–June every year", link: "https://cuet.samarth.ac.in",
+      { name: "CUET UG", icon: "ðŸ“š", desc: "Central Universities â€” BA programs", dates: "Mayâ€“June every year", link: "https://cuet.samarth.ac.in",
         books: [
           { title: "NCERT XII Humanities", freeLink: "https://ncert.nic.in/textbook.php", linkLabel: "Free Official NCERT PDFs" },
           { title: "CUET Previous Papers", freeLink: "https://cuet.samarth.ac.in/index.php/site/previousyearqp", linkLabel: "Free Official Papers" },
         ],
       },
-      { name: "SSC CGL", icon: "👮", desc: "Staff Selection Commission — government jobs", dates: "Year-round", link: "https://ssc.nic.in",
+      { name: "SSC CGL", icon: "ðŸ‘®", desc: "Staff Selection Commission â€” government jobs", dates: "Year-round", link: "https://ssc.nic.in",
         books: [
           { title: "SSC CGL Previous Year Papers", freeLink: "https://ssc.nic.in/Portal/Previous-Year-Question-Papers", linkLabel: "Free Official Papers" },
           { title: "Lucent GK", freeLink: "https://archive.org/search?query=lucent+gk+general+knowledge", linkLabel: "Free on Archive.org" },
@@ -495,27 +493,27 @@ const CAREER_STREAMS: {
 ];
 
 const UPSC_RESOURCES = [
-  { stage: "Free NCERT & Basics", icon: "📖", color: "#2563EB", items: [
-    { label: "NCERT Free PDFs (Official)", link: "https://ncert.nic.in/textbook.php", desc: "Free download — Class 6 to 12 all subjects. Backbone of UPSC." },
-    { label: "Drishti IAS — Free Portal",  link: "https://www.drishtiias.com",        desc: "Best free UPSC portal in India — notes, current affairs, videos." },
+  { stage: "Free NCERT & Basics", icon: "ðŸ“–", color: "#2563EB", items: [
+    { label: "NCERT Free PDFs (Official)", link: "https://ncert.nic.in/textbook.php", desc: "Free download â€” Class 6 to 12 all subjects. Backbone of UPSC." },
+    { label: "Drishti IAS â€” Free Portal",  link: "https://www.drishtiias.com",        desc: "Best free UPSC portal in India â€” notes, current affairs, videos." },
     { label: "Vision IAS Free Material",   link: "https://visionias.in/resources/",   desc: "Free current affairs, monthly magazines, test series." },
     { label: "Unacademy Free Classes",     link: "https://unacademy.com/goal/upsc-civil-services-examination-ias/KSCGY", desc: "Free live UPSC classes by top educators." },
   ]},
-  { stage: "Current Affairs", icon: "📰", color: "#16A34A", items: [
+  { stage: "Current Affairs", icon: "ðŸ“°", color: "#16A34A", items: [
     { label: "The Hindu (Newspaper)",      link: "https://www.thehindu.com",   desc: "Most recommended newspaper for UPSC. Read daily." },
-    { label: "PIB — Press Info Bureau",    link: "https://pib.gov.in",         desc: "Official government news — directly asked in UPSC." },
-    { label: "Yojana Magazine (Free PDF)", link: "https://yojana.gov.in",      desc: "Government magazine — must read for GS Paper II & III." },
+    { label: "PIB â€” Press Info Bureau",    link: "https://pib.gov.in",         desc: "Official government news â€” directly asked in UPSC." },
+    { label: "Yojana Magazine (Free PDF)", link: "https://yojana.gov.in",      desc: "Government magazine â€” must read for GS Paper II & III." },
     { label: "Kurukshetra Magazine",       link: "https://kurukshetra.gov.in", desc: "Rural development & economy. Key UPSC topic." },
   ]},
-  { stage: "Key Books", icon: "📚", color: "#D97706", items: [
-    { label: "Indian Polity — M Lakshmikant",    link: "https://archive.org/search?query=lakshmikant+polity",      desc: "Bible of UPSC Polity. Read cover to cover." },
-    { label: "Modern India — Spectrum",          link: "https://archive.org/search?query=spectrum+modern+history", desc: "Most used Modern History book for UPSC." },
-    { label: "Indian Economy — Ramesh Singh",    link: "https://archive.org/search?query=ramesh+singh+economy",    desc: "Standard Economy reference for UPSC Mains." },
-    { label: "Certificate Physical Geo — Leong", link: "https://archive.org/search?query=gc+leong+geography",      desc: "Geography standard reference book." },
+  { stage: "Key Books", icon: "ðŸ“š", color: "#D97706", items: [
+    { label: "Indian Polity â€” M Lakshmikant",    link: "https://archive.org/search?query=lakshmikant+polity",      desc: "Bible of UPSC Polity. Read cover to cover." },
+    { label: "Modern India â€” Spectrum",          link: "https://archive.org/search?query=spectrum+modern+history", desc: "Most used Modern History book for UPSC." },
+    { label: "Indian Economy â€” Ramesh Singh",    link: "https://archive.org/search?query=ramesh+singh+economy",    desc: "Standard Economy reference for UPSC Mains." },
+    { label: "Certificate Physical Geo â€” Leong", link: "https://archive.org/search?query=gc+leong+geography",      desc: "Geography standard reference book." },
   ]},
-  { stage: "Practice & Mock Tests", icon: "✍️", color: "#7C3AED", items: [
-    { label: "UPSC Previous Year Papers",  link: "https://upsc.gov.in/examinations/previous-question-papers", desc: "Official previous papers — start solving from Class 10 itself." },
-    { label: "Insights IAS — Free Tests",  link: "https://www.insightsonindia.com",                           desc: "Free UPSC tests & answer writing practice." },
+  { stage: "Practice & Mock Tests", icon: "âœï¸", color: "#7C3AED", items: [
+    { label: "UPSC Previous Year Papers",  link: "https://upsc.gov.in/examinations/previous-question-papers", desc: "Official previous papers â€” start solving from Class 10 itself." },
+    { label: "Insights IAS â€” Free Tests",  link: "https://www.insightsonindia.com",                           desc: "Free UPSC tests & answer writing practice." },
     { label: "ForumIAS Community",         link: "https://forumias.com",                                      desc: "UPSC community, test series, answer writing." },
     { label: "BYJU's Free IAS Prep",       link: "https://byjus.com/free-ias-prep/",                          desc: "Topic-wise free study material & videos." },
   ]},
@@ -544,13 +542,13 @@ async function generateTimetable(exam: string, weeks: number, hoursPerDay: numbe
     return JSON.parse(text.replace(/```json|```/g, "").trim());
   } catch {
     return [
-      { day: "Monday",    subject: exam,  topic: "Chapters 1–3 Review",   hours: hoursPerDay, notes: "Concepts + examples" },
-      { day: "Tuesday",   subject: exam,  topic: "Chapters 4–6 Review",   hours: hoursPerDay, notes: "MCQ practice" },
-      { day: "Wednesday", subject: exam,  topic: "Chapters 7–9 Review",   hours: hoursPerDay, notes: "Previous year Qs" },
-      { day: "Thursday",  subject: exam,  topic: "Chapters 10–12 Review", hours: hoursPerDay, notes: "Short answers" },
+      { day: "Monday",    subject: exam,  topic: "Chapters 1â€“3 Review",   hours: hoursPerDay, notes: "Concepts + examples" },
+      { day: "Tuesday",   subject: exam,  topic: "Chapters 4â€“6 Review",   hours: hoursPerDay, notes: "MCQ practice" },
+      { day: "Wednesday", subject: exam,  topic: "Chapters 7â€“9 Review",   hours: hoursPerDay, notes: "Previous year Qs" },
+      { day: "Thursday",  subject: exam,  topic: "Chapters 10â€“12 Review", hours: hoursPerDay, notes: "Short answers" },
       { day: "Friday",    subject: exam,  topic: "Full Revision",          hours: hoursPerDay, notes: "Mind maps & notes" },
       { day: "Saturday",  subject: exam,  topic: "Mock Test + Analysis",   hours: hoursPerDay, notes: "Timed paper" },
-      { day: "Sunday",    subject: "Rest",topic: "Light reading only",     hours: 1,           notes: "Relax & recharge 🌟" },
+      { day: "Sunday",    subject: "Rest",topic: "Light reading only",     hours: 1,           notes: "Relax & recharge ðŸŒŸ" },
     ];
   }
 }
@@ -571,16 +569,16 @@ function LastYearsTab10() {
         <button onClick={() => setExpanded(isOpen ? null : yd.year)}
           style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", background: isOpen ? "rgba(212,175,55,0.15)" : "rgba(255,255,255,0.5)", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 700, color: "#0a2540", fontFamily: "inherit" }}>
           <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            📄 CBSE Class 10 — {yd.label}
+            ðŸ“„ CBSE Class 10 â€” {yd.label}
             {yd.badge && <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, background: yd.badgeColor, color: "#fff" }}>{yd.badge}</span>}
           </span>
-          <span style={{ color: "#D4AF37" }}>{isOpen ? "▲" : "▼"}</span>
+          <span style={{ color: "#D4AF37" }}>{isOpen ? "â–²" : "â–¼"}</span>
         </button>
         {isOpen && (
           <div style={{ padding: "14px 18px", background: "rgba(255,255,255,0.7)" }}>
             {yd.type === "sqp"
-              ? <p style={{ fontSize: 12, color: "#5c6f82", marginBottom: 10 }}>📌 <strong>Sample Question Paper</strong> — CBSE practice paper with Marking Scheme (✅ MS) buttons.</p>
-              : <p style={{ fontSize: 12, color: "#2563EB", marginBottom: 10, background: "rgba(37,99,235,0.06)", padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(37,99,235,0.2)" }}>🏫 <strong>Actual Board Exam Paper</strong> — real paper from CBSE Question Bank.</p>
+              ? <p style={{ fontSize: 12, color: "#5c6f82", marginBottom: 10 }}>ðŸ“Œ <strong>Sample Question Paper</strong> â€” CBSE practice paper with Marking Scheme (âœ… MS) buttons.</p>
+              : <p style={{ fontSize: 12, color: "#2563EB", marginBottom: 10, background: "rgba(37,99,235,0.06)", padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(37,99,235,0.2)" }}>ðŸ« <strong>Actual Board Exam Paper</strong> â€” real paper from CBSE Question Bank.</p>
             }
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
               {Object.entries(yd.subjects).map(([sub, links]) => (
@@ -588,18 +586,18 @@ function LastYearsTab10() {
                   <button onClick={() => openPdf(links.sqp || links.board || yd.listingUrl)}
                     style={{ padding: "8px 14px", borderRadius: 8, background: yd.type === "board" ? "rgba(37,99,235,0.08)" : "rgba(212,175,55,0.1)", border: `1.5px solid ${yd.type === "board" ? "rgba(37,99,235,0.35)" : "rgba(212,175,55,0.5)"}`, color: "#0a2540", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
                     onMouseOver={e => (e.currentTarget.style.opacity = "0.75")} onMouseOut={e => (e.currentTarget.style.opacity = "1")}>
-                    📄 {sub}
+                    ðŸ“„ {sub}
                   </button>
                   {links.ms && (
                     <button onClick={() => openPdf(links.ms!)} title="Marking Scheme"
                       style={{ padding: "8px 10px", borderRadius: 8, background: "rgba(34,197,94,0.08)", border: "1.5px solid rgba(34,197,94,0.35)", color: "#15803d", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-                      ✅ MS
+                      âœ… MS
                     </button>
                   )}
                 </div>
               ))}
             </div>
-            <p style={{ fontSize: 11, color: "#5c6f82" }}>💡 Not loading? <a href={yd.listingUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#2563EB" }}>Open CBSE Official Page ↗</a></p>
+            <p style={{ fontSize: 11, color: "#5c6f82" }}>ðŸ’¡ Not loading? <a href={yd.listingUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#2563EB" }}>Open CBSE Official Page â†—</a></p>
           </div>
         )}
       </div>
@@ -611,15 +609,15 @@ function LastYearsTab10() {
       <p style={{ color: "#5c6f82", fontSize: 13, marginBottom: 14 }}>
         Click any subject to open the PDF. <strong>SQPs</strong> are pre-exam practice papers; <strong>Board Exam Papers</strong> are actual question papers.
       </p>
-      <SectionHeader label="📝 SAMPLE QUESTION PAPERS (SQP)" dividerColor="rgba(212,175,55,0.3)" />
+      <SectionHeader label="ðŸ“ SAMPLE QUESTION PAPERS (SQP)" dividerColor="rgba(212,175,55,0.3)" />
       {sqpYears.map(renderBlock)}
       <div style={{ marginTop: 18 }}>
-        <SectionHeader label="🏫 ACTUAL BOARD EXAM PAPERS" dividerColor="rgba(37,99,235,0.25)" />
-        <NoticeBanner text="2025 board papers not yet uploaded by CBSE — released a few months after exams." link={`${BASE}/qbclass10.html`} linkText="CBSE Class 10 Question Bank ↗" />
+        <SectionHeader label="ðŸ« ACTUAL BOARD EXAM PAPERS" dividerColor="rgba(37,99,235,0.25)" />
+        <NoticeBanner text="2025 board papers not yet uploaded by CBSE â€” released a few months after exams." link={`${BASE}/qbclass10.html`} linkText="CBSE Class 10 Question Bank â†—" />
         {boardYears.map(renderBlock)}
       </div>
       <p style={{ fontSize: 12, color: "#5c6f82", marginTop: 12 }}>
-        💡 More subjects & years: <a href="https://cbseacademic.nic.in" target="_blank" rel="noopener noreferrer" style={{ color: "#2563EB" }}>cbseacademic.nic.in ↗</a> → Sample Question Paper / Question Bank → Class X
+        ðŸ’¡ More subjects & years: <a href="https://cbseacademic.nic.in" target="_blank" rel="noopener noreferrer" style={{ color: "#2563EB" }}>cbseacademic.nic.in â†—</a> â†’ Sample Question Paper / Question Bank â†’ Class X
       </p>
     </div>
   );
@@ -640,16 +638,16 @@ function LastYearsTab12() {
         <button onClick={() => setExpanded(isOpen ? null : yd.year)}
           style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", background: isOpen ? "rgba(212,175,55,0.15)" : "rgba(255,255,255,0.5)", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 700, color: "#0a2540", fontFamily: "inherit" }}>
           <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            📄 CBSE Class 12 — {yd.label}
+            ðŸ“„ CBSE Class 12 â€” {yd.label}
             {yd.badge && <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, background: yd.badgeColor, color: "#fff" }}>{yd.badge}</span>}
           </span>
-          <span style={{ color: "#D4AF37" }}>{isOpen ? "▲" : "▼"}</span>
+          <span style={{ color: "#D4AF37" }}>{isOpen ? "â–²" : "â–¼"}</span>
         </button>
         {isOpen && (
           <div style={{ padding: "14px 18px", background: "rgba(255,255,255,0.7)" }}>
             {yd.type === "sqp"
-              ? <p style={{ fontSize: 12, color: "#5c6f82", marginBottom: 10 }}>📌 <strong>Sample Question Paper</strong> — select your stream, then click any subject. ✅ MS opens the Marking Scheme.</p>
-              : <p style={{ fontSize: 12, color: "#2563EB", marginBottom: 10, background: "rgba(37,99,235,0.06)", padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(37,99,235,0.2)" }}>🏫 <strong>Actual Board Exam Paper</strong> — real paper from CBSE Question Bank.</p>
+              ? <p style={{ fontSize: 12, color: "#5c6f82", marginBottom: 10 }}>ðŸ“Œ <strong>Sample Question Paper</strong> â€” select your stream, then click any subject. âœ… MS opens the Marking Scheme.</p>
+              : <p style={{ fontSize: 12, color: "#2563EB", marginBottom: 10, background: "rgba(37,99,235,0.06)", padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(37,99,235,0.2)" }}>ðŸ« <strong>Actual Board Exam Paper</strong> â€” real paper from CBSE Question Bank.</p>
             }
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
               {yd.streams.map((s, i) => (
@@ -665,18 +663,18 @@ function LastYearsTab12() {
                   <button onClick={() => openPdf(links.sqp || links.board || yd.listingUrl)}
                     style={{ padding: "8px 14px", borderRadius: 8, background: yd.type === "board" ? "rgba(37,99,235,0.08)" : "rgba(212,175,55,0.1)", border: `1.5px solid ${yd.type === "board" ? "rgba(37,99,235,0.35)" : "rgba(212,175,55,0.5)"}`, color: "#0a2540", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
                     onMouseOver={e => (e.currentTarget.style.opacity = "0.75")} onMouseOut={e => (e.currentTarget.style.opacity = "1")}>
-                    📄 {sub}
+                    ðŸ“„ {sub}
                   </button>
                   {links.ms && (
                     <button onClick={() => openPdf(links.ms!)} title="Marking Scheme"
                       style={{ padding: "8px 10px", borderRadius: 8, background: "rgba(34,197,94,0.08)", border: "1.5px solid rgba(34,197,94,0.35)", color: "#15803d", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-                      ✅ MS
+                      âœ… MS
                     </button>
                   )}
                 </div>
               ))}
             </div>
-            <p style={{ fontSize: 11, color: "#5c6f82" }}>💡 Not loading? <a href={yd.listingUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#2563EB" }}>Open CBSE Official Page ↗</a></p>
+            <p style={{ fontSize: 11, color: "#5c6f82" }}>ðŸ’¡ Not loading? <a href={yd.listingUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#2563EB" }}>Open CBSE Official Page â†—</a></p>
           </div>
         )}
       </div>
@@ -688,15 +686,15 @@ function LastYearsTab12() {
       <p style={{ color: "#5c6f82", fontSize: 13, marginBottom: 14 }}>
         Click any subject to open the PDF. Switch between <strong>Science / Commerce / Arts</strong> using the stream tabs inside each year.
       </p>
-      <SectionHeader label="📝 SAMPLE QUESTION PAPERS (SQP)" dividerColor="rgba(212,175,55,0.3)" />
+      <SectionHeader label="ðŸ“ SAMPLE QUESTION PAPERS (SQP)" dividerColor="rgba(212,175,55,0.3)" />
       {sqpYears.map(renderBlock)}
       <div style={{ marginTop: 18 }}>
-        <SectionHeader label="🏫 ACTUAL BOARD EXAM PAPERS" dividerColor="rgba(37,99,235,0.25)" />
-        <NoticeBanner text="2025 board papers not yet uploaded by CBSE — released a few months after exams." link={`${BASE}/qbclassxii.html`} linkText="CBSE Class 12 Question Bank ↗" />
+        <SectionHeader label="ðŸ« ACTUAL BOARD EXAM PAPERS" dividerColor="rgba(37,99,235,0.25)" />
+        <NoticeBanner text="2025 board papers not yet uploaded by CBSE â€” released a few months after exams." link={`${BASE}/qbclassxii.html`} linkText="CBSE Class 12 Question Bank â†—" />
         {boardYears.map(renderBlock)}
       </div>
       <p style={{ fontSize: 12, color: "#5c6f82", marginTop: 12 }}>
-        💡 More subjects & years: <a href="https://cbseacademic.nic.in" target="_blank" rel="noopener noreferrer" style={{ color: "#2563EB" }}>cbseacademic.nic.in ↗</a> → Sample Question Paper / Question Bank → Class XII
+        ðŸ’¡ More subjects & years: <a href="https://cbseacademic.nic.in" target="_blank" rel="noopener noreferrer" style={{ color: "#2563EB" }}>cbseacademic.nic.in â†—</a> â†’ Sample Question Paper / Question Bank â†’ Class XII
       </p>
     </div>
   );
@@ -708,7 +706,7 @@ function LastYearsTab({ student }: { student: StudentContext }) {
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
         <span style={{ fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 20, background: cls >= 11 ? "rgba(37,99,235,0.12)" : "rgba(212,175,55,0.15)", color: cls >= 11 ? "#2563EB" : "#92400e", border: `1.5px solid ${cls >= 11 ? "rgba(37,99,235,0.3)" : "rgba(212,175,55,0.4)"}` }}>
-          📚 Showing Class {cls >= 11 ? "12" : "10"} Papers
+          ðŸ“š Showing Class {cls >= 11 ? "12" : "10"} Papers
         </span>
         <span style={{ fontSize: 12, color: "#5c6f82" }}>based on your class ({student.class})</span>
       </div>
@@ -729,7 +727,7 @@ function SectionHeader({ label, dividerColor }: { label: string; dividerColor: s
 function NoticeBanner({ text, link, linkText }: { text: string; link: string; linkText: string }) {
   return (
     <p style={{ fontSize: 12, color: "#92400e", background: "rgba(254,243,199,0.8)", padding: "8px 14px", borderRadius: 8, marginBottom: 10 }}>
-      ⚠️ <strong>2025 board papers</strong> — {text}{" "}
+      âš ï¸ <strong>2025 board papers</strong> â€” {text}{" "}
       <a href={link} target="_blank" rel="noopener noreferrer" style={{ color: "#2563EB" }}>{linkText}</a>
     </p>
   );
@@ -740,15 +738,15 @@ function AboutTab() {
     <div>
       <h3 style={{ fontSize: 17, fontWeight: 700, color: "#0a2540", marginBottom: 12 }}>What is SHAURI?</h3>
       <p style={{ fontSize: 13, color: "#425466", lineHeight: 1.8, marginBottom: 14 }}>
-        <strong>SHAURI</strong> is a CBSE-aligned adaptive learning platform for Class 6–12 students. It uses AI to help you learn smarter — not harder.
+        <strong>SHAURI</strong> is a CBSE-aligned adaptive learning platform for Class 6â€“12 students. It uses AI to help you learn smarter â€” not harder.
       </p>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
         {[
-          { icon: "🧠", title: "Learn Mode",           desc: "AI-powered CBSE concept explanations" },
-          { icon: "🧪", title: "Examiner Mode",         desc: "Full mock papers with AI evaluation" },
-          { icon: "🗣️", title: "Oral Mode",             desc: "Spoken practice & fluency building" },
-          { icon: "🎬", title: "Audio-Visual Mode",     desc: "Best teacher videos + AI explanation" },
-          { icon: "📊", title: "Progress Dashboard",    desc: "Track growth across subjects over time" },
+          { icon: "ðŸ§ ", title: "Learn Mode",           desc: "AI-powered CBSE concept explanations" },
+          { icon: "ðŸ§ª", title: "Examiner Mode",         desc: "Full mock papers with AI evaluation" },
+          { icon: "ðŸ—£ï¸", title: "Oral Mode",             desc: "Spoken practice & fluency building" },
+          { icon: "ðŸŽ¬", title: "Audio-Visual Mode",     desc: "Best teacher videos + AI explanation" },
+          { icon: "ðŸ“Š", title: "Progress Dashboard",    desc: "Track growth across subjects over time" },
         ].map(f => (
           <div key={f.title} style={{ background: "rgba(255,255,255,0.6)", borderRadius: 10, padding: "12px 14px", border: "1px solid rgba(212,175,55,0.25)" }}>
             <p style={{ fontSize: 18, marginBottom: 5 }}>{f.icon}</p>
@@ -758,7 +756,7 @@ function AboutTab() {
         ))}
       </div>
       <p style={{ fontSize: 12, color: "#5c6f82", lineHeight: 1.7 }}>
-        🔒 <strong>Privacy first:</strong> Your learning data stays on your device. No ads. No tracking.
+        ðŸ”’ <strong>Privacy first:</strong> Your learning data stays on your device. No ads. No tracking.
       </p>
     </div>
   );
@@ -785,9 +783,9 @@ function CheckResultTab({ student }: { student: StudentContext }) {
 
   return (
     <div>
-      <p style={{ color: "#5c6f82", fontSize: 13, marginBottom: 14 }}>Enter your details once — we'll take you directly to your CBSE result.</p>
+      <p style={{ color: "#5c6f82", fontSize: 13, marginBottom: 14 }}>Enter your details once â€” we'll take you directly to your CBSE result.</p>
       <div style={{ background: "rgba(255,255,255,0.7)", borderRadius: 14, padding: "18px", border: "1px solid rgba(212,175,55,0.3)", marginBottom: 14 }}>
-        <p style={{ fontWeight: 700, fontSize: 14, color: "#0a2540", marginBottom: 14 }}>🎓 {student.name}'s Result Lookup</p>
+        <p style={{ fontWeight: 700, fontSize: 14, color: "#0a2540", marginBottom: 14 }}>ðŸŽ“ {student.name}'s Result Lookup</p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
           <div>
             <label style={{ fontSize: 12, fontWeight: 700, color: "#5c6f82", display: "block", marginBottom: 5 }}>Roll Number *</label>
@@ -807,12 +805,12 @@ function CheckResultTab({ student }: { student: StudentContext }) {
         </div>
         <button onClick={handleCheck}
           style={{ width: "100%", padding: "12px", borderRadius: 10, border: "none", background: "linear-gradient(135deg, #D4AF37, #92400e)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>
-          🔍 Check My Result
+          ðŸ” Check My Result
         </button>
       </div>
       {submitted && (
         <div style={{ background: "rgba(34,197,94,0.1)", borderRadius: 10, padding: "10px 14px", border: "1px solid rgba(34,197,94,0.3)", marginBottom: 12 }}>
-          <p style={{ fontSize: 13, color: "#15803d", fontWeight: 600 }}>✅ Opening CBSE result page. If blocked, use direct links below.</p>
+          <p style={{ fontSize: 13, color: "#15803d", fontWeight: 600 }}>âœ… Opening CBSE result page. If blocked, use direct links below.</p>
         </div>
       )}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -823,12 +821,12 @@ function CheckResultTab({ student }: { student: StudentContext }) {
         ].map(({ label, url }) => (
           <a key={label} href={url} target="_blank" rel="noopener noreferrer"
             style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(212,175,55,0.4)", color: "#0a2540", fontSize: 12, fontWeight: 600, textDecoration: "none", background: "rgba(255,255,255,0.6)" }}>
-            {label} ↗
+            {label} â†—
           </a>
         ))}
       </div>
       <p style={{ fontSize: 12, color: "#92400e", marginTop: 12, background: "rgba(254,243,199,0.8)", padding: "10px 14px", borderRadius: 8 }}>
-        ⚠️ Result only available after CBSE officially declares it (expected May 2026). Save your Roll Number from your Admit Card now.
+        âš ï¸ Result only available after CBSE officially declares it (expected May 2026). Save your Roll Number from your Admit Card now.
       </p>
     </div>
   );
@@ -852,7 +850,7 @@ function CareerTab({ studentName }: { studentName: string }) {
         Hey {studentName}! Click a <strong>career</strong> to see which exams to prepare for, then click any exam for books & free study links.
       </p>
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        {[{ key: "streams", label: "🎯 Streams & Exams" }, { key: "upsc", label: "🏛️ UPSC / Civil Services" }].map(({ key, label }) => (
+        {[{ key: "streams", label: "ðŸŽ¯ Streams & Exams" }, { key: "upsc", label: "ðŸ›ï¸ UPSC / Civil Services" }].map(({ key, label }) => (
           <button key={key} onClick={() => { setSection(key as any); setSelectedCareer(null); setSelectedExam(null); }}
             style={{ padding: "7px 16px", borderRadius: 20, border: `2px solid ${section === key ? "#D4AF37" : "rgba(212,175,55,0.3)"}`, background: section === key ? "rgba(212,175,55,0.15)" : "rgba(255,255,255,0.5)", color: section === key ? "#0a2540" : "#5c6f82", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
             {label}
@@ -876,7 +874,7 @@ function CareerTab({ studentName }: { studentName: string }) {
             <div style={{ border: `2px solid ${stream.border}`, borderRadius: 14, padding: 18, background: stream.bg }}>
               <p style={{ fontWeight: 800, fontSize: 15, color: stream.color, marginBottom: 4 }}>{stream.icon} {stream.stream}</p>
               <p style={{ fontSize: 12, color: "#5c6f82", marginBottom: 14 }}>Subjects: {stream.subjects.join(", ")}</p>
-              <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 10 }}>👇 Click a career to see which entrance exams you need:</p>
+              <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 10 }}>ðŸ‘‡ Click a career to see which entrance exams you need:</p>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 {stream.careers.map(career => (
                   <button key={career.name} onClick={() => setSelectedCareer(career)}
@@ -888,7 +886,7 @@ function CareerTab({ studentName }: { studentName: string }) {
                       <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540" }}>{career.name}</p>
                       <p style={{ fontSize: 11, color: "#5c6f82" }}>{career.exams.length} exam{career.exams.length > 1 ? "s" : ""} to prepare</p>
                     </div>
-                    <span style={{ marginLeft: "auto", color: stream.color }}>→</span>
+                    <span style={{ marginLeft: "auto", color: stream.color }}>â†’</span>
                   </button>
                 ))}
               </div>
@@ -898,7 +896,7 @@ function CareerTab({ studentName }: { studentName: string }) {
             <div>
               <button onClick={() => setSelectedCareer(null)}
                 style={{ marginBottom: 14, padding: "7px 14px", borderRadius: 8, border: "1px solid rgba(212,175,55,0.3)", background: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: 13, fontFamily: "inherit", color: "#0a2540" }}>
-                ← Back to Careers
+                â† Back to Careers
               </button>
               <div style={{ border: `2px solid ${stream.border}`, borderRadius: 14, padding: 18, background: stream.bg }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
@@ -911,7 +909,7 @@ function CareerTab({ studentName }: { studentName: string }) {
                 <div style={{ background: "rgba(255,255,255,0.6)", borderRadius: 10, padding: "10px 14px", marginBottom: 16, border: `1px solid ${stream.border}` }}>
                   <p style={{ fontSize: 12, color: "#5c6f82" }}>To pursue <strong>{selectedCareer.name}</strong>, prepare for: <strong style={{ color: stream.color }}>{selectedCareer.exams.join(", ")}</strong></p>
                 </div>
-                <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 10 }}>📝 Click any exam for dates, books & free study material:</p>
+                <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 10 }}>ðŸ“ Click any exam for dates, books & free study material:</p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {careerExams.map(exam => (
                     <button key={exam.name} onClick={() => setSelectedExam(exam)}
@@ -920,9 +918,9 @@ function CareerTab({ studentName }: { studentName: string }) {
                       <div>
                         <p style={{ fontWeight: 700, fontSize: 14, color: "#0a2540" }}>{exam.icon} {exam.name}</p>
                         <p style={{ fontSize: 12, color: "#5c6f82", marginTop: 2 }}>{exam.desc}</p>
-                        <p style={{ fontSize: 11, color: stream.color, marginTop: 3 }}>📅 {exam.dates}</p>
+                        <p style={{ fontSize: 11, color: stream.color, marginTop: 3 }}>ðŸ“… {exam.dates}</p>
                       </div>
-                      <span style={{ color: stream.color, fontSize: 20, marginLeft: 12 }}>→</span>
+                      <span style={{ color: stream.color, fontSize: 20, marginLeft: 12 }}>â†’</span>
                     </button>
                   ))}
                 </div>
@@ -933,42 +931,42 @@ function CareerTab({ studentName }: { studentName: string }) {
             <div>
               <button onClick={() => setSelectedExam(null)}
                 style={{ marginBottom: 14, padding: "7px 14px", borderRadius: 8, border: "1px solid rgba(212,175,55,0.3)", background: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: 13, fontFamily: "inherit", color: "#0a2540" }}>
-                ← Back
+                â† Back
               </button>
               <div style={{ background: "rgba(255,255,255,0.7)", borderRadius: 14, padding: "20px", border: "1px solid rgba(212,175,55,0.3)" }}>
                 <p style={{ fontWeight: 800, fontSize: 18, color: "#0a2540", marginBottom: 4 }}>{selectedExam.icon} {selectedExam.name}</p>
                 <p style={{ fontSize: 14, color: "#5c6f82", marginBottom: 16 }}>{selectedExam.desc}</p>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
                   <div style={{ background: "rgba(212,175,55,0.1)", borderRadius: 10, padding: "14px" }}>
-                    <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 6 }}>📅 When to Appear</p>
+                    <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 6 }}>ðŸ“… When to Appear</p>
                     <p style={{ fontSize: 13, color: "#425466" }}>{selectedExam.dates}</p>
                   </div>
                   <div style={{ background: "rgba(212,175,55,0.1)", borderRadius: 10, padding: "14px" }}>
-                    <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 6 }}>🔗 Apply / Register</p>
-                    <a href={selectedExam.link} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: "#2563EB", fontWeight: 700 }}>Official Portal ↗</a>
+                    <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 6 }}>ðŸ”— Apply / Register</p>
+                    <a href={selectedExam.link} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: "#2563EB", fontWeight: 700 }}>Official Portal â†—</a>
                   </div>
                 </div>
                 <div style={{ marginBottom: 16 }}>
-                  <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 4 }}>📚 Best Books — Click to Access Free Online</p>
+                  <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540", marginBottom: 4 }}>ðŸ“š Best Books â€” Click to Access Free Online</p>
                   <p style={{ fontSize: 11, color: "#5c6f82", marginBottom: 10 }}>All links go to free, legal study material.</p>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {selectedExam.books.map(book => (
                       <a key={book.title} href={book.freeLink} target="_blank" rel="noopener noreferrer"
                         style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: "rgba(255,255,255,0.8)", borderRadius: 10, border: "1px solid rgba(212,175,55,0.25)", textDecoration: "none" }}
                         onMouseOver={e => (e.currentTarget.style.background = "rgba(212,175,55,0.08)")} onMouseOut={e => (e.currentTarget.style.background = "rgba(255,255,255,0.8)")}>
-                        <span style={{ fontSize: 20, flexShrink: 0 }}>📖</span>
+                        <span style={{ fontSize: 20, flexShrink: 0 }}>ðŸ“–</span>
                         <div style={{ flex: 1 }}>
                           <p style={{ fontWeight: 600, fontSize: 13, color: "#0a2540" }}>{book.title}</p>
-                          <p style={{ fontSize: 11, color: "#2563EB", marginTop: 2 }}>🔗 {book.linkLabel}</p>
+                          <p style={{ fontSize: 11, color: "#2563EB", marginTop: 2 }}>ðŸ”— {book.linkLabel}</p>
                         </div>
-                        <span style={{ color: "#D4AF37", fontSize: 16, flexShrink: 0 }}>↗</span>
+                        <span style={{ color: "#D4AF37", fontSize: 16, flexShrink: 0 }}>â†—</span>
                       </a>
                     ))}
                   </div>
                 </div>
                 <a href={selectedExam.link} target="_blank" rel="noopener noreferrer"
                   style={{ display: "block", textAlign: "center", padding: "12px", borderRadius: 10, background: "linear-gradient(135deg, #D4AF37, #92400e)", color: "#fff", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
-                  🚀 Go to Official {selectedExam.name} Portal
+                  ðŸš€ Go to Official {selectedExam.name} Portal
                 </a>
               </div>
             </div>
@@ -979,8 +977,8 @@ function CareerTab({ studentName }: { studentName: string }) {
       {section === "upsc" && (
         <div>
           <div style={{ background: "linear-gradient(135deg, #0a2540, #1e3a5f)", borderRadius: 14, padding: "16px 20px", color: "#fff", marginBottom: 14 }}>
-            <p style={{ fontWeight: 800, fontSize: 16, marginBottom: 6 }}>🇮🇳 UPSC Civil Services — Complete Free Guide</p>
-            <p style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.7 }}>Any stream works. Many toppers start in Class 10–11. All resources below are <strong style={{ color: "#fbbf24" }}>free</strong>.</p>
+            <p style={{ fontWeight: 800, fontSize: 16, marginBottom: 6 }}>ðŸ‡®ðŸ‡³ UPSC Civil Services â€” Complete Free Guide</p>
+            <p style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.7 }}>Any stream works. Many toppers start in Class 10â€“11. All resources below are <strong style={{ color: "#fbbf24" }}>free</strong>.</p>
           </div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
             {UPSC_RESOURCES.map((r, i) => (
@@ -994,12 +992,12 @@ function CareerTab({ studentName }: { studentName: string }) {
             {UPSC_RESOURCES[upscSection].items.map(item => (
               <a key={item.label} href={item.link} target="_blank" rel="noopener noreferrer"
                 style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 16px", background: "rgba(255,255,255,0.6)", borderRadius: 10, border: "1px solid rgba(212,175,55,0.25)", textDecoration: "none" }}>
-                <span style={{ fontSize: 20 }}>🔗</span>
+                <span style={{ fontSize: 20 }}>ðŸ”—</span>
                 <div style={{ flex: 1 }}>
                   <p style={{ fontWeight: 700, fontSize: 14, color: "#0a2540" }}>{item.label}</p>
                   <p style={{ fontSize: 12, color: "#5c6f82", marginTop: 3 }}>{item.desc}</p>
                 </div>
-                <span style={{ color: "#D4AF37", fontSize: 16, flexShrink: 0 }}>↗</span>
+                <span style={{ color: "#D4AF37", fontSize: 16, flexShrink: 0 }}>â†—</span>
               </a>
             ))}
           </div>
@@ -1038,7 +1036,7 @@ function TimetableTab({ student }: { student: StudentContext }) {
 
   return (
     <div>
-      <p style={{ color: "#5c6f82", fontSize: 13, marginBottom: 14 }}>Generate a personalised AI study plan — then edit each day to match your schedule.</p>
+      <p style={{ color: "#5c6f82", fontSize: 13, marginBottom: 14 }}>Generate a personalised AI study plan â€” then edit each day to match your schedule.</p>
       <div style={{ background: "rgba(255,255,255,0.6)", borderRadius: 14, padding: "16px", border: "1px solid rgba(212,175,55,0.3)", marginBottom: 14 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
           <div>
@@ -1065,14 +1063,14 @@ function TimetableTab({ student }: { student: StudentContext }) {
         </div>
         <button onClick={handleGenerate} disabled={loading}
           style={{ width: "100%", padding: "11px", borderRadius: 10, border: "none", background: loading ? "#a0aec0" : "linear-gradient(135deg, #D4AF37, #92400e)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: loading ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
-          {loading ? "⏳ Generating AI Timetable..." : "✨ Generate My Personalised Study Plan"}
+          {loading ? "â³ Generating AI Timetable..." : "âœ¨ Generate My Personalised Study Plan"}
         </button>
       </div>
       {timetable.length > 0 && (
         <div>
           <p style={{ fontSize: 13, fontWeight: 700, color: "#0a2540", marginBottom: 10 }}>
-            📅 {student.name}'s Weekly Plan — {exam}
-            <span style={{ fontSize: 11, fontWeight: 400, color: "#5c6f82", marginLeft: 8 }}>✏️ Click any row to edit</span>
+            ðŸ“… {student.name}'s Weekly Plan â€” {exam}
+            <span style={{ fontSize: 11, fontWeight: 400, color: "#5c6f82", marginLeft: 8 }}>âœï¸ Click any row to edit</span>
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
             {timetable.map((entry, i) => (
@@ -1082,7 +1080,7 @@ function TimetableTab({ student }: { student: StudentContext }) {
                     <input value={editVal.subject} onChange={e => setEditVal({ ...editVal, subject: e.target.value })} placeholder="Subject" style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #D4AF37", fontSize: 13, fontFamily: "inherit" }} />
                     <input value={editVal.topic}   onChange={e => setEditVal({ ...editVal, topic: e.target.value })}   placeholder="Topic"   style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #D4AF37", fontSize: 13, fontFamily: "inherit" }} />
                     <input value={editVal.notes}   onChange={e => setEditVal({ ...editVal, notes: e.target.value })}   placeholder="Notes"   style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #D4AF37", fontSize: 13, fontFamily: "inherit" }} />
-                    <button onClick={() => saveEdit(i)} style={{ padding: "6px 12px", borderRadius: 6, border: "none", background: "#D4AF37", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>✓</button>
+                    <button onClick={() => saveEdit(i)} style={{ padding: "6px 12px", borderRadius: 6, border: "none", background: "#D4AF37", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>âœ“</button>
                   </div>
                 ) : (
                   <div onClick={() => { setEditing(i); setEditVal({ ...entry }); }}
@@ -1114,9 +1112,9 @@ function ImportantDatesTab() {
             <span style={{ fontSize: 22 }}>{item.icon}</span>
             <div style={{ flex: 1 }}>
               <p style={{ fontWeight: 700, fontSize: 13, color: "#0a2540" }}>{item.event}</p>
-              <p style={{ fontSize: 12, color: "#5c6f82", marginTop: 2 }}>📅 {item.date}</p>
+              <p style={{ fontSize: 12, color: "#5c6f82", marginTop: 2 }}>ðŸ“… {item.date}</p>
             </div>
-            <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 12px", borderRadius: 20, background: "rgba(212,175,55,0.15)", color: "#92400e", whiteSpace: "nowrap" }}>⏳ Upcoming ↗</span>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 12px", borderRadius: 20, background: "rgba(212,175,55,0.15)", color: "#92400e", whiteSpace: "nowrap" }}>â³ Upcoming â†—</span>
           </a>
         ))}
       </div>
@@ -1124,7 +1122,7 @@ function ImportantDatesTab() {
   );
 }
 
-// ─── MAIN ─────────────────────────────────────────────────────
+// â”€â”€â”€ MAIN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function ModeSelector() {
   const [student, setStudent]     = useState<StudentContext | null>(null);
   const [activeTab, setActiveTab] = useState<Tab | null>(null);
@@ -1144,16 +1142,16 @@ export default function ModeSelector() {
   const isClass10 = getClassNum(student.class) === 10;
 
   const TABS: { key: Tab; label: string; icon: string }[] = [
-    { key: "about",          label: "About Shauri",   icon: "ℹ️"  },
-    { key: "lastYears",      label: "Last Years",     icon: "📄"  },
-    { key: "checkResult",    label: "Check Result",   icon: "🏆"  },
-    { key: "career",         label: "Career Guide",   icon: "🎯"  },
-    { key: "timetable",      label: "Study Planner",  icon: "📅"  },
-    { key: "importantDates", label: "Upcoming Dates", icon: "🔔"  },
+    { key: "about",          label: "About Shauri",   icon: "â„¹ï¸"  },
+    { key: "lastYears",      label: "Last Years",     icon: "ðŸ“„"  },
+    { key: "checkResult",    label: "Check Result",   icon: "ðŸ†"  },
+    { key: "career",         label: "Career Guide",   icon: "ðŸŽ¯"  },
+    { key: "timetable",      label: "Study Planner",  icon: "ðŸ“…"  },
+    { key: "importantDates", label: "Upcoming Dates", icon: "ðŸ””"  },
   ];
 
   return (
-    <div className={orbitron.className} style={{ minHeight: "100vh", background: "linear-gradient(to bottom, #FFF3D9 0%, #FFE4B3 45%, #E6F2FF 100%)", display: "flex", flexDirection: "column" }}>
+    <div className={orbitronClassName} style={{ minHeight: "100vh", background: "linear-gradient(to bottom, #FFF3D9 0%, #FFE4B3 45%, #E6F2FF 100%)", display: "flex", flexDirection: "column" }}>
       <style>{`
         * { box-sizing: border-box; }
         .modes-main { flex: 1; width: 100%; max-width: 1400px; margin: 0 auto; padding: clamp(16px,4vw,40px) clamp(16px,4vw,32px) 48px; display: flex; flex-direction: column; }
@@ -1170,7 +1168,7 @@ export default function ModeSelector() {
         .choose-sub { text-align: center; font-size: clamp(9px,2vw,14px); letter-spacing: clamp(0.05em,1vw,0.18em); color: #5c6f82; margin-bottom: clamp(20px,4vw,44px); }
         .cards-grid { display: grid; gap: clamp(12px,3vw,28px); grid-template-columns: 1fr; }
         @media (min-width:560px) { .cards-grid { grid-template-columns: repeat(2,1fr); } }
-        @media (min-width:1100px) { .cards-grid { grid-template-columns: repeat(5,1fr); } }
+        @media (min-width:1100px) { .cards-grid { grid-template-columns: repeat(6,1fr); } }
         .mode-card { background: rgba(255,255,255,0.55); backdrop-filter: blur(10px); border-radius: 18px; border: 1px solid rgba(212,175,55,0.35); text-decoration: none; display: flex; flex-direction: row; align-items: center; gap: 16px; padding: clamp(16px,3vw,22px) clamp(14px,3vw,20px); transition: transform 0.15s, box-shadow 0.15s; -webkit-tap-highlight-color: transparent; }
         .mode-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.1); }
         .mode-card:active { transform: scale(0.97); }
@@ -1197,7 +1195,7 @@ export default function ModeSelector() {
           ))}
           {isClass10 && (
             <a className="tab-btn" href="/planner" style={{ textDecoration: "none" }}>
-              🗓️ 30-Day Planner
+              ðŸ—“ï¸ 30-Day Planner
             </a>
           )}
         </div>
@@ -1214,17 +1212,18 @@ export default function ModeSelector() {
         )}
 
         <h1 className="welcome-name" style={{ marginTop: "clamp(16px,3vw,28px)" }}>WELCOME, {student.name.toUpperCase()}</h1>
-        <p className="welcome-class">CLASS {student.class} · {student.board}</p>
+        <p className="welcome-class">CLASS {student.class} Â· {student.board}</p>
         <h2 className="choose-h2">CHOOSE YOUR LEARNING MODE</h2>
         <p className="choose-sub">SELECT YOUR PATH TO BEGIN THE ASCENT</p>
 
-        {/* ── 5 MODE CARDS ── */}
+        {/* â”€â”€ 6 MODE CARDS â”€â”€ */}
         <div className="cards-grid">
-          <ModeCard icon="🧠" title="LEARN MODE"            desc="Learn concepts with clear CBSE-aligned explanations and examples."                          href="/teacher"  cta="BEGIN LEARNING" />
-          <ModeCard icon="🧪" title="EXAMINER MODE"         desc="Practice full-length question papers in real exam conditions."                              href="/examiner" cta="BEGIN TEST" />
-          <ModeCard icon="🗣️" title="ORAL MODE"             desc="Strengthen recall, fluency, and spoken confidence."                                         href="/oral"     cta="BEGIN SPEAKING" />
-          <ModeCard icon="🎬" title="AUDIO-VISUAL MODE"     desc="Watch the best teacher videos with AI explanation, quiz & Q&A for any topic." href="/av"       cta="BEGIN WATCHING" highlight />
-          <ModeCard icon="📊" title="PROGRESS DASHBOARD"    desc="Review strengths, identify gaps, and track your growth."                                    href="/progress" cta="VIEW PROGRESS" />
+          <ModeCard icon="ðŸ§ " title="LEARN MODE"            desc="Learn concepts with clear CBSE-aligned explanations and examples."                          href="/teacher"  cta="BEGIN LEARNING" />
+          <ModeCard icon="ðŸ§ª" title="EXAMINER MODE"         desc="Practice full-length question papers in real exam conditions."                              href="/examiner" cta="BEGIN TEST" />
+          <ModeCard icon="ðŸ—£ï¸" title="ORAL MODE"             desc="Strengthen recall, fluency, and spoken confidence."                                         href="/oral"     cta="BEGIN SPEAKING" />
+          <ModeCard icon="ðŸŽ¬" title="AUDIO-VISUAL MODE"     desc="Watch the best teacher videos with AI explanation, quiz & Q&A for any topic." href="/av"       cta="BEGIN WATCHING" highlight />
+          <ModeCard icon="ðŸ”¬" title="VIRTUAL LAB"           desc="Run interactive CBSE practical simulations with diagrams, observations, quiz and viva."     href="/lab"      cta="OPEN LAB" />
+          <ModeCard icon="ðŸ“Š" title="PROGRESS DASHBOARD"    desc="Review strengths, identify gaps, and track your growth."                                    href="/progress" cta="VIEW PROGRESS" />
         </div>
 
         <p className="privacy">Your learning data remains private and stays on this device unless you explicitly export or share it.</p>

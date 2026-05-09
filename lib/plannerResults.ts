@@ -6,6 +6,21 @@ export type PlannerResult = {
   score: number;
   total: number;
   source: "exam" | "manual" | "manual_verified";
+  diagnostics?: {
+    strengths?: string[];
+    weaknesses?: string[];
+    improvementPriorities?: string[];
+    errorLog?: string[];
+    errorTopics?: string[];
+    categoryPerformance?: Array<{
+      category: string;
+      obtained: number;
+      total: number;
+      percentage: number;
+      weaknessSeverity: "low" | "medium" | "high" | "critical";
+      notes?: string;
+    }>;
+  };
 };
 
 const RESULTS_KEY = "planner_results";

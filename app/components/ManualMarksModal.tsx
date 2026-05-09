@@ -14,13 +14,41 @@ interface Props {
   subject:   string;
   chapter:   string;
   day:       number;
-  onSaved:   (result: { marks: number; total: number; pct: number; errorTopics: string[] }) => void;
+  onSaved:   (result: {
+    marks: number;
+    total: number;
+    pct: number;
+    errorTopics: string[];
+    strengths: string[];
+    weaknesses: string[];
+    improvements: string[];
+    errorLog: string[];
+    categoryPerformance: CategoryPerformanceItem[];
+  }) => void;
   onClose:   () => void;
 }
 
 type Step = "entry" | "upload" | "verifying" | "result";
 const MAX_UPLOAD_BYTES = 12 * 1024 * 1024; // 12MB per file
 const MAX_AS_FILES = 10; // max answer sheet pages
+const MAX_SUMMARY_FILES = 10;
+type UploadMode = "qp_as" | "summary";
+
+type WeaknessSeverity = "low" | "medium" | "high" | "critical";
+type CategoryPerformanceItem = {
+  category:
+    | "Primary Conceptual"
+    | "Secondary Conceptual"
+    | "Writing/Presentation"
+    | "Vocabulary/Language"
+    | "Accuracy"
+    | "Attempt Quality";
+  obtained: number;
+  total: number;
+  percentage: number;
+  weaknessSeverity: WeaknessSeverity;
+  notes?: string;
+};
 
 export default function ManualMarksModal({ subject, chapter, day, onSaved, onClose }: Props) {
   const [step,        setStep]       = useState<Step>("entry");
@@ -29,15 +57,20 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
   const [qpFile,      setQpFile]     = useState<File | null>(null);
   const [qpName,      setQpName]     = useState("");
   const [asFiles,     setAsFiles]    = useState<File[]>([]); // multiple pages
+  const [summaryFiles, setSummaryFiles] = useState<File[]>([]);
+  const [uploadMode, setUploadMode] = useState<UploadMode>("qp_as");
   const [verifyStep,  setVerifyStep] = useState("");
   const [aiResult,    setAiResult]   = useState<{
     confirmedMarks: number; confirmedTotal: number; pct: number;
     errorTopics: string[]; feedback: string; deductions: string[]; scoreChanged: boolean;
+    strengths: string[]; weaknesses: string[]; improvements: string[]; errorLog: string[];
+    categoryPerformance: CategoryPerformanceItem[];
   } | null>(null);
   const [error, setError] = useState("");
 
   const qpRef = useRef<HTMLInputElement>(null);
   const asRef = useRef<HTMLInputElement>(null);
+  const summaryRef = useRef<HTMLInputElement>(null);
 
   // ── Image compression ──
   async function maybeCompressImage(file: File): Promise<File> {
@@ -107,8 +140,30 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
     setAsFiles(prev => prev.filter((_, i) => i !== idx));
   }
 
+  async function handleSummary(newFiles: FileList) {
+    const incoming = Array.from(newFiles).slice(0, MAX_SUMMARY_FILES);
+    const processed: File[] = [];
+    for (const f of incoming) {
+      const isPdf = f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf");
+      const p = isPdf ? f : await maybeCompressImage(f);
+      if (p.size > MAX_UPLOAD_BYTES) {
+        setError(`"${f.name}" is too large (${sizeMb(p.size)} MB). Max 12 MB per file.`);
+        return;
+      }
+      processed.push(p);
+    }
+    setError("");
+    setSummaryFiles(processed);
+  }
+
+  function removeSummaryFile(idx: number) {
+    setSummaryFiles(prev => prev.filter((_, i) => i !== idx));
+  }
+
   function canVerify() {
-    return marks && total && parseInt(marks) <= parseInt(total) && qpFile && asFiles.length > 0;
+    if (!marks || !total || parseInt(marks) > parseInt(total)) return false;
+    if (uploadMode === "summary") return summaryFiles.length > 0;
+    return !!qpFile && asFiles.length > 0;
   }
 
   // ── Upload single file to Blob ──
@@ -131,28 +186,35 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
     const t = parseInt(total);
 
     try {
-      // Upload QP
-      setVerifyStep("Uploading question paper…");
-      const qpUrl = await uploadToBlob(qpFile!);
+      let payload: Record<string, any> = {
+        marks: m, total: t, subject, chapter, day: String(day),
+      };
 
-      // Upload all answer sheet pages
-      const asUrls: string[] = [];
-      for (let i = 0; i < asFiles.length; i++) {
-        setVerifyStep(`Uploading answer sheet page ${i + 1} of ${asFiles.length}…`);
-        asUrls.push(await uploadToBlob(asFiles[i]));
+      if (uploadMode === "summary") {
+        const summaryUrls: string[] = [];
+        for (let i = 0; i < summaryFiles.length; i++) {
+          setVerifyStep(`Uploading result summary file ${i + 1} of ${summaryFiles.length}…`);
+          summaryUrls.push(await uploadToBlob(summaryFiles[i]));
+        }
+        payload = { ...payload, summaryUrls };
+        setVerifyStep("AI is reading your result summary…");
+      } else {
+        setVerifyStep("Uploading question paper…");
+        const qpUrl = await uploadToBlob(qpFile!);
+
+        const asUrls: string[] = [];
+        for (let i = 0; i < asFiles.length; i++) {
+          setVerifyStep(`Uploading answer sheet page ${i + 1} of ${asFiles.length}…`);
+          asUrls.push(await uploadToBlob(asFiles[i]));
+        }
+        payload = { ...payload, qpUrl, asUrls };
+        setVerifyStep("AI is reading your answer sheet…");
       }
 
-      // Call verify-marks with array of AS URLs
-      setVerifyStep("AI is reading your answer sheet…");
       const res = await fetch("/api/verify-marks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          marks: m, total: t,
-          subject, chapter, day: String(day),
-          qpUrl,
-          asUrls, // array — supports multi-page
-        }),
+        body: JSON.stringify(payload),
       });
 
       const raw = await res.text();
@@ -170,6 +232,10 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
       const deductionsMatch = reply.match(/DEDUCTIONS:\s*([\s\S]+?)(?=ERRORS:|FEEDBACK:|$)/i);
       const errorsMatch     = reply.match(/ERRORS:\s*(.+)/i);
       const feedbackMatch   = reply.match(/FEEDBACK:\s*([\s\S]+)/i);
+      const strengthsMatch  = reply.match(/STRENGTHS:\s*(.+)/i);
+      const weakMatch       = reply.match(/WEAKNESSES:\s*(.+)/i);
+      const improveMatch    = reply.match(/IMPROVEMENT_PRIORITY:\s*([\s\S]+?)(?=ERROR_LOG:|ERRORS:|FEEDBACK:|$)/i);
+      const errorLogMatch   = reply.match(/ERROR_LOG:\s*([\s\S]+?)(?=FEEDBACK:|$)/i);
 
       const confirmedMarks = scoreMatch ? parseInt(scoreMatch[1]) : m;
       const confirmedTotal = scoreMatch ? parseInt(scoreMatch[2]) : t;
@@ -182,9 +248,43 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
         ? errorsMatch[1].split(",").map((s: string) => s.trim()).filter(Boolean)
         : [];
       const feedback     = feedbackMatch ? feedbackMatch[1].trim() : reply.slice(0, 400);
+      const strengths = strengthsMatch
+        ? strengthsMatch[1].split(",").map((s: string) => s.trim()).filter(Boolean)
+        : [];
+      const weaknesses = weakMatch
+        ? weakMatch[1].split(",").map((s: string) => s.trim()).filter(Boolean)
+        : [];
+      const improvements = improveMatch
+        ? improveMatch[1]
+            .split("\n")
+            .map((s: string) => s.replace(/^\d+[\).\s-]*/, "").trim())
+            .filter(Boolean)
+        : [];
+      const errorLog = errorLogMatch
+        ? errorLogMatch[1]
+            .split("\n")
+            .map((s: string) => s.replace(/^[-*]\s*/, "").trim())
+            .filter(Boolean)
+        : deductions;
       const scoreChanged = confirmedMarks !== m || confirmedTotal !== t;
+      const categoryPerformance: CategoryPerformanceItem[] = Array.isArray(data?.categoryPerformance)
+        ? data.categoryPerformance
+        : [];
 
-      setAiResult({ confirmedMarks, confirmedTotal, pct, errorTopics, feedback, deductions, scoreChanged });
+      setAiResult({
+        confirmedMarks,
+        confirmedTotal,
+        pct,
+        errorTopics,
+        feedback,
+        deductions,
+        scoreChanged,
+        strengths,
+        weaknesses,
+        improvements,
+        errorLog,
+        categoryPerformance,
+      });
       setStep("result");
 
     } catch (e: any) {
@@ -203,8 +303,24 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
       score_source: "manual_verified",
       evaluation_text: aiResult.feedback,
       error_topics: aiResult.errorTopics,
+      category_performance: aiResult.categoryPerformance,
+      strengths: aiResult.strengths,
+      weaknesses: aiResult.weaknesses,
+      improvement_priorities: aiResult.improvements,
+      error_log: aiResult.errorLog,
+      upload_mode: uploadMode,
     });
-    onSaved({ marks: aiResult.confirmedMarks, total: aiResult.confirmedTotal, pct: aiResult.pct, errorTopics: aiResult.errorTopics });
+    onSaved({
+      marks: aiResult.confirmedMarks,
+      total: aiResult.confirmedTotal,
+      pct: aiResult.pct,
+      errorTopics: aiResult.errorTopics,
+      strengths: aiResult.strengths,
+      weaknesses: aiResult.weaknesses,
+      improvements: aiResult.improvements,
+      errorLog: aiResult.errorLog,
+      categoryPerformance: aiResult.categoryPerformance,
+    });
   }
 
   const inp: React.CSSProperties = {
@@ -253,7 +369,7 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
         {step === "entry" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#92400e" }}>
-              ⚠️ Upload the question paper and answer sheet so AI can verify your score. Self-reported marks without proof are not counted in your verified average.
+              ⚠️ Upload supporting test documents so AI can verify your score. Self-reported marks without proof are not counted in your verified average.
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
@@ -282,80 +398,139 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
         {step === "upload" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <p style={{ fontSize: 14, color: "#334155", lineHeight: 1.6, margin: 0 }}>
-              Upload the <strong>question paper</strong> and your <strong>answer sheet</strong>. AI will check your score of <strong>{marks}/{total}</strong>.
+              Upload test documents for AI verification of <strong>{marks}/{total}</strong>.
             </p>
 
-            {/* Question paper — single PDF/image */}
-            <div
-              onClick={() => qpRef.current?.click()}
-              style={{ border: `2px dashed ${qpFile ? "#2563eb" : "#e2e8f0"}`, borderRadius: 12, padding: 20, cursor: "pointer", background: qpFile ? "#eff6ff" : "#f8fafc", textAlign: "center" }}
-            >
-              {qpFile ? (
-                <div style={{ fontSize: 14, color: "#2563eb", fontWeight: 600 }}>
-                  ✓ {qpName} <span style={{ color: "#94a3b8", fontWeight: 400, fontSize: 12 }}>(tap to replace)</span>
-                </div>
-              ) : (
-                <>
-                  <div style={{ fontSize: 28, marginBottom: 6 }}>📄</div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: "#334155" }}>Question Paper</div>
-                  <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>PDF or photo — tap to upload</div>
-                </>
-              )}
-            </div>
-            <input ref={qpRef} type="file" accept="image/*,application/pdf" hidden
-              onChange={e => { const f = e.target.files?.[0]; if (f) handleQP(f); }} />
-
-            {/* Answer sheet — multi-image OR single PDF */}
-            <div>
-              <div
-                onClick={() => asRef.current?.click()}
-                style={{ border: `2px dashed ${asFiles.length > 0 ? "#059669" : "#e2e8f0"}`, borderRadius: 12, padding: 20, cursor: "pointer", background: asFiles.length > 0 ? "#f0fdf4" : "#f8fafc", textAlign: "center" }}
+            <div style={{ display: "grid", gap: 10 }}>
+              <button
+                onClick={() => { setUploadMode("qp_as"); setSummaryFiles([]); }}
+                style={{ ...btnGhost, textAlign: "left", borderColor: uploadMode === "qp_as" ? "#2563eb" : "#cbd5e1", background: uploadMode === "qp_as" ? "#eff6ff" : "#fff" }}
               >
-                {asFiles.length === 0 ? (
-                  <>
-                    <div style={{ fontSize: 28, marginBottom: 6 }}>📝</div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: "#334155" }}>Your Answer Sheet</div>
-                    <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>
-                      Tap to upload — PDF <strong>or</strong> multiple photos (one per page)
+                OPTION 1: Upload Question Paper + Answer Sheet
+              </button>
+              <button
+                onClick={() => { setUploadMode("summary"); setQpFile(null); setQpName(""); setAsFiles([]); }}
+                style={{ ...btnGhost, textAlign: "left", borderColor: uploadMode === "summary" ? "#2563eb" : "#cbd5e1", background: uploadMode === "summary" ? "#eff6ff" : "#fff" }}
+              >
+                OPTION 3: Upload Result Summary
+              </button>
+              <div style={{ fontSize: 12, color: "#64748b" }}>
+                If your test was conducted outside SHAURI, upload the evaluated result summary/report card/test review PDF here.
+              </div>
+            </div>
+
+            {uploadMode === "qp_as" ? (
+              <>
+                <div
+                  onClick={() => qpRef.current?.click()}
+                  style={{ border: `2px dashed ${qpFile ? "#2563eb" : "#e2e8f0"}`, borderRadius: 12, padding: 20, cursor: "pointer", background: qpFile ? "#eff6ff" : "#f8fafc", textAlign: "center" }}
+                >
+                  {qpFile ? (
+                    <div style={{ fontSize: 14, color: "#2563eb", fontWeight: 600 }}>
+                      ✓ {qpName} <span style={{ color: "#94a3b8", fontWeight: 400, fontSize: 12 }}>(tap to replace)</span>
                     </div>
-                  </>
-                ) : isPdf ? (
-                  <div style={{ fontSize: 14, color: "#059669", fontWeight: 600 }}>
-                    ✓ {asFiles[0].name} <span style={{ color: "#94a3b8", fontWeight: 400, fontSize: 12 }}>(tap to replace)</span>
+                  ) : (
+                    <>
+                      <div style={{ fontSize: 28, marginBottom: 6 }}>📄</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "#334155" }}>OPTION 1: Question Paper</div>
+                      <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>PDF or photo — tap to upload</div>
+                    </>
+                  )}
+                </div>
+                <input ref={qpRef} type="file" accept="image/*,application/pdf" hidden
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleQP(f); }} />
+
+                <div>
+                  <div
+                    onClick={() => asRef.current?.click()}
+                    style={{ border: `2px dashed ${asFiles.length > 0 ? "#059669" : "#e2e8f0"}`, borderRadius: 12, padding: 20, cursor: "pointer", background: asFiles.length > 0 ? "#f0fdf4" : "#f8fafc", textAlign: "center" }}
+                  >
+                    {asFiles.length === 0 ? (
+                      <>
+                        <div style={{ fontSize: 28, marginBottom: 6 }}>📝</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: "#334155" }}>OPTION 2: Answer Sheet</div>
+                        <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>
+                          Tap to upload — PDF <strong>or</strong> multiple photos (one per page)
+                        </div>
+                      </>
+                    ) : isPdf ? (
+                      <div style={{ fontSize: 14, color: "#059669", fontWeight: 600 }}>
+                        ✓ {asFiles[0].name} <span style={{ color: "#94a3b8", fontWeight: 400, fontSize: 12 }}>(tap to replace)</span>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 13, color: "#059669", fontWeight: 600 }}>
+                        ✓ {asFiles.length} page{asFiles.length > 1 ? "s" : ""} uploaded
+                        <span style={{ color: "#94a3b8", fontWeight: 400, fontSize: 12 }}> (tap to add more)</span>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div style={{ fontSize: 13, color: "#059669", fontWeight: 600 }}>
-                    ✓ {asFiles.length} page{asFiles.length > 1 ? "s" : ""} uploaded
-                    <span style={{ color: "#94a3b8", fontWeight: 400, fontSize: 12 }}> (tap to add more)</span>
+                  <input
+                    ref={asRef} type="file"
+                    accept="image/*,application/pdf"
+                    multiple hidden
+                    onChange={e => { if (e.target.files?.length) handleAS(e.target.files); e.target.value = ""; }}
+                  />
+
+                  {asFiles.length > 0 && !isPdf && (
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                      {asFiles.map((f, i) => (
+                        <div key={i} style={{ position: "relative", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 8, padding: "6px 10px", fontSize: 12, color: "#166534", display: "flex", alignItems: "center", gap: 6 }}>
+                          📄 Page {i + 1}
+                          <button
+                            onClick={() => removeAsFile(i)}
+                            style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 14, lineHeight: 1, padding: 0 }}
+                          >✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div>
+                <div
+                  onClick={() => summaryRef.current?.click()}
+                  style={{ border: `2px dashed ${summaryFiles.length > 0 ? "#7c3aed" : "#e2e8f0"}`, borderRadius: 12, padding: 20, cursor: "pointer", background: summaryFiles.length > 0 ? "#f5f3ff" : "#f8fafc", textAlign: "center" }}
+                >
+                  {summaryFiles.length === 0 ? (
+                  <>
+                    <div style={{ fontSize: 28, marginBottom: 6 }}>📑</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#334155" }}>OPTION 3: Result Summary</div>
+                    <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>Scanned PDF, phone camera images, teacher-marked sheets, coaching/school reports</div>
+                  </>
+                  ) : (
+                    <div style={{ fontSize: 13, color: "#6d28d9", fontWeight: 600 }}>
+                      ✓ {summaryFiles.length} file{summaryFiles.length > 1 ? "s" : ""} uploaded
+                      <span style={{ color: "#94a3b8", fontWeight: 400, fontSize: 12 }}> (tap to replace)</span>
+                    </div>
+                  )}
+                </div>
+                <input
+                  ref={summaryRef}
+                  type="file"
+                  accept="image/*,application/pdf"
+                  multiple
+                  hidden
+                  onChange={e => { if (e.target.files?.length) handleSummary(e.target.files); e.target.value = ""; }}
+                />
+                {summaryFiles.length > 0 && (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                    {summaryFiles.map((f, i) => (
+                      <div key={i} style={{ background: "#f5f3ff", border: "1px solid #ddd6fe", borderRadius: 8, padding: "6px 10px", fontSize: 12, color: "#5b21b6", display: "flex", alignItems: "center", gap: 6 }}>
+                        📄 {f.name.length > 20 ? `${f.name.slice(0, 20)}…` : f.name}
+                        <button
+                          onClick={() => removeSummaryFile(i)}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 14, lineHeight: 1, padding: 0 }}
+                        >✕</button>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
-              <input
-                ref={asRef} type="file"
-                accept="image/*,application/pdf"
-                multiple hidden
-                onChange={e => { if (e.target.files?.length) handleAS(e.target.files); e.target.value = ""; }}
-              />
+            )}
 
-              {/* Page thumbnails for multi-image */}
-              {asFiles.length > 0 && !isPdf && (
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-                  {asFiles.map((f, i) => (
-                    <div key={i} style={{ position: "relative", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 8, padding: "6px 10px", fontSize: 12, color: "#166534", display: "flex", alignItems: "center", gap: 6 }}>
-                      📄 Page {i + 1}
-                      <button
-                        onClick={() => removeAsFile(i)}
-                        style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 14, lineHeight: 1, padding: 0 }}
-                      >✕</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Scanner app hint */}
-              <div style={{ marginTop: 10, background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10, padding: "8px 12px", fontSize: 12, color: "#0369a1" }}>
-                💡 <strong>For best results:</strong> Use <strong>Adobe Scan</strong> or <strong>Google Drive</strong> app to scan all pages into one PDF. Free &amp; takes 30 seconds.
-              </div>
+            <div style={{ marginTop: 4, background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10, padding: "8px 12px", fontSize: 12, color: "#0369a1" }}>
+              💡 <strong>For best results:</strong> Use <strong>Adobe Scan</strong> or <strong>Google Drive</strong> app to scan all pages into one PDF. Free &amp; takes 30 seconds.
             </div>
 
             {error && (
@@ -386,7 +561,7 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
               {verifyStep || "AI is checking your work…"}
             </p>
             <p style={{ fontSize: 13, color: "#64748b" }}>
-              Reading answer sheet against your claimed score of {marks}/{total}
+              Reading uploaded documents against your claimed score of {marks}/{total}
             </p>
           </div>
         )}
@@ -447,6 +622,20 @@ export default function ManualMarksModal({ subject, chapter, day, onSaved, onClo
               <div style={{ background: "#f8fafc", borderRadius: 12, padding: "12px 16px", fontSize: 13, color: "#334155", lineHeight: 1.65, borderLeft: "3px solid #2563eb" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#2563eb", marginBottom: 6, textTransform: "uppercase" }}>AI Feedback</div>
                 {aiResult.feedback}
+              </div>
+            )}
+
+            {aiResult.categoryPerformance.length > 0 && (
+              <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 12, padding: "12px 16px" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#2563eb", marginBottom: 8, textTransform: "uppercase" }}>Category Performance</div>
+                <div style={{ display: "grid", gap: 6 }}>
+                  {aiResult.categoryPerformance.map((c) => (
+                    <div key={c.category} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, color: "#334155" }}>
+                      <span>{c.category}</span>
+                      <span>{c.obtained}/{c.total} ({c.percentage}%) · {c.weaknessSeverity}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

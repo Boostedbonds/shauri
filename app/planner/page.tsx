@@ -136,7 +136,22 @@ export default function PlannerPage() {
 
   /* ── Save result for ALL subjects in the day's plan ── */
   function handleMarksSaved(result: {
-    marks: number; total: number; pct: number; errorTopics: string[];
+    marks: number;
+    total: number;
+    pct: number;
+    errorTopics: string[];
+    strengths: string[];
+    weaknesses: string[];
+    improvements: string[];
+    errorLog: string[];
+    categoryPerformance: Array<{
+      category: string;
+      obtained: number;
+      total: number;
+      percentage: number;
+      weaknessSeverity: string;
+      notes?: string;
+    }>;
   }) {
     if (!planner) return; // ← FIXED: null guard added
 
@@ -157,13 +172,24 @@ export default function PlannerPage() {
         score:   perScore,
         total:   perSubject,
         source:  "manual_verified" as const,
+        diagnostics: {
+          strengths: result.strengths,
+          weaknesses: result.weaknesses,
+          improvementPriorities: result.improvements,
+          errorLog: result.errorLog,
+          errorTopics: result.errorTopics,
+          categoryPerformance: result.categoryPerformance.map((c) => ({
+            ...c,
+            weaknessSeverity: (c.weaknessSeverity as "low" | "medium" | "high" | "critical"),
+          })),
+        },
       }))
     );
 
     setResultsVersion((v) => v + 1);
     setShowMarksModal(false);
     setModalDay(null);
-    setFeedback(`✅ Result saved — ${result.pct}%${result.errorTopics.length ? ` · ${result.errorTopics.length} errors logged` : ""}`);
+    setFeedback(`✅ Result saved — ${result.pct}%${result.errorLog.length ? ` · ${result.errorLog.length} errors logged` : ""}`);
   }
 
   return (
@@ -337,7 +363,7 @@ export default function PlannerPage() {
               </button>
             )}
             <span style={{ fontSize: 12, color: "#5a6880" }}>
-              AI will verify your score against uploaded question paper & answer sheet
+              AI will verify from question paper + answer sheet or evaluated result summary
             </span>
           </div>
 

@@ -1,15 +1,11 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 "use client";
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Orbitron } from "next/font/google";
 import AccessGate from "../components/AccessGate";
 
-const orbitron = Orbitron({
-  subsets: ["latin"],
-  weight: ["400", "600", "700"],
-});
+const orbitronClassName = "font-orbitron-fallback";
 
 const ACCESS_CODE = "0330";
 
@@ -19,7 +15,7 @@ export default function HomePage() {
   const [showBtn, setShowBtn]       = useState(false);
   const board = "CBSE";
 
-  // ── Measure viewport (SSR-safe) ─────────────────────────────
+  // â”€â”€ Measure viewport (SSR-safe) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [vw, setVw] = useState(0);
   const [vh, setVh] = useState(0);
   useEffect(() => {
@@ -39,17 +35,17 @@ export default function HomePage() {
   // Portrait = phone held vertically
   const isPortrait = ready && vw < 600 && vh > vw;
 
-  // ── SVG coordinate system ────────────────────────────────────
-  // viewBox is always 1440 × 900; preserveAspectRatio="none"
+  // â”€â”€ SVG coordinate system â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // viewBox is always 1440 Ã— 900; preserveAspectRatio="none"
   // stretches it to fill the screen exactly.
   // We compute PEAK_Y as a % of SVG_H so it always lands:
-  //   • below the title block  (~top 40% on portrait, ~top 35% on desktop)
-  //   • with clear sky gap between title and mountain
+  //   â€¢ below the title block  (~top 40% on portrait, ~top 35% on desktop)
+  //   â€¢ with clear sky gap between title and mountain
   const SVG_W = 1440;
   const SVG_H = 900;
 
-  // Title lives at top 30% → ends ~38%.
-  // Peak at 62% on portrait, 58% on desktop → always below title.
+  // Title lives at top 30% â†’ ends ~38%.
+  // Peak at 62% on portrait, 58% on desktop â†’ always below title.
   const peakFraction = isPortrait ? 0.63 : 0.58;
   const PEAK_X = SVG_W / 2;
   const PEAK_Y = SVG_H * peakFraction;
@@ -57,12 +53,12 @@ export default function HomePage() {
   // Mountain: triangle from bottom-left and bottom-right to the peak
   const mountainPath = `M0,${SVG_H} L${PEAK_X},${PEAK_Y} L${SVG_W},${SVG_H} Z`;
 
-  // Button positioned via CSS (no SVG foreignObject) — fully iOS Safari compatible
+  // Button positioned via CSS (no SVG foreignObject) â€” fully iOS Safari compatible
 
   // Beam: from top of SVG down to peak
   const BEAM_TOP_Y = 0;
 
-  // ── Handlers ────────────────────────────────────────────────
+  // â”€â”€ Handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function handleEnter() {
     setWarp(true);
     setTimeout(() => setEntered(true), 900);
@@ -71,7 +67,7 @@ export default function HomePage() {
 
 
   return (
-    <div className={orbitron.className} style={{ minHeight: "100dvh" }}>
+    <div className={orbitronClassName} style={{ minHeight: "100dvh" }}>
       <style>{`
         *, *::before, *::after { box-sizing: border-box; }
 
@@ -135,7 +131,7 @@ export default function HomePage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            {/* ── Stars ── */}
+            {/* â”€â”€ Stars â”€â”€ */}
             {ready && Array.from({ length: isPortrait ? 38 : 60 }).map((_, i) => (
               <div key={i} style={{
                 position: "absolute",
@@ -155,8 +151,8 @@ export default function HomePage() {
               }} />
             ))}
 
-            {/* ── Sun / glow orb ── */}
-            {/* Centred at 30% from top — translate(-50%,-50%) puts centre on that point */}
+            {/* â”€â”€ Sun / glow orb â”€â”€ */}
+            {/* Centred at 30% from top â€” translate(-50%,-50%) puts centre on that point */}
             <div style={{
               position: "absolute",
               top: "30%", left: "50%",
@@ -171,8 +167,8 @@ export default function HomePage() {
               animationTimingFunction: "ease-in-out",
             }} />
 
-            {/* ── Title block ── */}
-            {/* Vertically centred at 30% — same as glow so title sits in the sun */}
+            {/* â”€â”€ Title block â”€â”€ */}
+            {/* Vertically centred at 30% â€” same as glow so title sits in the sun */}
             <div style={{
               position: "absolute",
               top: "30%", width: "100%",
@@ -229,7 +225,7 @@ export default function HomePage() {
               </motion.p>
             </div>
 
-            {/* ── SVG: Mountain + beam + button ── */}
+            {/* â”€â”€ SVG: Mountain + beam + button â”€â”€ */}
             {ready && (
               <svg
                 viewBox={`0 0 ${SVG_W} ${SVG_H}`}
@@ -240,7 +236,7 @@ export default function HomePage() {
                   overflow: "visible",
                 }}
               >
-                {/* ── Beam of hope: tapered gold light rising from peak ── */}
+                {/* â”€â”€ Beam of hope: tapered gold light rising from peak â”€â”€ */}
                 <defs>
                   {/* Vertical fade: bright at peak base, invisible at top */}
                   <linearGradient id="beamFade" x1="0" y1="1" x2="0" y2="0">
@@ -259,7 +255,7 @@ export default function HomePage() {
                   </filter>
                 </defs>
 
-                {/* Outer soft glow — wide trapezoid, blurred */}
+                {/* Outer soft glow â€” wide trapezoid, blurred */}
                 <motion.polygon
                   points={`${PEAK_X - (isPortrait ? 60 : 80)},0 ${PEAK_X + (isPortrait ? 60 : 80)},0 ${PEAK_X + 4},${PEAK_Y} ${PEAK_X - 4},${PEAK_Y}`}
                   fill="url(#beamGlow)"
@@ -275,7 +271,7 @@ export default function HomePage() {
                   }}
                 />
 
-                {/* Inner bright core — narrow trapezoid */}
+                {/* Inner bright core â€” narrow trapezoid */}
                 <motion.polygon
                   points={`${PEAK_X - (isPortrait ? 18 : 24)},0 ${PEAK_X + (isPortrait ? 18 : 24)},0 ${PEAK_X + 2},${PEAK_Y} ${PEAK_X - 2},${PEAK_Y}`}
                   fill="url(#beamFade)"
@@ -303,7 +299,7 @@ export default function HomePage() {
               </svg>
             )}
 
-            {/* ── CTA Button — CSS absolute, iOS Safari safe ── */}
+            {/* â”€â”€ CTA Button â€” CSS absolute, iOS Safari safe â”€â”€ */}
             {ready && (
               <div style={{
                 position: "absolute",
@@ -339,7 +335,7 @@ export default function HomePage() {
         )}
       </AnimatePresence>
 
-      {/* ACCESS SCREEN — two-sided AccessGate */}
+      {/* ACCESS SCREEN â€” two-sided AccessGate */}
       {entered && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
           <AccessGate onSuccess={() => { window.location.href = "/modes"; }} />

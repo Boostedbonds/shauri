@@ -1,13 +1,8 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import Header from "../components/Header";
-import { Orbitron } from "next/font/google";
-
-const orbitron = Orbitron({
-  subsets: ["latin"],
-  weight: ["400", "600", "700"],
-});
+const orbitronClassName = "font-orbitron-fallback";
 
 type StudentContext = {
   name: string;
@@ -34,7 +29,7 @@ export default function AboutShauri() {
 
   return (
     <div
-      className={orbitron.className}
+      className={orbitronClassName}
       style={{
         minHeight: "100vh",
         background:
@@ -92,7 +87,7 @@ export default function AboutShauri() {
         {/* SECTION */}
         <Section
           title="WHAT IS SHAURI"
-          text="Shauri is a structured CBSE-aligned adaptive learning platform built around the NCERT curriculum. It helps students build clarity, confidence, and true understanding — not memorization."
+          text="Shauri is a structured CBSE-aligned adaptive learning platform built around the NCERT curriculum. It helps students build clarity, confidence, and true understanding â€” not memorization."
         />
 
         <Section
@@ -108,19 +103,19 @@ export default function AboutShauri() {
 
           <ul style={sectionText}>
             <li>
-              TEACHER MODE — Concept clarity with CBSE-aligned explanations.
+              TEACHER MODE â€” Concept clarity with CBSE-aligned explanations.
             </li>
 
             <li>
-              EXAMINER MODE — Real exam-style papers and evaluation.
+              EXAMINER MODE â€” Real exam-style papers and evaluation.
             </li>
 
             <li>
-              ORAL MODE — Improves recall, articulation, and confidence.
+              ORAL MODE â€” Improves recall, articulation, and confidence.
             </li>
 
             <li>
-              PROGRESS DASHBOARD — Honest insights into strengths and gaps.
+              PROGRESS DASHBOARD â€” Honest insights into strengths and gaps.
             </li>
           </ul>
         </section>
@@ -139,7 +134,7 @@ export default function AboutShauri() {
             color: "#6b7c8f",
           }}
         >
-          © SHAURI  
+          Â© SHAURI  
           <br />
           CBSE-ALIGNED ADAPTIVE LEARNING PLATFORM
         </div>
@@ -179,3 +174,4 @@ const sectionText: React.CSSProperties = {
   lineHeight: 1.8,
   letterSpacing: "0.03em",
 };
+

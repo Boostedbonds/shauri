@@ -2,6 +2,7 @@
 import AdminGate from "../components/AdminGate";
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { inferKBMetadata, type KBDocumentType } from "@/app/lib/knowledgeBase";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -23,6 +24,15 @@ function fileIcon(name: string) { return FILE_ICONS[name.split(".").pop()?.toLow
 type Student = { student_name:string; class:string; board:string; attempts:number; avg_score:number; last_active:string; subjects:string[]; };
 type Attempt = { id:string; created_at:string; student_name:string; class:string; subject:string; marks_obtained:number; total_marks:number; percentage:number; mode:string; };
 type KBEntry = { id:string; title:string; subject:string; class_level:string; tags:string[]; file_name?:string; file_type?:string; created_at:string; active:boolean; };
+type KBInferredPreview = {
+  documentType: KBDocumentType;
+  classLevel: string;
+  subject: string;
+  chapter: string;
+  priorityLabel: "critical" | "high" | "medium" | "low";
+  priorityScore: number;
+  syllabusRelevance: number;
+};
 
 const S = {
   bg:"#fdf6e3", bgCard:"#ffffff", bgMuted:"#fdf9f0",
@@ -52,6 +62,8 @@ export default function AdminPage() {
   const [kbMsg,setKbMsg]       = useState("");
   const [kbMsgOk,setKbMsgOk]  = useState(false);
   const [extracting,setExtracting] = useState(false);
+  const [kbSearch, setKbSearch] = useState("");
+  const [kbInferred, setKbInferred] = useState<KBInferredPreview | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(()=>{ fetchAll(); },[]);
@@ -115,8 +127,10 @@ export default function AdminPage() {
       const res = await fetch("/api/admin/knowledge",{method:"POST",body:form});
       const d   = await res.json();
       if (d.ok) {
-        setKbMsg(`Saved! ${d.contentLength ? `(${d.contentLength.toLocaleString()} chars extracted)` : ""} AI will now use this knowledge.`);
+        const suffix = d.duplicate ? " (duplicate skipped)" : "";
+        setKbMsg(`Saved! ${d.contentLength ? `(${d.contentLength.toLocaleString()} chars extracted)` : ""}${suffix} AI will now use this knowledge.`);
         setKbMsgOk(true);
+        if (d?.inferred) setKbInferred(d.inferred as KBInferredPreview);
         setKbTitle(""); setKbContent(""); setKbTags(""); setKbFile(null);
         if(fileRef.current) fileRef.current.value="";
         fetchKB();
@@ -151,6 +165,23 @@ export default function AdminPage() {
     {id:"activity",label:"Activity"},
     {id:"knowledge",label:"Knowledge Base"},
   ];
+  const filteredKB = kb
+    .filter(k => k.active)
+    .filter(k => {
+      const q = kbSearch.trim().toLowerCase();
+      if (!q) return true;
+      return [k.title, k.subject, k.class_level, k.file_name || "", ...(k.tags || [])]
+        .join(" ")
+        .toLowerCase()
+        .includes(q);
+    });
+
+  function kbBadgeColor(label: KBInferredPreview["priorityLabel"]) {
+    if (label === "critical") return { bg: "#fee2e2", fg: "#b91c1c", bd: "#fecaca" };
+    if (label === "high") return { bg: "#ffedd5", fg: "#c2410c", bd: "#fdba74" };
+    if (label === "medium") return { bg: "#fef9c3", fg: "#a16207", bd: "#fde68a" };
+    return { bg: "#dcfce7", fg: "#166534", bd: "#86efac" };
+  }
 
   return (
     <AdminGate>
@@ -368,6 +399,15 @@ export default function AdminPage() {
                     </p>
                   </div>
                 )}
+                {kbInferred && (
+                  <div style={{ background: "#f8fafc", border: `1px solid ${S.borderLight}`, borderRadius: 10, padding: "10px 12px", marginBottom: 14 }}>
+                    <p style={{ margin: "0 0 6px", fontSize: 11, letterSpacing: 1.5, color: S.textMuted }}>AUTO CLASSIFICATION PREVIEW</p>
+                    <p style={{ margin: 0, fontSize: 12, color: S.text, lineHeight: 1.6 }}>
+                      {kbInferred.documentType} · Class {kbInferred.classLevel} · {kbInferred.subject} · {kbInferred.chapter}
+                      {" · "}Priority {kbInferred.priorityScore}/100 · Syllabus {kbInferred.syllabusRelevance}/100
+                    </p>
+                  </div>
+                )}
 
                 <button onClick={saveKB} disabled={kbSaving}
                   style={{width:"100%",background:kbSaving?S.textLight:S.text,color:"white",border:"none",borderRadius:24,padding:"13px 0",fontSize:11,letterSpacing:3,fontFamily:S.font,cursor:kbSaving?"not-allowed":"pointer",fontWeight:700}}>
@@ -382,10 +422,14 @@ export default function AdminPage() {
                     KNOWLEDGE BASE &nbsp;
                     <span style={{background:S.gold,color:"white",borderRadius:10,padding:"2px 10px",fontSize:10}}>{kb.filter(k=>k.active).length}</span>
                   </p>
-                  <button onClick={fetchKB}
-                    style={{background:"transparent",border:`1px solid ${S.border}`,color:S.textMuted,fontSize:10,letterSpacing:2,padding:"4px 12px",borderRadius:12,cursor:"pointer",fontFamily:S.font}}>
-                    REFRESH
-                  </button>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input value={kbSearch} onChange={e=>setKbSearch(e.target.value)} placeholder="Search KB..."
+                      style={{...inp, width: 180, padding:"6px 10px", fontSize:11}} />
+                    <button onClick={fetchKB}
+                      style={{background:"transparent",border:`1px solid ${S.border}`,color:S.textMuted,fontSize:10,letterSpacing:2,padding:"4px 12px",borderRadius:12,cursor:"pointer",fontFamily:S.font}}>
+                      REFRESH
+                    </button>
+                  </div>
                 </div>
 
                 {kb.length===0&&(
@@ -397,16 +441,34 @@ export default function AdminPage() {
                 )}
 
                 <div style={{display:"flex",flexDirection:"column",gap:10,maxHeight:600,overflowY:"auto"}}>
-                  {kb.filter(k=>k.active).map(k=>(
+                  {filteredKB.map(k=>{
+                    const inferred = inferKBMetadata({
+                      id: k.id,
+                      title: k.title,
+                      subject: k.subject,
+                      class_level: k.class_level,
+                      content: (k.tags || []).join(" "),
+                      tags: k.tags || [],
+                      file_name: k.file_name,
+                      created_at: k.created_at,
+                    });
+                    const pr = kbBadgeColor(inferred.priorityLabel);
+                    const relevance = Math.round((inferred.syllabusRelevance * 0.55) + (inferred.priorityScore * 0.45));
+                    return (
                     <div key={k.id} style={{background:S.bgMuted,border:`1px solid ${S.borderLight}`,borderRadius:12,padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
                           <span style={{fontSize:16}}>{k.file_name?fileIcon(k.file_name):"📝"}</span>
                           <p style={{color:S.text,fontWeight:700,fontSize:13,margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{k.title}</p>
+                          <span style={{background:"#eff6ff",border:"1px solid #bfdbfe",color:"#1d4ed8",fontSize:10,padding:"2px 8px",borderRadius:10}}>{inferred.documentType}</span>
+                          {inferred.documentType === "Syllabus" && <span style={{background:"#dcfce7",border:"1px solid #86efac",color:"#166534",fontSize:10,padding:"2px 8px",borderRadius:10}}>SYLLABUS PRIORITY</span>}
                         </div>
                         <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:4}}>
                           <span style={{background:S.bgCard,border:`1px solid ${S.border}`,color:S.purple,fontSize:10,padding:"2px 8px",borderRadius:10}}>{k.subject}</span>
                           <span style={{background:S.bgCard,border:`1px solid ${S.border}`,color:S.textMuted,fontSize:10,padding:"2px 8px",borderRadius:10}}>Class {k.class_level}</span>
+                          <span style={{background:pr.bg,border:`1px solid ${pr.bd}`,color:pr.fg,fontSize:10,padding:"2px 8px",borderRadius:10}}>Priority {inferred.priorityScore}</span>
+                          <span style={{background:"#faf5ff",border:"1px solid #ddd6fe",color:"#6d28d9",fontSize:10,padding:"2px 8px",borderRadius:10}}>Retrieval {relevance}</span>
+                          <span style={{background:"#fffbeb",border:"1px solid #fde68a",color:"#92400e",fontSize:10,padding:"2px 8px",borderRadius:10}}>Indexed</span>
                           {k.file_name&&<span style={{background:S.bgCard,border:`1px solid ${S.border}`,color:S.green,fontSize:10,padding:"2px 8px",borderRadius:10}}>{k.file_name}</span>}
                           {k.file_type&&k.file_type!=="text"&&<span style={{background:"#fef3cd",border:`1px solid ${S.gold}`,color:S.amber,fontSize:10,padding:"2px 8px",borderRadius:10}}>{k.file_type.toUpperCase()}</span>}
                         </div>
@@ -418,7 +480,7 @@ export default function AdminPage() {
                         REMOVE
                       </button>
                     </div>
-                  ))}
+                  )})}
                 </div>
               </div>
 

@@ -6,6 +6,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { inferKBMetadata, type KBEntry } from "@/app/lib/knowledgeBase";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,6 +15,7 @@ const supabase = createClient(
 );
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 
 // ── MIME type map ─────────────────────────────────────────────────────────────
 function getMime(fileName: string): string {
@@ -133,6 +135,12 @@ export async function POST(req: NextRequest) {
       const file = form.get("file") as File | null;
 
       if (file && file.size > 0) {
+        if (file.size > MAX_UPLOAD_BYTES) {
+          return NextResponse.json(
+            { error: "File too large. Max supported size is 20MB." },
+            { status: 413 }
+          );
+        }
         fileName = file.name;
         fileType = file.name.split(".").pop()?.toLowerCase() || "text";
         const bytes = await file.arrayBuffer();
@@ -170,14 +178,80 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No content could be extracted. Please paste content manually." }, { status: 400 });
     }
 
+    const inferred = inferKBMetadata({
+      id: "",
+      title,
+      subject,
+      class_level: classLevel,
+      content,
+      tags,
+      file_name: fileName,
+      created_at: new Date().toISOString(),
+    } as KBEntry);
+
+    // Auto-enrich and normalize user metadata while preserving manual input intent.
+    const finalSubject = subject === "General" ? inferred.subject : subject;
+    const finalClassLevel = classLevel === "All" ? inferred.classLevel : classLevel;
+    const autoTags = [
+      inferred.documentType,
+      inferred.chapter,
+      ...inferred.topics,
+      `difficulty:${inferred.difficulty}`,
+      `priority:${inferred.priorityLabel}`,
+      `syllabus:${inferred.syllabusRelevance}`,
+      `eval:${inferred.evaluationRelevance}`,
+      `answrite:${inferred.answerWritingRelevance}`,
+    ];
+    const mergedTags = Array.from(new Set([...(tags || []), ...autoTags])).slice(0, 24);
+
+    // Soft duplicate guard (same title + subject + class + highly similar prefix).
+    const signature = content.slice(0, 400).replace(/\s+/g, " ").trim().toLowerCase();
+    const { data: dupRows } = await supabase
+      .from("knowledge_base")
+      .select("id, content")
+      .eq("active", true)
+      .eq("title", title)
+      .eq("subject", finalSubject)
+      .eq("class_level", finalClassLevel)
+      .limit(8);
+    const duplicate = (dupRows || []).some((r: any) => {
+      const existing = String(r?.content || "").slice(0, 400).replace(/\s+/g, " ").trim().toLowerCase();
+      return existing && existing === signature;
+    });
+    if (duplicate) {
+      return NextResponse.json({
+        ok: true,
+        duplicate: true,
+        skipped: true,
+        message: "Duplicate content detected and skipped.",
+        inferred,
+        contentLength: content.length,
+      });
+    }
+
     const { data, error } = await supabase
       .from("knowledge_base")
-      .insert({ title, subject, class_level: classLevel, content, tags, file_name: fileName, file_type: fileType, active: true })
+      .insert({
+        title,
+        subject: finalSubject,
+        class_level: finalClassLevel,
+        content,
+        tags: mergedTags,
+        file_name: fileName,
+        file_type: fileType,
+        active: true,
+      })
       .select("id")
       .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ ok: true, id: data?.id, contentLength: content.length });
+    return NextResponse.json({
+      ok: true,
+      id: data?.id,
+      contentLength: content.length,
+      inferred,
+      indexingStatus: "indexed",
+    });
   } catch (e: any) {
     console.error("[KB POST error]", e);
     return NextResponse.json({ error: e.message }, { status: 500 });

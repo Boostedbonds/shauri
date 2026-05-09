@@ -23,6 +23,19 @@ export interface LogActivityParams {
   error_topics?:    string[];      // weak topics found by AI
   question_paper?:  string;        // text extracted from uploaded PDF
   answer_sheet?:    string;        // text extracted from uploaded PDF
+  upload_mode?:     "qp_as" | "summary";
+  strengths?:       string[];
+  weaknesses?:      string[];
+  improvement_priorities?: string[];
+  error_log?:       string[];
+  category_performance?: Array<{
+    category: string;
+    obtained: number;
+    total: number;
+    percentage: number;
+    weaknessSeverity: string;
+    notes?: string;
+  }>;
 }
 
 const LS_QUEUE = "shauri_sync_queue";
@@ -80,6 +93,12 @@ export async function logActivity(params: LogActivityParams): Promise<void> {
     error_topics:       params.error_topics ?? [],
     question_paper:     params.question_paper ?? null,
     answer_sheet:       params.answer_sheet ?? null,
+    upload_mode:        params.upload_mode ?? null,
+    strengths:          params.strengths ?? [],
+    weaknesses:         params.weaknesses ?? [],
+    improvement_priorities: params.improvement_priorities ?? [],
+    error_log:          params.error_log ?? [],
+    category_performance: params.category_performance ?? [],
     created_at:         new Date().toISOString(),
     client_id:          `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
   };

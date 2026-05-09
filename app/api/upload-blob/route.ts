@@ -1,18 +1,45 @@
-/**
- * app/api/upload-blob/route.ts
- *
- * Uses handleUpload from @vercel/blob/client (correct for v0.27+)
- * Browser uploads directly to Vercel Blob — bypasses 4.5MB server limit.
- */
+﻿import { put } from "@vercel/blob";
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  const body = (await req.json()) as HandleUploadBody;
-
   try {
+    const contentType = req.headers.get("content-type") || "";
+
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await req.formData();
+      const file = formData.get("file");
+
+      if (!(file instanceof File)) {
+        return NextResponse.json({ error: "No file provided." }, { status: 400 });
+      }
+
+      const allowed = new Set([
+        "application/pdf",
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/webp",
+      ]);
+
+      if (!allowed.has(file.type)) {
+        return NextResponse.json(
+          { error: "Unsupported file type." },
+          { status: 415 }
+        );
+      }
+
+      const blob = await put(file.name, file, {
+        access: "public",
+        addRandomSuffix: true,
+      });
+
+      return NextResponse.json({ url: blob.url });
+    }
+
+    const body = (await req.json()) as HandleUploadBody;
     const jsonResponse = await handleUpload({
       body,
       request: req,
@@ -25,7 +52,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             "image/png",
             "image/webp",
           ],
-          maximumSizeInBytes: 20 * 1024 * 1024, // 20MB
+          maximumSizeInBytes: 20 * 1024 * 1024,
         };
       },
       onUploadCompleted: async ({ blob }) => {

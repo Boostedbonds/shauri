@@ -12,3 +12,7 @@ body {
   background-color: #f8fafc; /* calm light background */
   color: #0f172a;
 }
+
+.font-orbitron-fallback {
+  font-family: "Orbitron", "Trebuchet MS", "Segoe UI", sans-serif;
+}

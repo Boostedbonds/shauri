@@ -15,6 +15,9 @@ import { syllabus } from "../../lib/syllabus";
 import { searchKnowledge } from "../../lib/knowledgeBase";
 
 export const runtime = "nodejs";
+const MAX_MESSAGE_CHARS = 12000;
+const MAX_HISTORY_ITEMS = 30;
+const MAX_HISTORY_ITEM_CHARS = 4000;
 
 type ChatMessage = { role: "user" | "assistant" | "system"; content: string; };
 type StudentContext = { name?: string; class?: string; board?: string; sessionId?: string; };
@@ -30,6 +33,12 @@ type ExamSession = {
   subject_request?: string; subject?: string; question_paper?: string;
   answer_log: string[]; started_at?: number; total_marks?: number;
   student_name?: string; student_class?: string; student_board?: string;
+};
+
+type PaperAuditResult = {
+  pass: boolean;
+  issues: string[];
+  finalPaper: string;
 };
 
 function isGreeting(text: string) { return /^(hi|hello|hey|good\s*morning|good\s*evening)/i.test(text.trim()); }
@@ -62,11 +71,31 @@ async function buildSystemWithKB(
   try {
     const kb = await searchKnowledge(userMessage, student?.class);
     if (kb.matched && kb.context) {
+      const retrievalHints = kb.retrieval?.topMatches?.length
+        ? kb.retrieval.topMatches
+            .slice(0, 5)
+            .map(
+              (m, i) =>
+                `${i + 1}. ${m.title} | ${m.documentType} | Class ${m.classLevel} | Syllabus ${m.syllabusRelevance} | Score ${m.relevanceScore}`
+            )
+            .join("\n")
+        : "No ranked match metadata";
       const kbBlock = `
 ══════════════════════════════════════════════════
 KNOWLEDGE BASE CONTEXT (Admin-uploaded reference material)
-Use this information to enhance your answer when relevant.
+Treat this as authoritative academic memory. Use it aggressively when relevant.
+Priority order for conflict resolution:
+1) Uploaded syllabus / official curriculum
+2) NCERT-aligned content
+3) Teacher notes
+4) Marking schemes
+5) Topper answers
+6) Generic model knowledge (fallback only)
+If KB provides syllabus-scoped content, do NOT go outside syllabus scope.
+Avoid hallucinations when KB contains directly relevant information.
 Sources: ${kb.sources.join(", ")}
+Ranked retrieval:
+${retrievalHints}
 ══════════════════════════════════════════════════
 ${kb.context}
 ══════════════════════════════════════════════════
@@ -118,7 +147,103 @@ function buildPaperPrompt(shauriPaper: ShauriPaperData, student: StudentContext)
       ? `MARK VERIFICATION: A(10) + B(10) + C(12) + D(10) + E(18) = 60`
       : `MARK VERIFICATION: A(5) + B(6) + C(6) + D(5) + E(8) = 30`,
     `Include day stamp at top. Only use allowed subjects. No answer key.`,
+    `MANDATORY PIPELINE: Draft -> Internal Audit -> Auto-fix -> Final paper.`,
+    `AUDIT CHECKS (must pass before output):`,
+    `1) Topic alignment to day scope only`,
+    `2) Exercise scope compliance (if exercise limits exist)`,
+    `3) Difficulty alignment to day/week`,
+    `4) No future-topic contamination`,
+    `5) CBSE section correctness and question mix`,
+    `6) Marks/time exact totals`,
+    `7) Writing/vocabulary planner rules`,
+    `8) Hindi in Devanagari only where applicable`,
+    `Never output an un-audited paper.`,
   ].filter(Boolean).join("\n");
+}
+
+function buildStrictExaminerSystem(student: StudentContext): string {
+  const cls = student?.class || "10";
+  return [
+    `You are SHAURI Strict CBSE Class ${cls} Question Paper Setter and Examiner.`,
+    `You must generate board-level papers, not generic worksheets.`,
+    `Follow NCERT-first and CBSE board phrasing.`,
+    `Section A must include standard MCQ + assertion-reason + case-based MCQ patterns.`,
+    `Section B/C must include concept+application with gradual difficulty.`,
+    `Section D must be realistic case-study analysis.`,
+    `Section E must follow writing/vocabulary progression and planner rules when provided.`,
+    `No answer key. No explanations. Only final question paper text.`,
+  ].join("\n");
+}
+
+function buildCustomPaperPrompt(
+  student: StudentContext,
+  subjectForMeta: string,
+  source: { uploadedText?: string; subjectRequest?: string }
+): string {
+  const cls = student?.class || "10";
+  const topicScope = source.uploadedText
+    ? `Use ONLY the uploaded syllabus/scope below:\n${source.uploadedText.slice(0, 12000)}`
+    : `Requested subject/topic scope: ${source.subjectRequest || subjectForMeta}`;
+  return [
+    `Generate a CBSE Class ${cls} board-style test paper.`,
+    `Subject: ${subjectForMeta}`,
+    `Total Marks: 30 | Time: 60 minutes`,
+    `Sections: A(5) + B(6) + C(6) + D(5) + E(8) = 30`,
+    topicScope,
+    `Quality requirements:`,
+    `- Non-generic board wording`,
+    `- Competency framing in MCQs and case-studies`,
+    `- Assertion-reason quality with valid logic`,
+    `- Diverse, non-repetitive question structures`,
+    `- NCERT aligned terminology and scope`,
+    `Output full paper with SECTION A/B/C/D/E and clear marks labels.`,
+  ].join("\n");
+}
+
+async function auditAndRepairPaper(
+  student: StudentContext,
+  draftPaper: string,
+  generatorPrompt: string
+): Promise<PaperAuditResult> {
+  const auditPrompt = [
+    `Audit and repair this CBSE Class ${student?.class || "10"} question paper.`,
+    `You are an internal paper quality auditor. Validate and auto-fix all issues.`,
+    `Checks:`,
+    `1) Section correctness and required question pattern`,
+    `2) Marks/time totals correctness`,
+    `3) Competency/assertion-reason/case-based quality`,
+    `4) Scope/planner compliance from generation prompt`,
+    `5) No future-topic leakage`,
+    `6) Board-level phrasing authenticity`,
+    `Return EXACTLY in this format:`,
+    `AUDIT_RESULT: PASS or FAIL`,
+    `ISSUES:`,
+    `- issue 1`,
+    `- issue 2`,
+    `FINAL_PAPER:`,
+    `<full corrected paper text>`,
+    `GENERATION_PROMPT_CONTEXT:`,
+    generatorPrompt,
+    `DRAFT_PAPER:`,
+    draftPaper,
+  ].join("\n\n");
+
+  const response = await callAI(
+    buildStrictExaminerSystem(student),
+    [{ role: "user", content: auditPrompt }],
+    55000
+  );
+
+  const resultMatch = response.match(/AUDIT_RESULT:\s*(PASS|FAIL)/i);
+  const pass = (resultMatch?.[1] || "").toUpperCase() === "PASS";
+  const finalPaper = (response.match(/FINAL_PAPER:\s*([\s\S]*)$/i)?.[1] || draftPaper).trim();
+  const issuesBlock = response.match(/ISSUES:\s*([\s\S]*?)(?=FINAL_PAPER:|$)/i)?.[1] || "";
+  const issues = issuesBlock
+    .split("\n")
+    .map((x) => x.replace(/^[-*\d.)\s]+/, "").trim())
+    .filter(Boolean);
+
+  return { pass, issues, finalPaper };
 }
 
 function extractTotalMarks(paper: string, fallback: number): number {
@@ -195,12 +320,20 @@ export async function POST(req: NextRequest) {
     const student: StudentContext              = body?.student  || {};
     const message: string                     = (body?.message  || "").trim();
     const shauriPaper: ShauriPaperData | null  = body?.shauriPaper || null;
-    const history: ChatMessage[]              = Array.isArray(body?.history) ? body.history : [];
+    const history: ChatMessage[]              = Array.isArray(body?.history)
+      ? body.history
+          .filter((h: ChatMessage) => h?.content && typeof h.content === "string")
+          .slice(-MAX_HISTORY_ITEMS)
+          .map((h: ChatMessage) => ({ ...h, content: h.content.slice(0, MAX_HISTORY_ITEM_CHARS) }))
+      : [];
     const uploadedText: string               = body?.uploadedText || "";
     const uploadType: string                 = body?.uploadType  || "";
     const confirmedSubject: string           = body?.confirmedSubject || "";
 
     if (!message) return NextResponse.json({ reply: "Please type something." });
+    if (message.length > MAX_MESSAGE_CHARS) {
+      return NextResponse.json({ reply: "Message too long. Please shorten and retry." }, { status: 400 });
+    }
 
     /* ── TEACHER MODE ─────────────────────────────────────────── */
     if (mode === "teacher") {
@@ -235,41 +368,27 @@ export async function POST(req: NextRequest) {
           totalMarks         = shauriPaper.totalMarks     || (isRevisionDay ? 60 : 30);
         } else if (confirmedSubject) {
           subjectForMeta     = confirmedSubject;
-          // Updated: 30 marks / 60 minutes for daily
-          paperPromptContent = [
-            `Generate a CBSE Class ${student?.class || "10"} test paper for: ${confirmedSubject}.`,
-            getSyllabusSummary(),
-            `Total Marks: 30 | Time: 60 minutes`,
-            `Sections: A(5×1=5) + B(3×2=6) + C(2×3=6) + D(1×5=5) + E(Writing 3m + Vocab 5×1=5m = 8m) = 30`,
-            `MARK VERIFICATION: A(5) + B(6) + C(6) + D(5) + E(8) = 30`,
-          ].join("\n");
+          paperPromptContent = buildCustomPaperPrompt(student, subjectForMeta, { subjectRequest: confirmedSubject });
           totalMarks = 30;
         } else if (uploadedText && uploadType === "syllabus") {
           subjectForMeta     = "Uploaded Syllabus";
-          paperPromptContent = [
-            `Generate a CBSE Class ${student?.class || "10"} test paper based on:`,
-            uploadedText,
-            `Total Marks: 30 | Time: 60 minutes`,
-            `Sections: A(5×1=5) + B(3×2=6) + C(2×3=6) + D(1×5=5) + E(Writing 3m + Vocab 5×1=5m = 8m) = 30`,
-            `MARK VERIFICATION: A(5) + B(6) + C(6) + D(5) + E(8) = 30`,
-          ].join("\n");
+          paperPromptContent = buildCustomPaperPrompt(student, subjectForMeta, { uploadedText });
           totalMarks = 30;
         } else {
           const subjectRequest = message.replace(/^start\s*/i, "").trim();
           subjectForMeta       = subjectRequest || "General";
-          paperPromptContent   = [
-            `Generate a CBSE Class ${student?.class || "10"} test paper${subjectRequest ? ` for ${subjectRequest}` : ""}.`,
-            getSyllabusSummary(),
-            `Total Marks: 30 | Time: 60 minutes`,
-            `Sections: A(5×1=5) + B(3×2=6) + C(2×3=6) + D(1×5=5) + E(Writing 3m + Vocab 5×1=5m = 8m) = 30`,
-            `MARK VERIFICATION: A(5) + B(6) + C(6) + D(5) + E(8) = 30`,
-          ].join("\n");
+          paperPromptContent = buildCustomPaperPrompt(student, subjectForMeta, { subjectRequest });
           totalMarks = 30;
         }
 
-        const examSys = await buildSystemWithKB("examiner", subjectForMeta, student, paperPromptContent);
-        const paper = await callAI(examSys, [{ role: "user", content: paperPromptContent }], 55000);
-        if (paper.startsWith("⚠️")) return NextResponse.json({ reply: paper });
+        const examSysBase = await buildSystemWithKB("examiner", subjectForMeta, student, paperPromptContent);
+        const examSys = `${buildStrictExaminerSystem(student)}\n\n${examSysBase}`;
+
+        const draftPaper = await callAI(examSys, [{ role: "user", content: paperPromptContent }], 55000);
+        if (draftPaper.startsWith("⚠️")) return NextResponse.json({ reply: draftPaper });
+
+        const audit = await auditAndRepairPaper(student, draftPaper, paperPromptContent);
+        const paper = audit.finalPaper || draftPaper;
 
         const resolvedMarks   = extractTotalMarks(paper, totalMarks);
         const resolvedSubject = extractSubjectFromPaper(paper) || subjectForMeta;
@@ -286,7 +405,9 @@ export async function POST(req: NextRequest) {
         await supabase.from("exam_sessions").upsert(session, { onConflict: "session_key" });
         return NextResponse.json({
           startTime: session.started_at, paper, subject: resolvedSubject, isRevisionDay,
-          reply: "✅ Paper ready! Write your answers and type **submit** when done.",
+          reply: audit.pass
+            ? "✅ Paper ready! Internal CBSE audit passed. Write your answers and type **submit** when done."
+            : "✅ Paper ready! Internal audit auto-fixed scope/quality issues before publishing.",
         });
       }
 
@@ -302,6 +423,12 @@ export async function POST(req: NextRequest) {
           `Question Paper:\n${session.question_paper}`,
           `Student Answers:\n${session.answer_log.join("\n")}`,
           `Mark every question. Give total out of ${session.total_marks || 30}.`,
+          `Use strict CBSE marking-scheme behavior:`,
+          `- Award method marks where steps are correct`,
+          `- Penalize missing units/final statements where required`,
+          `- Mention answer structure, presentation, vocabulary/terminology quality`,
+          `- Flag conceptual gaps and recurring mistakes`,
+          `- Keep judgement strict and board-realistic (not lenient generic feedback)`,
           `End with exactly:\n"Marks Obtained: X/${session.total_marks || 30}"\n"Percentage: Y%"`,
         ].join("\n\n");
 

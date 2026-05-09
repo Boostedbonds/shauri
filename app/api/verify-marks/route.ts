@@ -35,6 +35,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const maxDuration = 60;
 export const runtime = "nodejs";
+const MAX_FILES_PER_REQUEST = 12;
+const MAX_URL_LENGTH = 2048;
 
 // ─────────────────────────────────────────────────────────────
 // TYPES
@@ -53,6 +55,33 @@ interface SectionResult {
   percentage: number;
   status: "strong" | "average" | "weak" | "critical";
   note?: string;
+}
+
+type WeaknessSeverity = "low" | "medium" | "high" | "critical";
+interface CategoryPerformanceItem {
+  category:
+    | "Primary Conceptual"
+    | "Secondary Conceptual"
+    | "Writing/Presentation"
+    | "Vocabulary/Language"
+    | "Accuracy"
+    | "Attempt Quality";
+  obtained: number;
+  total: number;
+  percentage: number;
+  weaknessSeverity: WeaknessSeverity;
+  notes?: string;
+}
+
+function isAllowedBlobUrl(value: string): boolean {
+  try {
+    const u = new URL(value);
+    if (u.protocol !== "https:") return false;
+    const host = u.hostname.toLowerCase();
+    return host.endsWith(".vercel-storage.com") || host === "blob.vercel-storage.com";
+  } catch {
+    return false;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -74,6 +103,13 @@ function classifySection(pct: number): SectionResult["status"] {
   if (pct >= 80) return "strong";
   if (pct >= 60) return "average";
   if (pct >= 40) return "weak";
+  return "critical";
+}
+
+function weaknessSeverityFromPct(pct: number): WeaknessSeverity {
+  if (pct >= 80) return "low";
+  if (pct >= 60) return "medium";
+  if (pct >= 40) return "high";
   return "critical";
 }
 
@@ -160,6 +196,24 @@ STRENGTHS: topic1, topic2
 ERRORS: topic1, topic2
 NEEDS_IMPROVEMENT: topic1, topic2
 FEEDBACK: 3-4 sentences of specific, actionable advice based on actual mistakes only.`;
+  const upgradedPrompt = `${promptText}
+
+Also include:
+CATEGORY_PERFORMANCE:
+Primary Conceptual: X/Y - [low|medium|high|critical] - [short note]
+Secondary Conceptual: X/Y - [low|medium|high|critical] - [short note]
+Writing/Presentation: X/Y - [low|medium|high|critical] - [short note]
+Vocabulary/Language: X/Y - [low|medium|high|critical] - [short note]
+Accuracy: X/Y - [low|medium|high|critical] - [short note]
+Attempt Quality: X/Y - [low|medium|high|critical] - [short note]
+WEAKNESSES: item1, item2
+IMPROVEMENT_PRIORITY:
+1. item
+2. item
+3. item
+ERROR_LOG:
+- item
+- item`;
 
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
@@ -170,7 +224,7 @@ FEEDBACK: 3-4 sentences of specific, actionable advice based on actual mistakes 
         contents: [
           {
             role: "user",
-            parts: [...asParts, { text: promptText }],
+            parts: [...asParts, { text: upgradedPrompt }],
           },
         ],
         generationConfig: { temperature: 0.1 },
@@ -258,6 +312,24 @@ STRENGTHS: topic1, topic2
 ERRORS: topic1, topic2
 NEEDS_IMPROVEMENT: topic1, topic2
 FEEDBACK: 3-4 sentences of specific, actionable advice based on the result summary.`;
+  const upgradedPrompt = `${promptText}
+
+Also include these blocks exactly:
+CATEGORY_PERFORMANCE:
+Primary Conceptual: X/Y - [low|medium|high|critical] - [short note]
+Secondary Conceptual: X/Y - [low|medium|high|critical] - [short note]
+Writing/Presentation: X/Y - [low|medium|high|critical] - [short note]
+Vocabulary/Language: X/Y - [low|medium|high|critical] - [short note]
+Accuracy: X/Y - [low|medium|high|critical] - [short note]
+Attempt Quality: X/Y - [low|medium|high|critical] - [short note]
+WEAKNESSES: item1, item2
+IMPROVEMENT_PRIORITY:
+1. item
+2. item
+3. item
+ERROR_LOG:
+- item
+- item`;
 
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
@@ -268,7 +340,7 @@ FEEDBACK: 3-4 sentences of specific, actionable advice based on the result summa
         contents: [
           {
             role: "user",
-            parts: [...summaryParts, { text: promptText }],
+            parts: [...summaryParts, { text: upgradedPrompt }],
           },
         ],
         generationConfig: { temperature: 0.1 },
@@ -343,6 +415,24 @@ STRENGTHS: topic1, topic2
 ERRORS: topic1, topic2
 NEEDS_IMPROVEMENT: topic1, topic2
 FEEDBACK: text`;
+  const upgradedPrompt = `${prompt}
+
+Also include:
+CATEGORY_PERFORMANCE:
+Primary Conceptual: X/Y - [low|medium|high|critical] - [short note]
+Secondary Conceptual: X/Y - [low|medium|high|critical] - [short note]
+Writing/Presentation: X/Y - [low|medium|high|critical] - [short note]
+Vocabulary/Language: X/Y - [low|medium|high|critical] - [short note]
+Accuracy: X/Y - [low|medium|high|critical] - [short note]
+Attempt Quality: X/Y - [low|medium|high|critical] - [short note]
+WEAKNESSES: item1, item2
+IMPROVEMENT_PRIORITY:
+1. item
+2. item
+3. item
+ERROR_LOG:
+- item
+- item`;
 
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
@@ -357,7 +447,7 @@ FEEDBACK: text`;
           role: "system",
           content: "You are a strict CBSE examiner. Never hallucinate mark deductions.",
         },
-        { role: "user", content: prompt },
+        { role: "user", content: upgradedPrompt },
       ],
       temperature: 0.1,
     }),
@@ -390,6 +480,9 @@ function parseAIResponse(
   strengths: string[];
   errors: string[];
   improvements: string[];
+  weaknesses: string[];
+  errorLog: string[];
+  categoryPerformance: CategoryPerformanceItem[];
   feedback: string;
 } {
   const get = (key: string) => {
@@ -449,21 +542,45 @@ function parseAIResponse(
   }
 
   const deductionLines = getBlock("DEDUCTIONS", "STRENGTHS");
+  const errorLogLines = getBlock("ERROR_LOG", "FEEDBACK");
   const strengthsRaw   = get("STRENGTHS");
+  const weaknessesRaw  = get("WEAKNESSES");
   const errorsRaw      = get("ERRORS");
   const improvRaw      = get("NEEDS_IMPROVEMENT");
+  const improvRaw2     = getBlock("IMPROVEMENT_PRIORITY", "ERROR_LOG").join(", ");
   const feedback       = get("FEEDBACK");
 
   const splitComma = (s: string) =>
     s ? s.split(",").map((x) => x.trim()).filter(Boolean) : [];
+
+  const categoryPerformance: CategoryPerformanceItem[] = [];
+  const categoryBlock = raw.match(/CATEGORY_PERFORMANCE:([\s\S]*?)(?=WEAKNESSES:|ERROR_LOG:|DEDUCTIONS:|STRENGTHS:|$)/i)?.[1] || "";
+  for (const line of categoryBlock.split("\n").map((x) => x.trim()).filter(Boolean)) {
+    const m = line.match(/^([^:]+):\s*(\d+)\/(\d+)\s*[-–—]\s*(low|medium|high|critical)\s*[-–—]?\s*(.*)$/i);
+    if (!m) continue;
+    const obtained = parseInt(m[2]);
+    const total = parseInt(m[3]);
+    const pct = total > 0 ? Math.round((obtained / total) * 100) : 0;
+    categoryPerformance.push({
+      category: m[1].trim() as CategoryPerformanceItem["category"],
+      obtained,
+      total,
+      percentage: pct,
+      weaknessSeverity: (m[4].toLowerCase() as WeaknessSeverity) || weaknessSeverityFromPct(pct),
+      notes: m[5].trim() || undefined,
+    });
+  }
 
   return {
     score,
     sections,
     deductions:   deductionLines,
     strengths:    splitComma(strengthsRaw),
+    weaknesses:   splitComma(weaknessesRaw),
     errors:       splitComma(errorsRaw),
-    improvements: splitComma(improvRaw),
+    improvements: splitComma(improvRaw || improvRaw2),
+    errorLog: errorLogLines.length ? errorLogLines : deductionLines,
+    categoryPerformance,
     feedback,
   };
 }
@@ -522,6 +639,23 @@ export async function POST(req: NextRequest) {
 
     const isSummaryMode = summaryUrlList.length > 0;
     const isQPASMode    = !!qpUrl && asUrlList.length > 0;
+
+    if (summaryUrlList.length > MAX_FILES_PER_REQUEST || asUrlList.length > MAX_FILES_PER_REQUEST) {
+      return NextResponse.json({ reply: "Too many files in one request." }, { status: 400 });
+    }
+
+    const allUrls = [
+      ...(qpUrl ? [String(qpUrl)] : []),
+      ...asUrlList.map(String),
+      ...summaryUrlList.map(String),
+    ].filter(Boolean);
+
+    if (allUrls.some((u) => u.length > MAX_URL_LENGTH || !isAllowedBlobUrl(u))) {
+      return NextResponse.json(
+        { reply: "Invalid file URL. Please re-upload documents." },
+        { status: 400 }
+      );
+    }
 
     if (!isSummaryMode && !isQPASMode) {
       return NextResponse.json(
@@ -622,8 +756,11 @@ export async function POST(req: NextRequest) {
       sections:     parsed.sections,
       deductions:   parsed.deductions,
       strengths:    parsed.strengths,
+      weaknesses:   parsed.weaknesses,
       errors:       parsed.errors,
       improvements: parsed.improvements,
+      errorLog:     parsed.errorLog,
+      categoryPerformance: parsed.categoryPerformance,
       feedback:     parsed.feedback,
       mode:         isSummaryMode ? "summary" : "qp_as",
     });
