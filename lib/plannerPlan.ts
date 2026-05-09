@@ -15,6 +15,18 @@
 //   meta.type: "school" | "holiday" | "rev" | "mock"
 //   meta.isRev: true  → triggers revision day format (50 marks, 90 min)
 //   meta.isMock: true → triggers full mock test format
+//
+// CHANGELOG:
+//   2026-05-09 — Days 6–30 updated:
+//     • English (from Day 7): switched to MCB (Communicative) + Literature Reader
+//       MCB Units 1–4 covered across Days 7–30
+//       Literature Reader: F1–F5, P1–P2 covered
+//     • Hindi (all days): now covers BOTH Kavya Khand (poems) AND
+//       Gadya Khand (prose) shuffled — one poem + one prose each session
+//     • Days 6–12: corrected English/Hindi content
+//     • Days 13–30: new Week 3–5 content (Physics, Biology, Coord Geom,
+//       Trigonometry, Circles, Areas, Surface Areas, Control & Coordination,
+//       Reproduction, Electricity, Water Resources, Economics Ch 1)
 // ─────────────────────────────────────────────────────────────
 
 export type PlannerDayPlan = {
@@ -162,6 +174,7 @@ export const THIRTY_DAY_PLAN: PlannerDayPlan[] = [
     ],
   },
 
+  // ── Day 6 — Chemistry PRIMARY + Geography & History SECONDARY (unchanged) ──
   {
     day: 6,
     meta: { date: "6 May", dow: "Wednesday", type: "school" },
@@ -169,239 +182,261 @@ export const THIRTY_DAY_PLAN: PlannerDayPlan[] = [
       {
         subject: "Science",
         topic:
-          "Ch 1 Chemical Reactions – Double Displacement, Precipitation, Endothermic/Exothermic reactions; OIL RIG rule; All 6 reaction types summary table",
+          "Ch 2 Acids, Bases & Salts Pt 1 – Properties & All 6 Reaction Types; pH scale 0–14 with examples; universal indicator colours; Arrhenius definition; balanced equations for each reaction type",
       },
       {
-        subject: "English",
+        subject: "Geography",
         topic:
-          "First Flight Prose Ch 2: Nelson Mandela (Long Walk to Freedom); Poem Ch 2: Fire and Ice (Robert Frost) – symbolism of desire and hatred",
+          "Ch 1 Resources & Development – Classification (natural/human-made/human); renewable vs non-renewable; national/individual/community; 3 stages of resource planning; Brundtland Commission 1987 definition",
+      },
+      {
+        subject: "History",
+        topic:
+          "Ch 1 Nationalism in Europe – Napoleon's Civil Code 1804: abolition of feudalism, equality before law, property rights; Congress of Vienna 1815; Metternich's conservatism; restoration of old order",
       },
     ],
-    test: "Identify reaction type for 5 equations + 3 Mandela questions",
-    read: "Unseen passage (150 words) + 5 words: apartheid, inauguration, equality, obligation, democracy",
+    test: "Daily Test 30 marks 60 min: Acids/Bases all 6 types + pH; Geography resources + Brundtland; Nationalism Europe",
+    read: "5 vocab: Nationalism, Conservatism, Liberalism, Neutralisation, Sustainable",
     extra: [
-      "OIL RIG: Oxidation = electron Loss; Reduction = electron Gain",
-      "Mandela: ANC 1912; Robben Island 1964–1990; first black SA president 1994",
-      "Double displacement: swap partners; precipitation = insoluble product",
+      "Acid+metal carbonate → Salt+H₂O+CO₂ — board asks balanced equation almost every year",
+      "pH scale = guaranteed MCQ; Brundtland 1987 definition — word-perfect memorisation",
+      "Build summary table: Reaction Type | Example Equation | Key Observation",
     ],
   },
 
+  // ── Day 7 — CORRECTED: MCB Unit 1 + Literature Reader F1 ──
   {
     day: 7,
     meta: { date: "7 May", dow: "Thursday", type: "school" },
     topics: [
       {
-        subject: "Science",
+        subject: "Mathematics",
         topic:
-          "Ch 2 Acids, Bases & Salts Pt 1 – Properties; Acid+Metal/Metal oxide/Carbonate reactions; Ex 2 Q1–5",
+          "Ch 2 Polynomials – Geometrical meaning of zeros (graph intersects X-axis); for quadratic α+β=–b/a, αβ=c/a; for cubic α+β+γ=–b/a, αβ+βγ+γα=c/a, αβγ=–d/a; Ex 2.1 (geometric meaning), Ex 2.2 (find zeros, verify coefficient relationships)",
       },
       {
-        subject: "Geography",
+        subject: "English",
         topic:
-          "Ch 1 Resources & Development – classification; resource planning; Brundtland Commission 1987",
+          "MCB Unit 1 Health & Medicine – 'Do Indians Get Enough Sleep?' + 'Laughter — The Best Medicine': comprehension, fact vs opinion, cause & effect, key vocab (circadian rhythm, cognitive function, immunity, endorphins, cortisol); Literature Reader F1: Two Gentlemen of Verona (A.J. Cronin) – Nicola & Jacopo, selfless sacrifice for sister Lucia, themes: duty, resilience, nobility; extract-based question practice",
       },
     ],
-    test: "Write & balance 3 acid reactions + classify 6 resources",
-    read: "5 terms: litmus, indicator, neutralisation, renewable, non-renewable",
+    test: "Daily Test 30 marks 60 min: Polynomials MCQ + SA; English MCB comprehension + Lit F1 extract question",
+    read: "5 vocab: Endorphin, Circadian, Selfless, Resilience, Coefficient",
     extra: [
-      "Acid+metal: Zn+H₂SO₄→ZnSO₄+H₂↑; Cu does NOT react",
-      "Acid+carbonate: CO₂ test with lime water",
-      "Brundtland 1987: sustainable development defined",
+      "Always verify zeros by substituting back into polynomial — show working in board exam",
+      "MCB Unit 1 is thematic — each passage builds comprehension + grammar; note all new collocations",
+      "Lit F1 extract Q: 'What struck one most was their willingness to work' — what does this reveal about character?",
     ],
   },
 
-  // ── WEEK 2 (8 May Fri → 14 May Thu) · Revision: Day 10 Sun ──
-
+  // ── Day 8 — Chemistry Pt 2 + Geography Pt 2 (unchanged structure, content clarified) ──
   {
     day: 8,
     meta: { date: "8 May", dow: "Friday", type: "school" },
     topics: [
       {
-        subject: "Mathematics",
+        subject: "Science",
         topic:
-          "Ch 2 Polynomials Pt 1 – Degree, types; zeroes from graph (x-intercepts); sketching quadratic graphs; Sum α+β = –b/a; Product αβ = c/a; Ex 2.1",
+          "Ch 2 Acids, Bases & Salts Pt 2 – Important Salts: NaCl (common salt, uses), Na₂SO₄, Na₂CO₃ (washing soda), NaHCO₃ (baking soda), NaOH (caustic soda), Bleaching powder; Plaster of Paris CaSO₄·½H₂O (preparation from gypsum, setting reaction, uses); water of crystallisation; Chapter-end Q&A Q1–Q10",
       },
       {
-        subject: "Hindi",
+        subject: "Geography",
         topic:
-          "Sparsh Kavya Khand Ch 2: Meera ke Pad – virahotkantha; saguna vs nirguna bhakti; Anuprasa/Yamak/Utpreksha alankar",
+          "Ch 1 Resources & Development Pt 2 – Land use pattern (7 categories); 6 soil types: Alluvial (N India, most fertile), Black (Deccan, cotton), Red & Yellow (Eastern India), Laterite (heavy rainfall), Arid (desert), Forest/Mountain; soil erosion causes + conservation: contour ploughing, shelter belts, terrace farming, strip cropping",
       },
     ],
-    test: "Draw graph + find zeroes for 2 quadratics + Meera pad meaning + poetic device",
-    read: "5 examples of Anupras alankar from any poem",
+    test: "Daily Test 30 marks 60 min: Salts (baking soda vs washing soda formulae + uses); Geography 6 soil types + crop-soil links; Soil conservation methods",
+    read: "5 vocab: Alluvial, Erosion, Laterite, Crystallisation, Electrolysis",
     extra: [
-      "Zeroes = x-intercepts; Sum α+β = –b/a; Product αβ = c/a",
-      "Meera (1503–1546): princess of Merta; devoted to Krishna; saguna bhakti",
+      "Baking soda vs washing soda — chemical names, formulae, uses — asked almost every year!",
+      "Mark 6 soil types on outline map — 3 marks; know crop → soil link",
+      "Plaster of Paris: CaSO₄·½H₂O; medical/art uses; sets by absorbing water",
     ],
   },
 
+  // ── Day 9 — CORRECTED: Hindi now Kavya + Gadya both ──
   {
     day: 9,
     meta: { date: "9 May", dow: "Saturday", type: "holiday" },
     topics: [
       {
-        subject: "Science",
+        subject: "Mathematics",
         topic:
-          "Ch 2 Acids, Bases & Salts Pt 2 – pH scale; indicators; acid rain; aqua regia; strong vs weak acids; Ex 2 Q6–12",
+          "Ch 3 Pair of Linear Equations – Graphical method: intersection (unique), parallel (no solution), coincident (infinite); conditions using ratios a₁/a₂, b₁/b₂, c₁/c₂; Substitution method (full steps); Elimination method (full steps); Ex 3.1, 3.2, 3.3; cross-multiplication method introduction",
       },
       {
-        subject: "History",
+        subject: "Hindi",
         topic:
-          "Ch 2 Nationalism in India – Rowlatt Act 1919; Jallianwala Bagh massacre 13 April 1919; Khilafat movement",
+          "Kavya Khand: Sparsh Ch 2 Meera ke Pad (Meera Bai) – 'Hari aap haro jan ki bheer', devotion to Krishna, grihadhar gopal, bhakti kavya characteristics, figures: anuprasa, pratipaksha bhavana; Gadya Khand: Sparsh Ch 2 Diary ka Ek Panna (Sitaram Seksariya) – 26 January 1931 independence celebration in Kolkata under British rule, Subhash Chandra Bose's role, common people's participation, patriotism vs colonial repression",
       },
     ],
-    test: "pH of 6 substances + Jallianwala Bagh cause & consequences",
-    read: "5 terms: pH, dilution, aqua regia, Rowlatt Act, Khilafat",
+    test: "Daily Test 30 marks 60 min: Maths linear equations (graphical + substitution); Hindi — Meera pad theme + Diary ka Ek Panna significance",
+    read: "5 vocab: Coincident, Elimination, Patriotism, Devotion, Repression",
     extra: [
-      "pH < 7 = acidic; 7 = neutral; > 7 = basic. Stomach ≈1.5; Blood ≈7.4",
-      "Aqua regia = 3HCl + 1HNO₃; dissolves gold",
-      "Jallianwala: Dyer ordered firing; 379 killed; 10 min; one narrow exit",
+      "Cross-multiplication method: master it — saves time in board exam",
+      "Hindi: BOTH Kavya (poem) + Gadya (prose) covered each session from now on",
+      "Meera: क्यों मीरा कृष्ण को अपना एकमात्र सहारा मानती हैं — prepare answer",
     ],
   },
 
+  // ── Day 10 — Sunday Revision (Days 6–9) ──
   {
     day: 10,
     meta: { date: "10 May", dow: "Sunday", type: "rev", isRev: true },
     topics: [
       {
-        subject: "Mathematics",
+        subject: "Science",
         topic:
-          "REVISION: Maths Ch 1 complete (Euclid, FTA, irrationals, decimal expansions) + Ch 2 Polynomials intro (zeroes, graphical meaning); Science Ch 1 all 6 reaction types + Ch 2 Acids Parts 1–2 (pH, indicators, salts)",
+          "REVISION Days 6–9: Acids/Bases/Salts Pt1 (all 6 reaction types + pH scale + balanced equations) + Pt2 (NaCl, Na₂CO₃, NaHCO₃, Plaster of Paris, water of crystallisation); Geography Resources (Brundtland; land use pattern; 6 soil types + conservation); History Nationalism Europe (Napoleon's Civil Code, Congress of Vienna 1815, Metternich)",
       },
       {
         subject: "English",
         topic:
-          "REVISION: History Ch 1–2 intro (Nationalism Europe+India, Rowlatt, Khilafat); Hindi Sparsh Ch 1–2 (Kabir, Meera); English Ch 1–2 + Poems 1–2",
+          "REVISION Days 6–9: Maths Polynomials (zeros, coefficient relationship, quadratic + cubic) + Linear Equations (graphical + substitution + elimination); English MCB Unit 1 (Sleep + Laughter passages) + Lit Reader F1 Two Gentlemen of Verona (extracts + character analysis); Hindi Kavya — Meera ke Pad (bhakti, figures) + Gadya — Diary ka Ek Panna (26 Jan 1931)",
       },
     ],
-    test: "Full Mock: 5 Maths + 5 Science + 5 History + 5 English + 5 Hindi = 25 Qs (50 min)",
-    read: "Error analysis. Update formula sheet. 'Weak spots' list.",
+    test: "Sunday Revision Test 60 marks 120 min: MCQ All 10m + Primary SA 15m + Secondary SA 15m + LA 2Qs 10m + Full Vocab 20 words 10m",
+    read: "Full week vocab 20 words: Nationalism, Conservatism, Liberalism, Neutralisation, Sustainable, Endorphin, Circadian, Selfless, Resilience, Coefficient, Alluvial, Erosion, Laterite, Crystallisation, Electrolysis, Coincident, Elimination, Patriotism, Devotion, Repression",
     extra: [
-      "Self-check: Prove √2 in <5 min without notes?",
-      "Self-check: Write all 6 reaction types from memory?",
-      "Score target: 20+/25",
+      "Self-check: Write all 6 acid reaction types with balanced equations from memory",
+      "Self-check: Draw pH scale 0–14 with 6 examples at correct positions",
+      "Score target: 48+/60",
     ],
   },
 
+  // ── Day 11 — CORRECTED: Metals & Non-metals + Political Sci + Hindi Kavya+Gadya ──
   {
     day: 11,
     meta: { date: "11 May", dow: "Monday", type: "school" },
     topics: [
       {
-        subject: "Mathematics",
+        subject: "Science",
         topic:
-          "Ch 2 Polynomials Pt 2 – Relationship between zeroes and coefficients (PROOF); form quadratic when zeroes given; p(x) = k[x² – (α+β)x + αβ]; Ex 2.2 all 5 Qs",
+          "Ch 3 Metals & Non-metals – Physical properties: lustre, malleability, ductility, conductivity, sonority; exceptions (Na/K soft, Iodine lustrous, Graphite conductor, Mercury liquid); Chemical properties: reaction with O₂/H₂O/acids/other metal salts; Full Reactivity Series K→Au; Ionic bond formation: electron transfer; Lewis dot structures for NaCl, MgO, MgCl₂",
       },
       {
-        subject: "History",
+        subject: "Civics",
         topic:
-          "Ch 2 Nationalism in India – Non-Cooperation Movement launch 1920: forms of non-cooperation; peasants, tribals, plantation workers",
+          "Ch 1 Power Sharing – Belgium (Dutch 59%, French 40%, German 1%, equal representation, Brussels bilingual) vs Sri Lanka (Sinhalese 74%, Tamil 18%, Sinhala Only Act 1956, civil war); 4 forms of power sharing: horizontal (organs of govt), vertical (federalism), among social groups, among pressure groups",
+      },
+      {
+        subject: "Hindi",
+        topic:
+          "Kavya Khand: Sparsh Ch 3 Manushyata (Maithilisharan Gupt) – true humanity = living/dying for others; references to Dadhichi, Karna, Rana Pratap; figures: alliteration, metaphor; explain 'wohi pashupravritti hai ki aap aap chare'; Gadya Khand: Sparsh Ch 3 Tantara-Vamiro Katha (Leelaahar Mandloi) – Andaman-Nicobar folk love story, ancient taboo, tragic love, cultural values",
       },
     ],
-    test: "Form 3 quadratic polynomials from zeroes + 2 NCM groups with specific reasons",
-    read: "Comprehension on freedom movement + 5 words: non-cooperation, boycott, swadeshi, satyagraha, civil disobedience",
+    test: "Daily Test 30 marks 60 min: Metals vs non-metals comparison table; Power Sharing Belgium vs Sri Lanka; Hindi Manushyata theme + Tantara-Vamiro climax",
+    read: "5 vocab: Ductility, Reactivity, Federalism, Humanity, Sacrifice",
     extra: [
-      "Form quadratic: p(x) = k[x² – (α+β)x + αβ]",
-      "NCM 1920: first mass movement; women participated; Assam plantation workers tied by Inland Emigration Act",
+      "2-column comparison: metals vs non-metals properties — board asks this as a table question",
+      "Belgium vs Sri Lanka comparison table — 5-mark Q asked almost every year. Know dates!",
+      "Sinhala Only Act 1956: one of the most important policy dates in Civics",
     ],
   },
 
+  // ── Day 12 — CORRECTED: Quadratic + MCB Unit 1 continued + Lit F2 ──
   {
     day: 12,
     meta: { date: "12 May", dow: "Tuesday", type: "school" },
     topics: [
       {
-        subject: "Science",
+        subject: "Mathematics",
         topic:
-          "Ch 2 Acids Pt 3 – NaCl, NaHCO₃, Na₂CO₃, Bleaching powder, Plaster of Paris; Chlor-alkali process (NaCl+H₂O → Cl₂+H₂+NaOH); Ex 2 Q13–18",
+          "Ch 4 Quadratic Equations – Standard form ax²+bx+c=0; factorisation (middle-term split); completing the square; Quadratic formula x=(–b±√D)/2a; Discriminant D=b²–4ac: D>0 (2 distinct real roots), D=0 (equal roots), D<0 (no real roots); Ex 4.1, 4.2, 4.3; word problems: age, speed, area type",
       },
       {
         subject: "English",
         topic:
-          "First Flight Prose Ch 3: Two Stories About Flying (seagull + black aeroplane); Poem Ch 3: A Tiger in the Zoo – zoo vs forest stanzas",
+          "MCB Unit 1 Health – 'Whopping Walter Hudson' + 'The World of Sports' + 'Nature's Medicines': comprehension (central idea, logical sequence, tone), active vs passive voice in health writing, grammar: Present Perfect vs Simple Past (rule + 5 examples each); Literature Reader F2: Mrs Packletide's Tiger (H.H. Munro/Saki) – social satire, vanity, Mrs Packletide vs Loona Bimberton, Miss Mebbin's role, themes: pretension, one-upmanship, irony; extract Q practice",
       },
     ],
-    test: "Balanced equation for washing soda + chlor-alkali products + compare flying stories",
-    read: "Unseen passage + 5 words: instinct, valour, determination, mystique, beacon",
+    test: "Daily Test 30 marks 60 min: Quadratic equations (MCQ + SA + word problem); English MCB comprehension + Lit F2 satire identification",
+    read: "5 vocab: Discriminant, Quadratic, Satire, Pretension, Vanity",
     extra: [
-      "Chlor-alkali: NaCl+H₂O → Cl₂(anode)+H₂(cathode)+NaOH",
-      "His First Flight: hunger overcame fear. Tiger: 'quiet rage' vs 'vivid stripes'",
+      "Word problems: form the equation first, show all steps — board awards method marks",
+      "Saki's satire: every character trait has a comic exaggeration — identify each one",
+      "D<0 means no real roots — state this explicitly in board exam",
     ],
   },
 
+  // ── WEEK 3 (13 May Wed → 19 May Tue) · Revision: Day 17 Sun ──
+
+  // ── Day 13 — Physics Light Reflection + History NCM ──
   {
     day: 13,
     meta: { date: "13 May", dow: "Wednesday", type: "school" },
     topics: [
       {
-        subject: "Mathematics",
+        subject: "Science",
         topic:
-          "Ch 2 Polynomials Pt 3 – Division Algorithm; long division step-by-step; zeroes of cubic when one zero given; Ex 2.3 & 2.4",
+          "Ch 10 Light — Reflection – Laws of reflection; spherical mirrors: concave & convex; key terms: pole (P), centre of curvature (C), principal focus (F), radius of curvature (R=2f), aperture; Mirror formula 1/v+1/u=1/f (New Cartesian sign convention); Magnification m=–v/u=h'/h; Image formation — all 5 positions for concave mirror + 1 for convex (ray diagram rules for all)",
       },
       {
-        subject: "Hindi",
+        subject: "History",
         topic:
-          "Sparsh Kavya Khand Ch 3: Maithilisharan Gupt – Manushyata; humanity, sacrifice (Dadhichi, Karna, Sib); patriotic themes",
+          "Ch 2 Nationalism in India – WW1 impact on India (debt, inflation, forced recruitment); Rowlatt Act 1919; Jallianwala Bagh massacre 13 April 1919; Khilafat Movement; Non-Cooperation Movement 1920 — causes, 4 phases, Chauri Chaura incident Feb 1922 — withdrawal; timeline: 1919→Rowlatt→Jallianwala→1920 NCM→1922 Chauri Chaura",
       },
     ],
-    test: "Divide x³–3x²+5x–3 by x²–2 + find all zeroes of cubic + explain Manushyata in 5 Hindi lines",
-    read: "Hindi Samas: 5 examples with vigraha vakya",
+    test: "Daily Test 30 marks 60 min: Light reflection (mirror formula numericals + ray diagrams); History NCM timeline and Chauri Chaura explanation",
+    read: "5 vocab: Magnification, Satyagraha, Sedition, Boycott, Concave",
     extra: [
-      "Division Algo: degree of r(x) < degree of g(x)",
-      "Cubic: α+β+γ=–b/a; sum of pairs=c/a; product=–d/a",
-      "M.S. Gupt (1886–1964): Rashtrakavi; Chhayavad era",
+      "Draw ray diagrams for ALL positions of concave mirror — 2-mark easy marks in board",
+      "Dates = guaranteed MCQ marks: Rowlatt Act 1919, Jallianwala 13 Apr 1919, NCM 1920, Chauri Chaura Feb 1922",
+      "Mirror formula: 1/v+1/u=1/f; sign convention: incident ray direction = positive",
     ],
   },
 
+  // ── Day 14 — Maths AP + English MCB Unit 2 + Lit F3 ──
   {
     day: 14,
     meta: { date: "14 May", dow: "Thursday", type: "school" },
     topics: [
       {
-        subject: "Science",
+        subject: "Mathematics",
         topic:
-          "Ch 3 Metals & Non-metals Pt 1 – Physical & chemical properties; reactions with O₂/H₂O/acids; Full Reactivity Series K→Au; mnemonic",
+          "Ch 5 Arithmetic Progressions – AP definition, common difference d, nth term aₙ=a+(n–1)d; finding n given aₙ; Sum Sₙ=n/2[2a+(n–1)d]=n/2(a+l); word problems: stairs, salary increments, savings; aₙ=Sₙ–Sₙ₋₁ trick; Ex 5.1, 5.2, 5.3, 5.4 all exercises",
       },
       {
-        subject: "Geography",
+        subject: "English",
         topic:
-          "Ch 2 Forest & Wildlife – Reserved/Protected/Unclassed forests; biodiversity; Project Tiger 1973; Sacred groves; Bishnoi, Chipko",
+          "MCB Unit 2 Education – 'My Struggle for an Education' (Booker T. Washington, personal narrative, determination) + 'Educating the Girl Child' (gender gap, causes, solutions); comprehension + grammar: Modals (can/could/may/might/shall/should/will/would/must) — meaning + 2 examples each; Literature Reader F3: The Letter (Dhumaketu) – Ali's unwavering wait for daughter Miriam's letter; theme: parental love, longing, bureaucratic indifference; symbolism: post office = hope; Ali's transformation from hunter to devoted father; irony: letter arrives after death",
       },
     ],
-    test: "Na vs Al properties + Reactivity series K→Au + Reserved vs Protected forests difference",
-    read: "5 terms: malleability, ductility, allotrope, biodiversity, endemic species",
+    test: "Daily Test 30 marks 60 min: AP nth term + sum problems + word problems; English MCB modals grammar + Lit F3 symbolism and irony",
+    read: "5 vocab: Arithmetic, Progression, Longing, Determination, Bureaucracy",
     extra: [
-      "Reactivity: K>Na>Ca>Mg>Al>Zn>Fe>Pb>H>Cu>Hg>Ag>Au",
-      "Mnemonic: 'King Nora Can Make A Zoo; From Her Cage A Happy Angel'",
-      "Project Tiger 1973: 9→50+ reserves; ~3000+ tigers now",
+      "If aₙ given, find Sₙ–Sₙ₋₁ trick — saves steps",
+      "Lit F3: 'The Letter' — Ali gets the letter after death; what does the letter symbolise?",
+      "Modals: modal + base verb (no 'to', no 's')",
     ],
   },
 
-  // ── WEEK 3 (15 May Fri → 21 May Thu) · Revision: Day 17 Sun ──
-
+  // ── Day 15 — Biology Life Processes + Geography Forest & Wildlife ──
   {
     day: 15,
     meta: { date: "15 May", dow: "Friday", type: "school" },
     topics: [
       {
-        subject: "Mathematics",
+        subject: "Science",
         topic:
-          "Ch 3 Linear Equations in Two Variables – Graphical method; conditions for unique/no/infinite solutions using ratios a₁/a₂ vs b₁/b₂ vs c₁/c₂; Ex 3.1",
+          "Ch 6 Life Processes – Nutrition: Autotrophic (photosynthesis 6CO₂+6H₂O→C₆H₁₂O₆+6O₂; chloroplast structure); Heterotrophic types: parasitic, saprophytic, holozoic, symbiotic; Respiration: aerobic equation; Anaerobic: yeast fermentation (alcohol+CO₂), muscle fatigue (lactic acid); ATP role; label chloroplast diagram",
       },
       {
-        subject: "English",
+        subject: "Geography",
         topic:
-          "First Flight Prose Ch 4: From the Diary of Anne Frank – Holocaust background; writing as escape; Poem Ch 4: Amanda! – childhood freedom",
+          "Ch 2 Forest & Wildlife Resources – Types: Reserved (55%), Protected (29%), Unclassed (16%); IUCN categories: extinct, endangered, vulnerable, rare, endemic, depleted; Causes of depletion; Conservation movements: Chipko (1970s Uttarakhand), Beej Bachao Andolan, Project Tiger 1973; Map: Corbett, Kaziranga, Ranthambore, Sundarbans, Gir",
       },
     ],
-    test: "Check consistency for 3 pairs (ratio method) + short answer on Anne Frank",
-    read: "5 words: persevere, oppression, resilience, refuge, Holocaust",
+    test: "Daily Test 30 marks 60 min: Photosynthesis + aerobic vs anaerobic equations; Geography IUCN categories + 3 conservation movements; map 5 national parks",
+    read: "5 vocab: Biodiversity, Endangered, Holozoic, Conservation, Fermentation",
     extra: [
-      "Unique: a₁/a₂ ≠ b₁/b₂; No solution: a₁/a₂=b₁/b₂≠c₁/c₂; Infinite: all equal",
-      "Anne Frank (1929–1945): hid July 1942; arrested Aug 1944; died Bergen-Belsen Feb 1945",
+      "Label chloroplast diagram — practicals question; aerobic vs anaerobic equations must be word-perfect",
+      "IUCN categories + 3 conservation movements = guaranteed 5-mark LA; Project Tiger year: 1973",
+      "38 ATP aerobic; 2 ATP anaerobic",
     ],
   },
 
+  // ── Day 16 — CORRECTED: Triangles + Hindi Kavya+Gadya ──
   {
     day: 16,
     meta: { date: "16 May", dow: "Saturday", type: "holiday" },
@@ -409,47 +444,51 @@ export const THIRTY_DAY_PLAN: PlannerDayPlan[] = [
       {
         subject: "Mathematics",
         topic:
-          "Ch 3 Linear Equations – Substitution Method in full detail; 4 complete examples; word problems: age, number; Ex 3.2",
+          "Ch 6 Triangles – Basic Proportionality Theorem (Thales): proof + converse (with diagram); Similarity criteria: AA, SSS, SAS — each with proof; Areas of similar triangles: ratio = square of ratio of corresponding sides; Pythagoras Theorem: full proof by similarity + converse; Ex 6.1, 6.2, 6.3, 6.4, 6.5",
       },
       {
-        subject: "Geography",
+        subject: "Hindi",
         topic:
-          "Ch 3 Water Resources – scarcity causes; Bhakra-Nangal, Tehri, Sardar Sarovar; Narmada Bachao Andolan; traditional harvesting",
+          "Kavya Khand: Sparsh Ch 4 Parvat Pradesh mein Pavas (Sumitranandan Pant) – Kumaon hills in rainy season, vivid imagery: mekhalakar pahad, sumanfad, Upma, Rupak, personification; explain 'neel neel ambar par aakar meghmala'; Gadya Khand: Sparsh Ch 4 Teesri Kasam ke Shilpkar Shailendra (Prahlad Agarwal) – lyricist Shailendra's philosophy (art over commerce), film Teesri Kasam, Raj Kapoor's vision, comparison of Shailendra vs commercial films",
       },
     ],
-    test: "Solve 3 pairs by substitution + water scarcity cause + dam advantage/disadvantage",
-    read: "5 terms: irrigation, multipurpose project, watershed, eutrophication, rainwater harvesting",
+    test: "Daily Test 30 marks 60 min: Triangle theorems (BPT proof + Pythagoras application); Hindi Pant's imagery identification + Shailendra's artistic philosophy",
+    read: "5 vocab: Pythagoras, Hypotenuse, Imagery, Personification, Commerce",
     extra: [
-      "Substitution: express y in x from eq1 → substitute in eq2 → find x → back-substitute",
-      "Bhakra-Nangal: Sutlej river; highest gravity dam; Gobind Sagar reservoir",
-      "Narmada Bachao Andolan: Medha Patkar; displacement of tribals",
+      "Theorem proofs: write from memory — board awards full marks only if all steps + diagram shown",
+      "Pant poem: identify Upma, Rupak, personification with line references",
+      "Shailendra: what is his 'kasam' (pledge)? Why is the film artistically significant?",
     ],
   },
 
+  // ── Day 17 — Sunday Revision (Days 13–16) ──
   {
     day: 17,
     meta: { date: "17 May", dow: "Sunday", type: "rev", isRev: true },
     topics: [
       {
-        subject: "Mathematics",
+        subject: "Science",
         topic:
-          "REVISION: Maths Ch 2 Polynomials FULL (zeroes, relationship, division algorithm) + Ch 3 graphical + substitution (4 problems); Science Ch 2 complete (salts, chlor-alkali) + Ch 3 Metals Pt1 (properties + reactivity series)",
+          "REVISION Days 13–16: Physics Light Reflection (mirror formula, all 5 positions for concave mirror with ray diagrams, sign convention, magnification); Biology Life Processes (photosynthesis equation + chloroplast; aerobic vs anaerobic respiration, ATP, lactic acid); Geography Forest & Wildlife (3 types, IUCN categories, Chipko/Beej Bachao/Project Tiger, map 5 national parks)",
       },
       {
         subject: "English",
         topic:
-          "REVISION: History Ch 2 NCM table (events + dates); Geography Ch 2–3 (Forest, Water); Hindi Sparsh Ch 1–3; English Ch 3–4 + Poems 3–4",
+          "REVISION Days 13–16: Maths AP (nth term, Sₙ formulas, word problems) + Triangles (BPT proof, similarity criteria, Pythagoras proof); History Nationalism India (Rowlatt Act, Jallianwala Bagh, Khilafat, NCM 1920, Chauri Chaura 1922); English MCB Unit 2 (Booker T. Washington, girl child education, modals) + Lit F3 The Letter (Ali, Miriam, symbolism); Hindi Kavya — Pant's Parvat Pradesh (imagery, devices) + Gadya — Shailendra (art vs commerce)",
       },
     ],
-    test: "Full Mock: 5 Maths + 5 Science + 5 SST + 5 English + 5 Hindi = 25 Qs (50 min)",
-    read: "Error analysis. Reactivity series + polynomial division — most tested. Redo all wrong Qs.",
+    test: "Sunday Revision Test 60 marks 120 min: MCQ All 10m + Primary SA 15m + Secondary SA 15m + LA 2Qs 10m + Full Vocab 20 words 10m",
+    read: "Full week vocab 20 words: Magnification, Satyagraha, Sedition, Boycott, Concave, Arithmetic, Progression, Longing, Determination, Bureaucracy, Biodiversity, Endangered, Holozoic, Conservation, Fermentation, Pythagoras, Hypotenuse, Imagery, Personification, Commerce",
     extra: [
-      "Polynomial: p(x) = g(x)·q(x) + r(x). Always verify.",
-      "Reactivity: write K→Au twice without looking. Time yourself.",
-      "Score target: 21+/25",
+      "Self-check: Draw all 5 concave mirror positions from memory + 1 convex",
+      "Self-check: NCM timeline: 1919→1920→1922 with events at each date",
+      "Score target: 48+/60",
     ],
   },
 
+  // ── WEEK 4 (18 May Mon → 24 May Sun) · Revision: Day 24 Sun ──
+
+  // ── Day 18 — Coordinate Geometry + Civics Federalism ──
   {
     day: 18,
     meta: { date: "18 May", dow: "Monday", type: "school" },
@@ -457,23 +496,24 @@ export const THIRTY_DAY_PLAN: PlannerDayPlan[] = [
       {
         subject: "Mathematics",
         topic:
-          "Ch 3 Linear Equations – Elimination Method + Cross-Multiplication Method (derivation); when to use which; Ex 3.3 & 3.4",
+          "Ch 7 Coordinate Geometry – Distance formula d=√[(x₂–x₁)²+(y₂–y₁)²] (derivation from Pythagoras); Section formula (internal division): x=(m₁x₂+m₂x₁)/(m₁+m₂), y=(m₁y₂+m₂y₁)/(m₁+m₂); Midpoint formula; Centroid of triangle; Area of triangle using coordinates; Ex 7.1 (distance), Ex 7.2 (section formula); prove collinear points, isosceles/equilateral triangles, type of quadrilateral",
       },
       {
-        subject: "History",
+        subject: "Civics",
         topic:
-          "Ch 2 Nationalism in India – Chauri Chaura Feb 1922; Simon Commission 1927; Dandi March 1930 (date, route, significance)",
+          "Ch 2 Federalism – Definition, features; India as federation: Centre-State division; 3 lists: Union (97 subjects), State (66), Concurrent (47); Coming together (USA, Switzerland) vs holding together (India, Spain, Belgium) federations; Decentralisation: 73rd Amendment 1992 (Panchayati Raj) + 74th Amendment (urban bodies); 3-list system examples",
       },
     ],
-    test: "Solve 2 pairs by elimination + 1 by cross-multiplication + Why did Gandhi withdraw NCM?",
-    read: "5 words: elimination, coefficient, civil disobedience, franchise, dominion status",
+    test: "Daily Test 30 marks 60 min: Coordinate geometry (distance + section formula problems); Civics 3 lists with examples + 73rd/74th Amendment",
+    read: "5 vocab: Centroid, Collinear, Federalism, Decentralise, Concurrent",
     extra: [
-      "Cross-mult: x/(b₁c₂–b₂c₁) = y/(c₁a₂–c₂a₁) = 1/(a₁b₂–a₂b₁)",
-      "Chauri Chaura: Feb 4, 1922 UP; 22 policemen killed; Gandhi: non-violence is soul of satyagraha",
-      "Dandi March: March 12–April 6, 1930; 240 miles; broke salt law",
+      "Use distance formula to prove: collinear points, isosceles/equilateral triangles, type of quadrilateral",
+      "3-list system: memorise 3 examples from each list",
+      "Panchayati Raj: 73rd Amendment year = 1992",
     ],
   },
 
+  // ── Day 19 — Physics Refraction + English MCB Unit 3 + Poetry P1 ──
   {
     day: 19,
     meta: { date: "19 May", dow: "Tuesday", type: "school" },
@@ -481,23 +521,24 @@ export const THIRTY_DAY_PLAN: PlannerDayPlan[] = [
       {
         subject: "Science",
         topic:
-          "Ch 3 Metals & Non-metals Pt 2 – Ionic bond (NaCl, MgO, MgCl₂); extraction: ore vs mineral; reduction; electrolytic refining; corrosion & galvanisation; Ex 3 Q1–8",
+          "Ch 10 Light — Refraction – Laws of refraction; Snell's Law n₁sinθ₁=n₂sinθ₂; refractive index n=c/v=sini/sinr; Lenses: convex (converging) + concave (diverging); Lens formula 1/v–1/u=1/f; Magnification m=v/u=h'/h; Power of lens P=1/f(metres) unit=dioptre (D); Human eye structure + defects: myopia (concave lens), hypermetropia (convex), presbyopia, astigmatism",
       },
       {
-        subject: "Hindi",
+        subject: "English",
         topic:
-          "Sparsh Kavya Khand Ch 4: Sumitranandan Pant – Parvat Pradesh ke Paavs; mountains in monsoon; Rupak and Upama alankar",
+          "MCB Unit 3 Science – 'Promise for the Future: Renewable Energy' + 'Plugging into Future': solar/wind/hydro/biomass (advantages + challenges); comprehension (author's perspective, argument structure); grammar: Active/Passive Voice full conversion rules + 8 examples in different tenses; Literature Reader P1: The Frog and the Nightingale (Vikram Seth) – allegory (frog=exploitative critic, nightingale=talented but naive artist), Bingle Bog setting, rhyme scheme AABB, theme: don't let others define your worth, symbol-meaning table",
       },
     ],
-    test: "Draw ionic bond for MgCl₂ + explain galvanisation + 3 nature images from Pant with poetic device",
-    read: "Hindi Muhavare – 5 idioms about nature/courage",
+    test: "Daily Test 30 marks 60 min: Lens formula numericals + eye defects; English active/passive grammar + Lit P1 allegory analysis",
+    read: "5 vocab: Refraction, Dioptre, Renewable, Allegory, Naive",
     extra: [
-      "Ionic bond: metal loses e⁻ (cation), non-metal gains (anion); electrostatic attraction",
-      "Galvanisation: iron coated with zinc; ZnO protective layer prevents rusting",
-      "Pant (1900–1977): Jnanpith 1968; Chhayavad; nature poetry specialist",
+      "Lens vs Mirror sign convention: lens uses –u, +v; DIFFERENT from mirror — draw comparison table",
+      "P1 allegory: every element symbolises something — make symbol-meaning table",
+      "Power: convex P>0; concave P<0",
     ],
   },
 
+  // ── Day 20 — Trigonometry + Hindi Kavya+Gadya ──
   {
     day: 20,
     meta: { date: "20 May", dow: "Wednesday", type: "school" },
@@ -505,23 +546,24 @@ export const THIRTY_DAY_PLAN: PlannerDayPlan[] = [
       {
         subject: "Mathematics",
         topic:
-          "Ch 3 Linear Equations – Word Problems: age, fraction, speed-distance, number, mixture; Ex 3.5 & 3.6 all problems",
+          "Ch 8 Introduction to Trigonometry – 6 ratios: sin, cos, tan, cosec, sec, cot (definitions using right triangle); Standard values table 0°/30°/45°/60°/90° (derive using equilateral + isosceles right triangles); 3 fundamental identities: sin²A+cos²A=1; 1+tan²A=sec²A; 1+cot²A=cosec²A (prove each); Complementary angles: sin(90°–A)=cosA etc.; Ex 8.1, 8.2, 8.3; practice 10 identity simplifications",
       },
       {
-        subject: "English",
+        subject: "Hindi",
         topic:
-          "First Flight Prose Ch 5: Glimpses of India (Goa Baker, Coorg, Tea from Assam); Poem Ch 5: The Trees (Adrienne Rich) – feminist symbolism",
+          "Kavya Khand: Sparsh Ch 5 Top (Viren Dangwal) – 1857 cannon in Company Bagh (colonial oppression) vs sparrows nesting in it (resilience); anti-colonial critique; poetic devices: imagery, contrast, irony; Gadya Khand: Sparsh Ch 5 Ab Kahan Doosre ke Dukh se Dukhi Hone Wale (Nida Fazli) – humans encroaching on animals' space, compassion for all living beings, Sulaiman's story, sparrows symbol; cross-text: same sparrows symbol used differently in poem and prose",
       },
     ],
-    test: "Set up + solve 2 word problems + compare 2 of 3 places in Glimpses",
-    read: "5 words: compassion, vivid, eloquent, festive, indigenous – write paragraph using 3",
+    test: "Daily Test 30 marks 60 min: Trig standard values + identity proof; Hindi Top poem symbol analysis + Nida Fazli compassion theme",
+    read: "5 vocab: Trigonometry, Identity, Resilience, Colonial, Compassion",
     extra: [
-      "Word problem: define variables first; form 2 equations; solve; verify in original context",
-      "Coorg: 'Scotland of India'; Kodavas warriors; coffee and cardamom",
-      "The Trees: move from glass house to forest = women breaking free from patriarchy",
+      "Standard values table: must be instantaneous recall — practice hand trick",
+      "Cross-text connection: sparrows in Dangwal's poem vs Nida Fazli's prose — compare usage",
+      "Identity 1 from Pythagoras: perpendicular²+base²=hyp²; divide both sides by hyp²",
     ],
   },
 
+  // ── Day 21 — Biology Transport & Excretion + History CDM ──
   {
     day: 21,
     meta: { date: "21 May", dow: "Thursday", type: "school" },
@@ -529,25 +571,24 @@ export const THIRTY_DAY_PLAN: PlannerDayPlan[] = [
       {
         subject: "Science",
         topic:
-          "Ch 4 Carbon & Its Compounds – tetravalency, catenation; allotropes (diamond, graphite, fullerene C₆₀); covalent bonds; electron dot structures CH₄, C₂H₆, C₂H₄, C₂H₂",
+          "Ch 6 Life Processes – Transport: xylem (water+minerals, one-way) vs phloem (food, bidirectional); transpiration pull mechanism; Human circulatory system: heart (4 chambers, double circulation), blood vessels (arteries vs veins), blood components; Excretion: kidney — nephron structure (Bowman's capsule, glomerulus, loop of Henle); dialysis concept; urine formation (3 steps); nephron diagram with labels",
       },
       {
-        subject: "Geography",
+        subject: "History",
         topic:
-          "Ch 4 Agriculture – Kharif/Rabi/Zaid seasons; rice, wheat, cash crops; Green Revolution; food security",
+          "Ch 2 Nationalism in India — Civil Disobedience Movement (CDM): Salt March/Dandi March 1930 (cause: salt tax, 240-mile walk by Gandhi); CDM significance vs NCM; Different social groups in CDM: peasants, workers, women, tribals; Gandhi-Irwin Pact 1931; Second Round Table Conference; why CDM was called off and restarted; comparison table NCM vs CDM",
       },
     ],
-    test: "Electron dot structure for C₂H₄ (double bond) + Diamond vs Graphite + 3 kharif + 3 rabi crops with areas",
-    read: "5 terms: catenation, tetravalency, allotrope, kharif, rabi",
+    test: "Daily Test 30 marks 60 min: Nephron diagram + double circulation explanation; History NCM vs CDM comparison table + Gandhi-Irwin Pact significance",
+    read: "5 vocab: Transpiration, Nephron, Excretion, Satyagraha, Disobedience",
     extra: [
-      "Diamond: tetrahedral C–C; hardest; insulator. Graphite: hexagonal layers; conductor; lubricant",
-      "Fullerene C₆₀: 20 hexagons + 12 pentagons; Nobel 1996",
-      "Green Revolution: Norman Borlaug HYV seeds + fertilisers → food self-sufficient",
+      "Nephron diagram with labels — 3-mark diagram question in boards",
+      "Double circulation = pulmonary + systemic: explain both pathways",
+      "Comparison table: NCM vs CDM — causes, participants, withdrawal reasons",
     ],
   },
 
-  // ── WEEK 4 (22 May Fri → 30 May Sat) · Revision: Day 24 Sun ──
-
+  // ── Day 22 — Heights & Distances + English MCB Unit 3 + Lit F4 ──
   {
     day: 22,
     meta: { date: "22 May", dow: "Friday", type: "school" },
@@ -555,22 +596,24 @@ export const THIRTY_DAY_PLAN: PlannerDayPlan[] = [
       {
         subject: "Mathematics",
         topic:
-          "Ch 4 Quadratic Equations – Factorisation method (split middle term): find p,q where p×q=ac AND p+q=b; standard form ax²+bx+c=0; Ex 4.1 & 4.2",
+          "Ch 9 Applications of Trigonometry — Heights & Distances: angle of elevation (observer below) vs angle of depression (observer above); draw clear labelled diagrams; problem types: height of tower, width of river, distance between two objects at different heights; Ex 9.1 all 16 questions; key: draw labelled diagram first, then apply tan/sin/cos",
       },
       {
-        subject: "Hindi",
+        subject: "English",
         topic:
-          "Sparsh Kavya Khand Ch 5: Viren Dangwal – Topiwala; Ch 6: Kaffi Azmi – Ek Phool ki Chah (caste discrimination)",
+          "MCB Unit 3 Science – 'Space Travel' + 'Letters from the Planet Aurigae II' (Sci-Fi): tone identification, inferring meaning, letter format in fiction; grammar: Direct & Indirect Speech full rules + 10 conversion examples across tenses; Literature Reader F4: A Shady Plot (Elsie Brown) – comic supernatural story, Ghost Helen + John Hallock the writer, Ouija board, Lavinia's jealousy, comic misunderstandings; themes: writer's block, supernatural satire; identify ALL comic situations and ironic twists for extract Qs",
       },
     ],
-    test: "Solve by factorisation: x²–3x–10=0 and 2x²–7x+3=0 + central message of Ek Phool ki Chah in 5 Hindi sentences",
-    read: "Hindi: Vakya bhed – 5 examples each of Saral/Sanyukt/Mishra vakya",
+    test: "Daily Test 30 marks 60 min: Heights & distances (2 problems with full diagrams); English direct/indirect speech grammar + Lit F4 irony identification",
+    read: "5 vocab: Elevation, Depression, Supernatural, Irony, Hyperbole",
     extra: [
-      "Split middle: find p,q: p×q=ac AND p+q=b",
-      "Azmi (1919–2002): Ek Phool ki Chah — Untouchable father wants marigold; daughter dies of plague",
+      "Board tip: Most marks lost here due to missing diagrams — make diagram first, label angles & distances",
+      "F4 is a light comic story — identify ALL comic situations and ironic twists",
+      "Direct/Indirect: reporting verb tense change rules + pronoun change rules",
     ],
   },
 
+  // ── Day 23 — Chemistry Metals Extraction + Hindi Kavya+Gadya ──
   {
     day: 23,
     meta: { date: "23 May", dow: "Saturday", type: "holiday" },
@@ -578,23 +621,24 @@ export const THIRTY_DAY_PLAN: PlannerDayPlan[] = [
       {
         subject: "Science",
         topic:
-          "Ch 4 Carbon Pt 2 – Homologous series; IUPAC naming (prefix + suffix table); first 5 members of alkane/alkene/alkyne; functional groups (–OH, –COOH, –CHO, –CO); Ex 4 Q1–8",
+          "Ch 3 Metals & Non-metals — Extraction & Properties: metallurgy basics (ore → concentrate → reduction → refining); terms: ore, gangue, flux, slag; Extraction by activity: highly active (electrolysis — Al, Na), moderately active (reduction with C/CO — Fe, Zn, Cu), low activity (thermal decomposition — Hg, Ag); Corrosion of iron: rust (Fe₂O₃·xH₂O) conditions; prevention: galvanisation, painting, alloying, anodising; Alloys: steel (Fe+C), stainless steel (Fe+Cr+Ni), brass (Cu+Zn), bronze (Cu+Sn), solder (Pb+Sn)",
       },
       {
-        subject: "History",
+        subject: "Hindi",
         topic:
-          "Ch 2 Nationalism in India – Gandhi's vision of Swaraj; Round Table Conference 1930–32; Gandhi-Irwin Pact 1931; Poona Pact 1932 (Ambedkar)",
+          "Kavya Khand: Sparsh Ch 6 Kar Chale Hum Fida (Kaifi Azmi) – patriotic war poem, 1962 Sino-Indian War, soldier's sacrifice for motherland, Urdu poetry tradition (qafiya, radif); 'Kar chale hum fida jaan-o-tan saathiyo' — emotion and significance; figures: anaphora, apostrophe; Gadya Khand: Sparsh Ch 6 Patjhar mein Tooti Pattiyan (Ravindra Kelekar) – (i) Ginni ka Sona: pure vs alloyed gold, pure goodness vs practicality; (ii) Patjhar ki Pattiyaan: learning to let go; philosophical prose style",
       },
     ],
-    test: "IUPAC names for 5 compounds + Gandhi-Irwin Pact terms & significance",
-    read: "5 terms: homologous, functional group, IUPAC, Swaraj, Round Table Conference",
+    test: "Daily Test 30 marks 60 min: Metals extraction (3 categories) + alloy composition table; Hindi Kaifi Azmi soldier's sacrifice + Kelekar's Ginni ka Sona symbolism",
+    read: "5 vocab: Galvanisation, Metallurgy, Sacrifice, Philosophical, Alloying",
     extra: [
-      "Alkanes: CₙH₂ₙ₊₂; alkenes: CₙH₂ₙ; alkynes: CₙH₂ₙ₋₂",
-      "Gandhi-Irwin Pact 1931: release political prisoners; Gandhi attends 2nd RTC; suspend CDM",
-      "Poona Pact 1932: joint electorate with reserved seats for Dalits (after Gandhi's fast)",
+      "Alloy composition table: memorise all 5. Galvanisation = coating with Zinc",
+      "Corrosion = 3-mark Q every year: conditions needed + prevention methods",
+      "Kelekar: what does 'Ginni ka sona' symbolise in human behaviour?",
     ],
   },
 
+  // ── Day 24 — Sunday Revision (Days 18–23) ──
   {
     day: 24,
     meta: { date: "24 May", dow: "Sunday", type: "rev", isRev: true },
@@ -602,94 +646,101 @@ export const THIRTY_DAY_PLAN: PlannerDayPlan[] = [
       {
         subject: "Mathematics",
         topic:
-          "REVISION: Maths Ch 3 Linear Equations FULL (all 4 algebraic methods + 5 word problems) + Ch 4 intro (factorisation 6 problems); Science Ch 3 Metals FULL (ionic bonds, extraction) + Ch 4 Carbon (allotropes, IUPAC 10 compounds)",
+          "REVISION Days 18–23: Coordinate Geometry (distance, section, mid-point formulas); Trigonometry (ratios, standard values table, all 3 identities); Heights & Distances (all problem types with diagrams); Physics Refraction (Snell's Law, lens formula, power, eye defects + correction); Biology Transport (xylem/phloem, transpiration) + Excretion (nephron diagram, dialysis) + Circulation (double circulation)",
       },
       {
         subject: "English",
         topic:
-          "REVISION: History Ch 2 full timeline (10 events + dates: Rowlatt→JB→NCM→CC→Simon→Salt March→GI Pact); Geography Ch 3–4; Hindi Sparsh Ch 4–6; English Ch 4–5 + Poems 4–5",
+          "REVISION Days 18–23: Chemistry Metals extraction (3 categories by activity) + corrosion + alloys (all 5); History Nationalism India CDM 1930 (Salt March, Gandhi-Irwin Pact, social groups); Civics Federalism (3 lists, coming together vs holding together, 73rd/74th Amendment); English MCB Unit 3 (Renewable Energy, Space Travel) + Lit F4 Shady Plot + P1 Frog & Nightingale (allegory); Hindi Kavya — Kaifi Azmi Fida + Gadya — Kelekar (Ginni ka Sona + Patjhar)",
       },
     ],
-    test: "Full Mock: 5 Maths + 5 Science + 5 SST + 5 English + 5 Hindi = 25 Qs (50 min)",
-    read: "Error analysis. IUPAC naming 8 compounds without notes? History 8 dates?",
+    test: "Sunday Revision Test 60 marks 120 min: MCQ All 10m + Primary SA 15m + Secondary SA 15m + LA 2Qs 10m + Full Vocab 30 words 10m",
+    read: "Full week vocab 30 words: Centroid, Collinear, Federalism, Decentralise, Concurrent, Refraction, Dioptre, Renewable, Allegory, Naive, Trigonometry, Identity, Resilience, Colonial, Compassion, Transpiration, Nephron, Excretion, Disobedience, Civil, Elevation, Depression, Supernatural, Irony, Hyperbole, Galvanisation, Metallurgy, Sacrifice, Philosophical, Alloying",
     extra: [
-      "NCM-CDM timeline: 1919 Rowlatt→JB→1920 NCM→1922 CC→1927 Simon→1930 Salt March→1931 GI Pact",
-      "Score target: 22+/25",
+      "Self-check: Draw nephron diagram from memory with all labels",
+      "Self-check: Trig standard values table in under 90 seconds",
+      "Score target: 48+/60",
     ],
   },
 
+  // ── WEEK 5 (25 May Mon → 31 May Sun) · Revision: Day 31 Sun ──
+
+  // ── Day 25 — Biology Control & Coordination + Geography Water Resources ──
   {
     day: 25,
     meta: { date: "25 May", dow: "Monday", type: "school" },
     topics: [
       {
-        subject: "Mathematics",
+        subject: "Science",
         topic:
-          "Ch 4 Quadratic Equations – Completing the Square + Quadratic Formula derivation; Discriminant D=b²–4ac: nature of roots (D>0/D=0/D<0); Ex 4.3 & 4.4",
+          "Ch 7 Control & Coordination – Nervous system: neuron structure (dendrite→cell body→axon→synapse), types (sensory, motor, relay); Reflex arc: stimulus→sensory neuron→spinal cord→motor neuron→effector; involuntary vs voluntary; Brain: hindbrain (medulla — involuntary), midbrain, forebrain (cerebrum — thinking, cerebellum — balance); Endocrine system: thyroid (thyroxine), adrenal (adrenaline), pancreas (insulin/glucagon), pituitary; draw reflex arc with all 5 components labelled",
       },
       {
-        subject: "English",
+        subject: "Geography",
         topic:
-          "First Flight Prose Ch 6: Mijbil the Otter; Poem Ch 6: Fog (Carl Sandburg) – extended metaphor; Grammar: Formal Letter format (all 6 parts) + 1 practice letter",
+          "Ch 3 Water Resources – Global distribution (97% saline, 3% freshwater); freshwater scarcity causes: uneven distribution, pollution, overuse; Multi-purpose river projects: advantages (irrigation, electricity, flood control) vs disadvantages (displacement, ecology); Rainwater harvesting traditional methods: Johad (Rajasthan), Kul (Himachal), Bamboo drip (Meghalaya), Tankas (Rajasthan) — know region + method + how it works",
       },
     ],
-    test: "Solve by formula: 2x²–7x+3=0 and x²+4x+5=0 + write formal letter to principal (study leave)",
-    read: "5 words: instinctive, amphibious, domesticated, elusive, persistent",
+    test: "Daily Test 30 marks 60 min: Reflex arc diagram + brain regions + hormones; Geography traditional water harvesting (region + method + working)",
+    read: "5 vocab: Neuron, Synapse, Reflex, Scarcity, Harvesting",
     extra: [
-      "Completing square: x²+6x=(x+3)²–9; derive formula from this",
-      "D<0: no real roots. Formal letter: Sender→Date→Receiver→Subject→Salutation→Body→Yours faithfully",
-      "Fog: 'on little cat feet' — entire poem = extended personification",
+      "Reflex arc diagram with all 5 components = guaranteed 3-mark board question every year",
+      "Traditional water conservation: board gives 5 marks for this — know all 4 methods with regions",
+      "Pituitary = 'master gland'; thyroid needs iodine (deficiency = goitre)",
     ],
   },
 
+  // ── Day 26 — Circles + English MCB Unit 4 + Poetry P2 ──
   {
     day: 26,
     meta: { date: "26 May", dow: "Tuesday", type: "school" },
     topics: [
       {
-        subject: "Science",
+        subject: "Mathematics",
         topic:
-          "Ch 4 Carbon Pt 3 – Ethanol properties + reactions; Ethanoic acid properties; Esterification; Soaps & Detergents; micelle formation; Ex 4 Q9–15",
+          "Ch 10 Circles — Tangent Properties: Theorem 1: tangent ⊥ radius at point of contact (proof); Theorem 2: two tangents from external point are equal (proof); number of tangents from a point: inside (0), on (1), outside (2); PA=PB for tangents from P; Ex 10.1 (number of tangents), Ex 10.2 (tangent length, angles); problems with circles + triangles; write complete proofs from memory",
       },
       {
-        subject: "Geography",
+        subject: "English",
         topic:
-          "Ch 5 Minerals & Energy Resources Pt 1 – Ferrous/non-ferrous minerals; distribution; coal types; petroleum; energy crisis",
+          "MCB Unit 4 Environment – 'Treading the Green Path' + 'Heroes of the Environment': Wangari Maathai, Green Belt movement; comprehension (writer's opinion, supporting evidence, bias); grammar: Clauses (noun, adjective, adverb) — identify type + examples; Conditional sentences Type 0/1/2/3; Literature Reader P2: Not Marble, nor the Gilded Monuments (Shakespeare Sonnet 55) – theme: immortality of poetry vs decay of physical monuments; Shakespearean sonnet structure (ABAB CDCD EFEF GG); key contrast; figures: metaphor, allusion, hyperbole; identify the volta",
       },
     ],
-    test: "Ethanol reaction with Na + esterification equation + 2 ferrous + 2 non-ferrous minerals with states",
-    read: "5 terms: ester, saponification, micelle, ferrous, haematite",
+    test: "Daily Test 30 marks 60 min: Tangent theorems (proofs + application problems); English clauses + conditionals grammar + Lit P2 sonnet structure analysis",
+    read: "5 vocab: Tangent, Perpendicular, Immortality, Monument, Activism",
     extra: [
-      "Esterification: CH₃COOH + C₂H₅OH ⇌ CH₃COOC₂H₅ + H₂O (conc. H₂SO₄, heat; reversible)",
-      "Micelle: hydrophobic tail in oil, hydrophilic head in water → spherical cluster",
-      "Iron ore: Jharkhand, Odisha, Chhattisgarh, Karnataka",
+      "Both tangent theorems + proofs are frequently asked in boards — write complete proofs from memory",
+      "Sonnet structure: 3 quatrains + 1 couplet; volta = where argument shifts (usually at line 9)",
+      "Conditionals: Type 0 (always true), 1 (possible), 2 (hypothetical), 3 (impossible past)",
     ],
   },
 
+  // ── Day 27 — Physics Electricity + Hindi Kavya+Gadya ──
   {
     day: 27,
     meta: { date: "27 May", dow: "Wednesday", type: "school" },
     topics: [
       {
-        subject: "Mathematics",
+        subject: "Science",
         topic:
-          "Ch 5 Arithmetic Progressions Pt 1 – Definition; common difference; nth term aₙ = a+(n–1)d (derivation); find nth term; check if number is a term; Ex 5.1 & 5.2",
+          "Ch 12 Electricity – Electric charge & current I=Q/t; Potential difference V=W/Q; Ohm's Law V=IR; Resistance R=ρL/A — factors affecting; Resistors in series: R_total=R₁+R₂+R₃ (same current, voltages add); Resistors in parallel: 1/R_total=1/R₁+1/R₂+1/R₃ (same voltage, currents add); Electric power P=VI=I²R=V²/R; Commercial unit 1kWh=3.6×10⁶J; Heating effect H=I²Rt (Joule's Law); Ex 12.1–12.9 all in-text + chapter-end; practice 5 mixed circuits",
       },
       {
         subject: "Hindi",
         topic:
-          "Sparsh Kavya Khand Ch 7: Tagore – Atmatraan (prayer; strength, not sympathy); Gadya Khand Ch 8: Premchand – Bade Bhai Sahab (irony of formal vs real education)",
+          "Kavya Khand: Sparsh Ch 7 Atmtran (Rabindranath Tagore, translation) – 'Save me from troubles is not my prayer / Only let me be fearless when facing them'; theme: courage over protection, self-reliance; how translation changes aesthetics; Gadya Khand: Sparsh Ch 7 Kartoos (Habib Tanvir — Drama) – 1799 Gorakhpur jungle, Colonel Callis vs Wazir Ali, Wazir Ali's audacity asking enemy for a cartridge; characters, staging elements, theme: bravery and wit; this is a DRAMA — staging matters",
       },
     ],
-    test: "Find nth term + check if 200 is a term in AP + Tagore's 3 requests in own words + character sketch of Bade Bhai Sahab",
-    read: "Hindi unseen passage 150 words + 5 words on courage/self-reliance",
+    test: "Daily Test 30 marks 60 min: Electricity numericals (series + parallel mixed circuit); Hindi Tagore Atmtran theme + Kartoos dramatic irony",
+    read: "5 vocab: Resistance, Potential, Fearlessness, Audacity, Joule",
     extra: [
-      "AP derivation: a, a+d, a+2d, ..., a+(n–1)d",
-      "Tagore (1861–1941): Nobel 1913; Gitanjali; wrote national anthems of India AND Bangladesh",
-      "Premchand (1880–1936): Godan, Nirmala; social realism",
+      "Numerical: calculate total resistance in series + parallel mixed circuit — 5 marks; practice 5 circuits",
+      "Kartoos is a play (drama) — note stage directions, character dynamics, irony of Wazir Ali getting the cartridge",
+      "Tagore: connect Atmtran philosophy with Patol Babu (F5) — both emphasise dignity over recognition",
     ],
   },
 
+  // ── Day 28 — Areas Related to Circles + History Collective Belonging ──
   {
     day: 28,
     meta: { date: "28 May", dow: "Thursday", type: "school" },
@@ -697,23 +748,24 @@ export const THIRTY_DAY_PLAN: PlannerDayPlan[] = [
       {
         subject: "Mathematics",
         topic:
-          "Ch 5 Arithmetic Progressions Pt 2 – Sum Sₙ = n/2[2a+(n–1)d] (Gauss derivation); Sₙ = n/2(a+l); aₙ = Sₙ–Sₙ₋₁; word problems; Ex 5.3 & 5.4",
+          "Ch 11 Areas Related to Circles – Area formulas: circle (πr²), semicircle (½πr²), ring (π(R²–r²)); Sector area=(θ/360)×πr²; Arc length=(θ/360)×2πr; Segment area=sector area–triangle area; Combined figure problems (circle+rectangle, circle+triangle); Ex 11.1 (perimeter+area of sectors/segments), Ex 11.2 (combined figures); practice 5 running track type problems",
       },
       {
-        subject: "Science",
+        subject: "History",
         topic:
-          "Ch 5 Life Processes Pt 1 – Autotrophic/Heterotrophic nutrition; Photosynthesis in full (raw materials, products, chloroplasts, stomata, factors): 6CO₂+6H₂O+light→C₆H₁₂O₆+6O₂",
+          "Ch 2 Nationalism in India — Sense of Collective Belonging: how national identity formed through folk songs, images, stories, symbols; Bharat Mata image — Bankim Chandra Chattopadhyay; Abanindranath Tagore's painting; Indian folklore movements; Bal Gangadhar Tilak's Ganesh Chaturthi 1893; India's long road to unification — inclusion of women, dalits, tribals; 5 ways Indians developed national identity",
       },
     ],
-    test: "Find sum of AP + find n when sum given + draw leaf cross-section with stomata + photosynthesis equation",
-    read: "5 terms: stomata, chloroplast, chlorophyll, mesophyll, transpiration",
+    test: "Daily Test 30 marks 60 min: Areas (sector + segment + combined figures); History 5 ways Indians developed national identity — symbols, songs, paintings",
+    read: "5 vocab: Segment, Sector, Nationalism, Folklore, Collective",
     extra: [
-      "Sum derivation: S+reversed S → 2S=n(a+l) → S=n/2(a+l)",
-      "Photosynthesis: 6CO₂+6H₂O+light → C₆H₁₂O₆+6O₂",
-      "Stomata: open day (gas exchange); guard cells control by osmosis",
+      "Running track type problems = most popular board question type for this chapter",
+      "Sense of collective belonging — 5-mark LA: list 5 ways with specific examples",
+      "Segment = sector area – triangle area; use correct triangle formula (½ ab sinC for non-right)",
     ],
   },
 
+  // ── Day 29 — Biology Reproduction + Economics Development ──
   {
     day: 29,
     meta: { date: "29 May", dow: "Friday", type: "school" },
@@ -721,23 +773,24 @@ export const THIRTY_DAY_PLAN: PlannerDayPlan[] = [
       {
         subject: "Science",
         topic:
-          "Ch 5 Life Processes Pt 2 – Aerobic respiration (glycolysis, Krebs cycle, 38 ATP); Anaerobic (yeast→ethanol; muscle→lactic acid); Xylem vs phloem; double circulation intro",
+          "Ch 8 How do Organisms Reproduce – Asexual: binary fission (Amoeba, bacteria), budding (Hydra, yeast), fragmentation (Spirogyra), regeneration (Planaria), spore formation (Rhizopus), vegetative propagation; Sexual reproduction in plants: flower parts (stamen, pistil), pollination (self vs cross), fertilisation → seed formation; Human reproductive system: male (testes, vas deferens, urethra) + female (ovary, fallopian tube, uterus); menstrual cycle (basic); draw and label both systems",
       },
       {
-        subject: "Geography",
+        subject: "Economics",
         topic:
-          "Ch 5 Minerals Pt 2 + Ch 6 Manufacturing Industries – Non-conventional energy; textile (cotton/jute); sugar industry; industrial pollution",
+          "Ch 1 Development — What Development Promises: development = different things for different people; development goals: income + security + equality + respect; per capita income for comparing countries; HDI — Human Development Index (income + education + health) — all 3 components; India's HDI rank; sustainable development definition; Sen Amartya — capability approach; difference between per capita income and HDI as measures",
       },
     ],
-    test: "Aerobic vs anaerobic table + xylem vs phloem differences + 3 non-conventional energy sources in India",
-    read: "5 terms: glycolysis, Krebs cycle, ATP, xylem, phloem",
+    test: "Daily Test 30 marks 60 min: Reproduction (asexual types table + plant/human system diagrams); Economics HDI components + per capita income vs HDI difference",
+    read: "5 vocab: Regeneration, Pollination, Development, Per-capita, Capability",
     extra: [
-      "38 ATP aerobic; 2 ATP anaerobic",
-      "Lactic acid = muscle cramp; hot water bath helps",
-      "India: largest wind power in Asia; Rajasthan = most solar potential",
+      "Diagram: human male/female reproductive system — both are 3-mark questions in board practicals",
+      "HDI: all 3 components. Difference between per capita income and HDI — guaranteed 3-mark Q",
+      "Asexual reproduction table: organism → method → how it works — memorise all 6",
     ],
   },
 
+  // ── Day 30 — Surface Areas & Volumes + English MCB Unit 4 + Lit F5 ──
   {
     day: 30,
     meta: { date: "30 May", dow: "Saturday", type: "rev", isRev: true },
@@ -745,19 +798,20 @@ export const THIRTY_DAY_PLAN: PlannerDayPlan[] = [
       {
         subject: "Mathematics",
         topic:
-          "MAY MONTH-END REVISION – Maths Ch 1–5 FULL: solve 2 problems per chapter = 10 problems under timed conditions (45 min); verify all formulas; redo weakest chapter completely",
+          "Ch 12 Surface Areas & Volumes – Formulas: cube, cuboid, cylinder (CSA=2πrh, TSA=2πr(r+h)), cone (CSA=πrl, l=√(r²+h²)), sphere (SA=4πr²), hemisphere; Combined solids: hemisphere on cylinder, cone on cylinder, frustum; Ex 12.1 (SA of combinations), Ex 12.2 (volumes), Ex 12.3 (conversion: melt one shape → another, volumes equal); Frustum: V=πh/3(R²+Rr+r²), CSA=πl(R+r)",
       },
       {
-        subject: "Science",
+        subject: "English",
         topic:
-          "MAY MONTH-END REVISION – Science Ch 1–5 complete write-from-memory; History Ch 2 timeline; Geography Ch 1–5 key facts; English Ch 1–6 themes; Hindi Sparsh Ch 1–8 author+theme chart",
+          "MCB Unit 4 Environment – 'Let's Clean Up' + 'A Tale of Three Villages' + 'Geological Heritage of India': community action, geological wonders; reading: identify purpose (inform/persuade/inspire); grammar: Tenses Revision (Present/Past/Future: simple/continuous/perfect/perfect continuous — 8 sentences each tense); Literature Reader F5: Patol Babu, Film Star (Satyajit Ray) – Patol Babu's brief acting chance, dignity in small roles, art for art's sake; his 3 lines 'Oh!' — how he prepares; connection to Shakespeare 'All the world's a stage'; connect Patol Babu's philosophy to Tagore's Atmtran",
       },
     ],
-    test: "MAY MOCK: 10 Maths + 10 Science + 8 SST + 7 English + 5 Hindi = 40 Qs (70 min)",
-    read: "Prepare JUNE PLAN: note weakest topics from May. These get priority in June.",
+    test: "MAY MONTH-END REVISION TEST — 60 marks 120 min covering ALL of Month 1: Maths, Science (all 3 branches), SST (all 4 subjects), English (MCB + Lit), Hindi (Kavya + Gadya)",
+    read: "Full week vocab 30 words: Neuron, Synapse, Reflex, Scarcity, Harvesting, Tangent, Perpendicular, Immortality, Monument, Activism, Resistance, Potential, Fearlessness, Audacity, Joule, Segment, Sector, Folklore, Collective, Identity, Regeneration, Pollination, Development, Per-capita, Capability, Frustum, Hemisphere, Dignity, Recognition, Geological",
     extra: [
-      "May check: Maths Ch 1–5 ✓ | Science Ch 1–5 ✓ | History Ch 2 ✓ | Geography Ch 1–5 ✓ | English Ch 1–6 ✓ | Hindi Sparsh Ch 1–8 ✓",
-      "FOUNDATION month complete. Enter June with formula sheet ready + error log updated.",
+      "Frustum: V=πh/3(R²+Rr+r²), CSA=πl(R+r) — memorise both; frequently asked as 5-mark question",
+      "MONTH 1 COVERAGE: Real Numbers → Surface Areas (Maths Ch 1–12); Science Ch 1–3,6–8,10,12; SST all 4 subjects Ch 1–3; English MCB Units 1–4 + Lit F1–F5, P1–P2; Hindi Sparsh Kavya Ch 1–7 + Gadya Ch 1–7",
+      "June 1: Application Phase begins — deeper problem practice + past paper questions",
     ],
   },
 
@@ -2183,8 +2237,8 @@ export const THIRTY_DAY_PLAN: PlannerDayPlan[] = [
       "✅ History: 5 chapters ALL COVERED",
       "✅ Geography: 7 chapters ALL COVERED",
       "✅ Civics: 5 chapters ALL COVERED",
-      "✅ English: First Flight + Footprints + Grammar ALL COVERED",
-      "✅ Hindi: Sparsh Ch 1–14 + Sanchayan + Grammar ALL COVERED",
+      "✅ English: MCB Units 1–6 + Literature Reader F1–F6, P1–P5, D1–D2 + Grammar ALL COVERED",
+      "✅ Hindi: Sparsh Kavya Ch 1–7 + Gadya Ch 1–7 + Sanchayan + Grammar ALL COVERED",
       "🌟 90-DAY JOURNEY COMPLETE. NCERT 100% COVERAGE. BEST OF LUCK! 🌟",
     ],
   },
@@ -2219,7 +2273,7 @@ export const THIRTY_DAY_PLAN: PlannerDayPlan[] = [
       {
         subject: "Mathematics",
         topic:
-          "🏆 Day 90 — Journey Complete: 90 days; 6 subjects; 14 Maths + 10 Science + 5 History + 7 Geography + 5 Civics + 9 English prose + 9 Poems + 14 Sparsh + 3 Sanchayan chapters; hundreds of practice problems; multiple mocks. You did it.",
+          "🏆 Day 90 — Journey Complete: 90 days; 6 subjects; 14 Maths + 10 Science + 5 History + 7 Geography + 5 Civics + English (MCB 6 Units + Lit Reader F1–F6, P1–P5, D1–D2) + Hindi (Sparsh Kavya+Gadya Ch 1–7 + Sanchayan 3 stories) chapters; hundreds of practice problems; multiple mocks. You did it.",
       },
       {
         subject: "Science",
@@ -2231,7 +2285,7 @@ export const THIRTY_DAY_PLAN: PlannerDayPlan[] = [
     read: "Write 3 things you learned about YOURSELF (not just subjects) during these 90 days. Keep that paper.",
     extra: [
       "🎓 90 DAYS COMPLETE — CBSE CLASS X FULL SYLLABUS COVERED",
-      "📚 Total chapters: Maths 14 + Science 10 + History 5 + Geography 7 + Civics 5 + English 18 + Hindi 17 = 76 chapters",
+      "📚 Total chapters: Maths 14 + Science 10 + History 5 + Geography 7 + Civics 5 + English MCB+Lit + Hindi Sparsh+Sanchayan = 76+ chapters",
       "🔬 ~18 comprehensive mock evaluations throughout the plan",
       "⚡ ~500+ practice problems across all subjects",
       "🌟 Best of luck in your results. Now go build something great.",

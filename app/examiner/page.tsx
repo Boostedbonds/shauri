@@ -77,12 +77,13 @@ function ResumeBanner({ subject, elapsed, onDismiss }: {
 function printCBSEPaper({ paperContent, subject, studentName, studentClass, isRevisionDay }: {
   paperContent: string; subject?: string; studentName?: string; studentClass?: string; isRevisionDay?: boolean;
 }) {
-  const expectedMarks = isRevisionDay ? "50" : "25";
+  // Updated: Daily = 30 marks / 60 min | Revision = 60 marks / 120 min
+  const expectedMarks = isRevisionDay ? "60" : "30";
   const marksMatch    = paperContent.match(/(?:Maximum\s*Marks|Total(?:\s*Marks)?)\s*[:\-]\s*(\d+)/i);
   const parsedMarks   = marksMatch ? marksMatch[1] : "";
-  const totalMarks    = (parsedMarks === "25" || parsedMarks === "50") ? parsedMarks : expectedMarks;
+  const totalMarks    = (parsedMarks === "30" || parsedMarks === "60") ? parsedMarks : expectedMarks;
   const timeMatch     = paperContent.match(/(?:Time\s*Allowed|Duration)\s*[:\-]\s*([^\n]+)/i);
-  const timeAllowed   = timeMatch ? timeMatch[1].trim() : (isRevisionDay ? "90 Minutes" : "45 Minutes");
+  const timeAllowed   = timeMatch ? timeMatch[1].trim() : (isRevisionDay ? "120 Minutes" : "60 Minutes");
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const formattedBody = paperContent.split("\n").map(line => {
     const escaped = esc(line);
@@ -191,7 +192,6 @@ function createNewSessionId(): string {
 // ─────────────────────────────────────────────────────────────
 // DAY STAMP HELPERS
 // Base date: Day 1 = 1 May 2026 (Friday)
-// Derives human-readable date and week number from dayNum.
 // ─────────────────────────────────────────────────────────────
 
 const PLANNER_BASE_DATE = new Date("2026-05-01"); // Day 1
@@ -210,16 +210,15 @@ function getWeekNum(dayNum: number): number {
 
 function getDayType(dayNum: number, isRevision: boolean): string {
   if (isRevision) return "Revision Day";
-  // Days 3, 10, 17, 24 are revision — others check if it falls on weekend
   const d = new Date(PLANNER_BASE_DATE);
   d.setDate(PLANNER_BASE_DATE.getDate() + (dayNum - 1));
-  const dow = d.getDay(); // 0=Sun, 6=Sat
+  const dow = d.getDay();
   if (dow === 0 || dow === 6) return "Holiday";
   return "School Day";
 }
 
 // ─────────────────────────────────────────────────────────────
-// FIX 1: WRITING SUBJECT — planner-accurate lookup map
+// WRITING SUBJECT MAP
 // ─────────────────────────────────────────────────────────────
 
 const WRITING_SUBJECT_MAP: Record<number, "English" | "Hindi"> = {
@@ -257,7 +256,7 @@ function getWritingSubjectsForRevision(day: number): ("English" | "Hindi")[] {
 }
 
 // ─────────────────────────────────────────────────────────────
-// FIX 2: REVISION COVERAGE MAP
+// REVISION COVERAGE MAP
 // ─────────────────────────────────────────────────────────────
 
 const REVISION_COVERAGE_MAP: Record<number, { from: number; to: number }> = {
@@ -272,7 +271,12 @@ function isRevisionDayNum(dayNum: number): boolean {
 }
 
 // ─────────────────────────────────────────────────────────────
-// FIX 3: SHAURI PAPER FORMAT
+// SHAURI PAPER FORMAT
+// Updated marking system:
+//   Daily / Holiday → 30 marks · 60 minutes
+//     A(5×1=5) + B(3×2=6) + C(2×3=6) + D(1×5=5) + E(Writing 3m + Vocab 5×1=5m = 8m) = 30
+//   Revision        → 60 marks · 120 minutes
+//     A(10×1=10) + B(5×2=10) + C(4×3=12) + D(2×5=10) + E(Writing 6m + Vocab 10×1=10m = 18m) = 60 (wait — 10+10+12+10+18 = 60 ✓)
 // ─────────────────────────────────────────────────────────────
 
 function getSharuiPaperFormat(
@@ -283,170 +287,232 @@ function getSharuiPaperFormat(
 
   const hasMultipleLanguages = writingSubjects && writingSubjects.length > 1;
 
+  // ── SECTION E: REVISION DAY ──────────────────────────────
   function buildSectionE_Revision(): string {
     if (hasMultipleLanguages && writingSubjects) {
       return [
-        `SECTION E – Writing Skills  [5 marks total]`,
-        `  • Both languages covered in this revision are required:`,
-        `     (a) ${writingSubjects[0]} writing task [3 marks]`,
-        `         Choose ONE format: formal letter OR article`,
-        `         Must use vocabulary/themes from the ${writingSubjects[0]} chapters covered`,
-        `         Word limit: 120-150 words`,
-        `         Marking: Format-1 | Content-2 | Grammar-1 | Vocabulary use (min 3 words)-1`,
-        `     (b) ${writingSubjects[1]} writing task [2 marks]`,
-        `         Choose ONE format: anuched lekhan OR patra lekhan (if Hindi)`,
-        `         OR paragraph OR short letter (if English)`,
-        `         Word limit: 60-80 words`,
-        `  • Total Section E: 3 + 2 = 5 marks`,
-        `  • Do NOT mix formats within each part`,
-        `  • Both parts are compulsory — no internal choice in Section E`,
+        `SECTION E – Writing Task + Vocabulary  [18 marks total]`,
+        ``,
+        `┌─ Writing Task ─────────────────────────────── 6 marks ─┐`,
+        `│  BOTH languages required on every Revision Day:         │`,
+        `│  (a) ${writingSubjects[0]} writing task — 3 marks                  │`,
+        `│      Most advanced ${writingSubjects[0]} format introduced so far   │`,
+        `│      Word limit: 120–150 words                          │`,
+        `│      Marking: Format-1 | Content-1 | Language-1 = 3    │`,
+        `│  (b) ${writingSubjects[1]} writing task — 3 marks                  │`,
+        `│      Most advanced ${writingSubjects[1]} format introduced so far   │`,
+        `│      Word limit: 120–150 words                          │`,
+        `│      Marking: Format-1 | Content-1 | Language-1 = 3    │`,
+        `│  (odd/even language rule suspended on Revision Days)    │`,
+        `└─────────────────────────────────────────────────────────┘`,
+        ``,
+        `┌─ Vocabulary Test ──────────────────────────── 10 marks ─┐`,
+        `│  Words tested: ALL vocab words from the revision window  │`,
+        `│  List the 10 words at the top of this sub-section       │`,
+        `│  Format: mix of ALL 4 question types —                  │`,
+        `│    • Write the meaning   • Write a synonym              │`,
+        `│    • Write an antonym    • Use the word in a sentence   │`,
+        `│  10 questions × 1 mark each = 10 marks                  │`,
+        `└─────────────────────────────────────────────────────────┘`,
+        ``,
+        `  Writing (6) + Vocab (10) = 18 marks ✓`,
       ].join("\n");
     }
+    // single language revision (rare)
     return [
-      `SECTION E – Writing Skills  [1 × 5 = 5 marks]  Language: ${writingSubject}`,
-      `  • Write exactly 1 writing question in ${writingSubject}`,
-      `  • Choose exactly ONE format: formal letter OR article OR paragraph`,
-      `  • Word limit: 120-150 words for letter/article, 80-100 for paragraph`,
-      `  • Must connect to themes/vocabulary from the revision chapters`,
-      `  • Include marking breakdown: Format-1 | Content-2 | Grammar-1 | Vocabulary-1 = 5`,
-      `  • Do NOT mix formats`,
+      `SECTION E – Writing Task + Vocabulary  [18 marks total]`,
+      ``,
+      `┌─ Writing Task ─────────────────────────────── 6 marks ─┐`,
+      `│  (a) Hindi writing task   — 3 marks (full Devanagari)   │`,
+      `│  (b) English writing task — 3 marks                     │`,
+      `│  Use most advanced format introduced so far per subject  │`,
+      `└─────────────────────────────────────────────────────────┘`,
+      ``,
+      `┌─ Vocabulary Test ──────────────────────────── 10 marks ─┐`,
+      `│  10 words from the full revision window × 1 mark each   │`,
+      `│  List words at top. Mix all 4 question types.           │`,
+      `└─────────────────────────────────────────────────────────┘`,
+      ``,
+      `  Writing (6) + Vocab (10) = 18 marks ✓`,
     ].join("\n");
   }
 
+  // ── SECTION E: DAILY / HOLIDAY DAY ──────────────────────
   function buildSectionE_StudyDay(): string {
+    const langNote = writingSubject === "Hindi"
+      ? `Hindi writing task — FULL Devanagari script only`
+      : `English writing task`;
     return [
-      `SECTION E – Writing Skills  [1 × 3 = 3 marks]  Language: ${writingSubject}`,
-      `  • Write exactly 1 writing question in ${writingSubject}`,
-      `  • Format: Anucched Lekhan (paragraph) if Hindi; paragraph/appropriate format if English`,
-      `  • Word limit: 60-70 words (state this explicitly in the question)`,
-      `  • Must include step-by-step writing guidance as bullet points`,
-      `  • Must connect to the primary topic studied today`,
-      `  • Repeat word limit at the end of the question`,
-      `  • Do NOT mix formats`,
-      `  • Do NOT use letter/patra format unless it has been introduced in the planner by this day`,
+      `SECTION E – Writing Task + Vocabulary  [8 marks total]`,
+      ``,
+      `┌─ Writing Task ──────────────────────────────── 3 marks ─┐`,
+      `│  ${langNote}                     │`,
+      `│  Format: use FIRST format introduced in planner by today │`,
+      `│    Hindi priority: अनुच्छेद → अनौपचारिक पत्र → औपचारिक पत्र → निबंध│`,
+      `│    English: paragraph/description → letter (only if taught)│`,
+      `│  Word limit: 60–80 words (state this in the question)    │`,
+      `│  NEVER use letter/patra if not yet introduced in planner │`,
+      `│  Marking: Format-1 | Content-1 | Language-1 = 3         │`,
+      `└─────────────────────────────────────────────────────────┘`,
+      ``,
+      `┌─ Vocabulary Test ───────────────────────────── 5 marks ─┐`,
+      `│  Words tested: the 5 vocab words from Day X–1            │`,
+      `│  List the 5 words at the top of this sub-section         │`,
+      `│  Format: mix of at least 2 question types —              │`,
+      `│    • Write the meaning   • Write a synonym               │`,
+      `│    • Write an antonym    • Use the word in a sentence    │`,
+      `│  5 questions × 1 mark each = 5 marks                    │`,
+      `└─────────────────────────────────────────────────────────┘`,
+      ``,
+      `  Writing (3) + Vocab (5) = 8 marks ✓`,
     ].join("\n");
   }
 
+  // ════════════════════════════════════════════════════════════
+  // REVISION DAY FORMAT  — 60 marks · 120 minutes
+  // ════════════════════════════════════════════════════════════
   if (isRevisionDay) {
     return [
-      "SHAURI REVISION DAY TEST FORMAT (follow exactly — no deviations):",
-      "Total Marks: 50 | Time Allowed: 90 minutes | Maximum Marks: 50",
-      "IMPORTANT: Total marks MUST equal exactly 50. Generate ALL sections A–E completely.",
-      "",
-      "SECTION A – Multiple Choice Questions  [10 × 1 = 10 marks]",
-      "  • Write exactly 10 MCQs total, distributed EXACTLY as follows:",
-      "    – Q1–Q6:  Standard MCQs with 4 options (A/B/C/D) [1 mark each]",
-      "              Spread EVENLY across all subjects covered in the revision days",
-      "              No subject gets more than 2 of Q1-Q6",
-      "              All 4 options must have DIFFERENT values — no duplicate options",
-      "    – Q7–Q8:  Case-based MCQs [1 mark each]",
-      "              ONE shared passage/scenario (4–6 lines), then Q7 and Q8 based on it",
-      "              Label: 'Questions 7 and 8 are based on the following passage:'",
-      "              Passage must be a rich Indian real-life scenario from covered topics",
-      "    – Q9–Q10: Assertion–Reason MCQs [1 mark each]",
-      "              Both A and R must be FACTUALLY CORRECT statements",
-      "              Options MUST be EXACTLY:",
-      "              (A) Both Assertion (A) and Reason (R) are true, and (R) is the correct explanation of (A)",
-      "              (B) Both Assertion (A) and Reason (R) are true, but (R) is NOT the correct explanation of (A)",
-      "              (C) Assertion (A) is true but Reason (R) is false",
-      "              (D) Assertion (A) is false but Reason (R) is true",
-      "  • Do NOT write all 10 as plain MCQs — Q7-Q8 MUST be case-based, Q9-Q10 MUST be AR",
-      "",
-      "SECTION B – Very Short Answer  [5 × 2 = 10 marks]",
-      "  • Write exactly 5 questions [2 marks each]",
-      "  • EVERY question MUST include an internal choice (OR) — NO missing ORs",
-      "  • Internal choice MUST be within the SAME subject — NEVER cross-subject OR",
-      "  • All Maths questions must provide ALL values needed (self-contained)",
-      "  • Cover all subjects covered in the revision days proportionally",
-      "",
-      "SECTION C – Short Answer  [5 × 3 = 15 marks]",
-      "  • Write exactly 5 questions [3 marks each]",
-      "  • EVERY question MUST include an internal choice (OR) — NO missing ORs",
-      "  • Internal choice MUST be within the SAME subject — NEVER cross-subject OR",
-      "  • Application-based; stepwise answers required",
-      "  • Cover all subjects covered in the revision days",
-      "",
-      "SECTION D – Case Study  [2 × 5 = 10 marks]",
-      "  • Write exactly 2 case study questions [5 marks each]",
-      "  • Each must have a rich real-life Indian passage (5–6 lines) — not a thin 1-line scenario",
-      "  • Each case study must have 3–4 sub-questions",
-      "  • Sub-question marks MUST add to exactly 5",
-      "  • Draw one case from Science/Maths and one from SST/Languages",
-      "",
+      `SHAURI REVISION DAY TEST FORMAT (follow exactly — no deviations)`,
+      `Time: 120 minutes  |  Maximum Marks: 60`,
+      `IMPORTANT: All section marks MUST total exactly 60.`,
+      ``,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `SECTION A — Multiple Choice Questions        10 × 1 = 10 marks`,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `  Write exactly 10 MCQs distributed as follows:`,
+      `  Q1–Q6  : Standard MCQs — 4 options (A/B/C/D) [1 mark each]`,
+      `           Spread evenly across all subjects in revision window`,
+      `           No subject gets more than 2 of Q1–Q6`,
+      `           All 4 options must have DIFFERENT values`,
+      `  Q7–Q8  : Case-based MCQs [1 mark each]`,
+      `           ONE shared passage (4–6 lines), then Q7 and Q8 from it`,
+      `           Label: "Questions 7 and 8 are based on the following passage:"`,
+      `           Passage must be a rich Indian real-life scenario`,
+      `  Q9–Q10 : Assertion–Reason MCQs [1 mark each]`,
+      `           Both A and R must be factually correct statements`,
+      `           Options MUST be EXACTLY:`,
+      `           (A) Both A and R true; R is the correct explanation of A`,
+      `           (B) Both A and R true; R is NOT the correct explanation of A`,
+      `           (C) A is true, R is false`,
+      `           (D) A is false, R is true`,
+      `  RULE: Q7–Q8 MUST be case-based; Q9–Q10 MUST be AR — no plain MCQs there`,
+      ``,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `SECTION B — Very Short Answer                 5 × 2 = 10 marks`,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `  Exactly 5 questions [2 marks each]`,
+      `  EVERY question MUST include an internal choice (OR)`,
+      `  OR must be within the SAME subject — never cross-subject`,
+      `  Cover all subjects in the revision window proportionally`,
+      `  All Maths questions must be fully self-contained (all values given)`,
+      ``,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `SECTION C — Short Answer                      4 × 3 = 12 marks`,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `  Exactly 4 questions [3 marks each]`,
+      `  EVERY question MUST include an internal choice (OR)`,
+      `  OR must be within the SAME subject — never cross-subject`,
+      `  Application-based; stepwise answers required`,
+      `  Cover all subjects in the revision window`,
+      ``,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `SECTION D — Case Study                        2 × 5 = 10 marks`,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `  Exactly 2 case study questions [5 marks each]`,
+      `  Each must have a rich real-life Indian passage (5–6 lines)`,
+      `  Each case study must have 3–4 sub-questions`,
+      `  Sub-question marks MUST add to exactly 5`,
+      `  Draw one case from Sci/Maths and one from SST/Languages`,
+      ``,
       buildSectionE_Revision(),
-      "",
-      "MARK VERIFICATION (mandatory — check before output):",
-      "  A(10) + B(10) + C(15) + D(10) + E(5) = 50 ✓",
-      "",
-      "STRICT RULES:",
-      "– Each section clearly labelled: SECTION A, B, C, D, E",
-      "– Marks in [brackets] for EVERY question and sub-question",
-      "– Section A: 6 standard MCQs + 2 case-based (Q7-Q8) + 2 AR (Q9-Q10)",
-      "– Section C: 5×3=15 marks",
-      "– Section D: 2×5=10 marks",
-      "– ORs in B and C: SAME subject only — never cross-subject",
-      "– ALL sections A–E must be fully generated — do NOT stop early",
-      "– This is a 50-mark revision test, NOT an 80-mark board paper",
+      ``,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `MARK VERIFICATION (check before generating):`,
+      `  A(10) + B(10) + C(12) + D(10) + E(18) = 60 ✓`,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      ``,
+      `STRICT RULES:`,
+      `– Every section clearly labelled: SECTION A, B, C, D, E`,
+      `– Marks in [brackets] for EVERY question and sub-question`,
+      `– Section A: exactly 6 standard + 2 case-based (Q7–Q8) + 2 AR (Q9–Q10)`,
+      `– Section C: exactly 4 × 3 = 12 marks`,
+      `– Section D: exactly 2 × 5 = 10 marks`,
+      `– ORs in B and C: SAME subject only — never cross-subject`,
+      `– ALL sections A–E must be fully generated — do NOT stop early`,
+      `– This is a 60-mark revision test, NOT an 80-mark board paper`,
     ].join("\n");
   }
 
+  // ════════════════════════════════════════════════════════════
+  // DAILY / HOLIDAY FORMAT  — 30 marks · 60 minutes
+  // ════════════════════════════════════════════════════════════
   return [
-    "SHAURI STUDY DAY TEST FORMAT (follow exactly — no deviations):",
-    "Total Marks: 25 | Time Allowed: 45 minutes | Maximum Marks: 25",
-    "IMPORTANT: Total marks MUST equal exactly 25. Generate ALL sections A–E completely.",
-    "",
-    "SECTION A – Multiple Choice Questions  [5 × 1 = 5 marks]",
-    "  • Write exactly 5 MCQs total, distributed EXACTLY as follows:",
-    "    – Q1–Q3: Standard MCQs with 4 options (A/B/C/D) from PRIMARY topic [1 mark each]",
-    "             All 4 options must have DIFFERENT values — no duplicate options",
-    "    – Q4:    Case-based MCQ [1 mark]",
-    "             2-3 line real-life Indian scenario where the PRIMARY concept is NECESSARY",
-    "             to solve the question (not just mentioned)",
-    "             ✅ GOOD: school groups → requires HCF",
-    "             ❌ BAD: 48÷4 → simple division, not HCF",
-    "    – Q5:    Assertion–Reason MCQ [1 mark]",
-    "             Both A and R must be FACTUALLY CORRECT statements",
-    "             Options MUST be EXACTLY:",
-    "             (A) Both Assertion (A) and Reason (R) are true, and (R) is the correct explanation of (A)",
-    "             (B) Both Assertion (A) and Reason (R) are true, but (R) is NOT the correct explanation of (A)",
-    "             (C) Assertion (A) is true but Reason (R) is false",
-    "             (D) Assertion (A) is false but Reason (R) is true",
-    "  • Q4 MUST be case-based, Q5 MUST be AR — do NOT make all 5 plain MCQs",
-    "",
-    "SECTION B – Very Short Answer  [3 × 2 = 6 marks]",
-    "  • Write exactly 3 questions [2 marks each]",
-    "  • EVERY question MUST include an internal choice (OR) — NO missing ORs",
-    "  • At least 2 questions from PRIMARY subject/topic",
-    "  • At most 1 question from secondary subject/topic",
-    "  • Internal choice MUST be within the SAME subject — NEVER cross-subject OR",
-    "  • All Maths questions must provide ALL values needed (self-contained)",
-    "",
-    "SECTION C – Short Answer  [2 × 3 = 6 marks]",
-    "  • Write exactly 2 questions [3 marks each]",
-    "  • EVERY question MUST include an internal choice (OR) — NO missing ORs",
-    "  • Both questions from PRIMARY subject/topic",
-    "  • Internal choice MUST be within the SAME subject — NEVER cross-subject OR",
-    "  • Application-based; stepwise answers required",
-    "",
-    "SECTION D – Case Study  [1 × 5 = 5 marks]",
-    "  • Write exactly 1 case study question",
-    "  • 3-5 line rich Indian narrative scenario on PRIMARY topic",
-    "  • Must have exactly 4 sub-questions: (i)1 + (ii)2 + (iii)1 + (iv)1 = 5 marks",
-    "  • Sub-question (ii) uses exactly TWO numbers if HCF/LCM topic",
-    "  • Scenario must be relatable (beads, ropes, groups, tiles) — not abstract arithmetic",
-    "",
+    `SHAURI DAILY TEST FORMAT (follow exactly — no deviations)`,
+    `Time: 60 minutes  |  Maximum Marks: 30`,
+    `IMPORTANT: All section marks MUST total exactly 30.`,
+    ``,
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `SECTION A — Multiple Choice Questions         5 × 1 = 5 marks`,
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `  Write exactly 5 MCQs distributed as follows:`,
+    `  Q1–Q3 : Standard MCQs — 4 options (A/B/C/D) from PRIMARY topic [1 mark each]`,
+    `           All 4 options must have DIFFERENT values — no duplicate options`,
+    `  Q4    : Case-based MCQ [1 mark]`,
+    `           2–3 line real-life Indian scenario requiring the PRIMARY concept`,
+    `           ✅ GOOD: school groups → requires HCF`,
+    `           ❌ BAD: 48÷4 → simple division, not HCF`,
+    `  Q5    : Assertion–Reason MCQ [1 mark]`,
+    `           Both A and R must be factually correct statements`,
+    `           Options MUST be EXACTLY:`,
+    `           (A) Both A and R true; R is the correct explanation of A`,
+    `           (B) Both A and R true; R is NOT the correct explanation of A`,
+    `           (C) A is true, R is false`,
+    `           (D) A is false, R is true`,
+    `  RULE: Q4 MUST be case-based; Q5 MUST be AR — never all 5 plain MCQs`,
+    ``,
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `SECTION B — Very Short Answer                 3 × 2 = 6 marks`,
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `  Exactly 3 questions [2 marks each]`,
+    `  EVERY question MUST include an internal choice (OR)`,
+    `  At least 2 questions from PRIMARY subject/topic`,
+    `  At most 1 question from secondary subject/topic`,
+    `  OR must be within the SAME subject — never cross-subject`,
+    `  All Maths questions must be fully self-contained (all values given)`,
+    ``,
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `SECTION C — Short Answer                      2 × 3 = 6 marks`,
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `  Exactly 2 questions [3 marks each]`,
+    `  EVERY question MUST include an internal choice (OR)`,
+    `  Both questions from PRIMARY subject/topic`,
+    `  OR must be within the SAME subject — never cross-subject`,
+    `  Application-based; stepwise answers required`,
+    ``,
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `SECTION D — Case Study                        1 × 5 = 5 marks`,
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `  Exactly 1 case study question`,
+    `  3–5 line rich Indian narrative scenario on PRIMARY topic`,
+    `  Must have exactly 4 sub-questions: (i)1 + (ii)2 + (iii)1 + (iv)1 = 5 marks`,
+    `  Sub-question (ii) uses exactly TWO numbers if HCF/LCM topic`,
+    `  Scenario must be relatable (beads, ropes, groups, tiles) — not abstract`,
+    ``,
     buildSectionE_StudyDay(),
-    "",
-    "MARK VERIFICATION (mandatory — check before output):",
-    "  A(5) + B(6) + C(6) + D(5) + E(3) = 25 ✓",
-    "",
-    "STRICT RULES:",
-    "– Each section clearly labelled: SECTION A, B, C, D, E",
-    "– Marks in [brackets] for EVERY question and sub-question",
-    "– Section A: 3 standard MCQs + 1 case-based (Q4) + 1 AR (Q5)",
-    "– ORs in B and C: SAME subject only — never cross-subject",
-    "– ALL sections A–E must be fully generated — do NOT stop early",
-    "– This is a 25-mark daily test, NOT an 80-mark board paper",
+    ``,
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `MARK VERIFICATION (check before generating):`,
+    `  A(5) + B(6) + C(6) + D(5) + E(8) = 30 ✓`,
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    ``,
+    `STRICT RULES:`,
+    `– Every section clearly labelled: SECTION A, B, C, D, E`,
+    `– Marks in [brackets] for EVERY question and sub-question`,
+    `– Section A: exactly 3 standard MCQs + 1 case-based (Q4) + 1 AR (Q5)`,
+    `– ORs in B and C: SAME subject only — never cross-subject`,
+    `– ALL sections A–E must be fully generated — do NOT stop early`,
+    `– This is a 30-mark daily test, NOT an 80-mark board paper`,
   ].join("\n");
 }
 
@@ -533,7 +599,6 @@ function PaperRenderer({ content }: { content: string }) {
   const classPair    = headerPairs.find(p => /^class$/i.test(p.key));
   const boardPair    = headerPairs.find(p => /board/i.test(p.key));
 
-  // Extract day stamp from paper content
   const dayStampMatch = content.match(/Day\s+(\d+)\s*[·•]\s*([^·•\n]+)[·•]\s*([^·•\n]+)[·•]\s*(Week\s*\d+)/i);
   const dayStampLine  = dayStampMatch ? dayStampMatch[0].trim() : "";
 
@@ -556,7 +621,6 @@ function PaperRenderer({ content }: { content: string }) {
 
     if (!line) { blocks.push({ type: "blank" }); i++; continue; }
 
-    // Day stamp detection
     if (/^Day\s+\d+\s*[·•]/i.test(line) || /Strictly aligned to Day/i.test(line)) {
       blocks.push({ type: "daystamp", text: line });
       i++; continue;
@@ -1060,7 +1124,7 @@ function ExaminerContent() {
   }
 
   // ─────────────────────────────────────────────────────────
-  // MAIN useEffect — builds shauriPaperData with full day stamp
+  // MAIN useEffect — builds shauriPaperData
   // ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (autoTriggeredRef.current) return;
@@ -1101,14 +1165,12 @@ function ExaminerContent() {
 
     const formatBlock = getSharuiPaperFormat(isRevisionDay, writingSubject, writingSubjects);
 
-    // ── DAY STAMP FIELDS — derived from dayNum ──────────────
-    const dayDate  = Number.isFinite(dayNum) && dayNum > 0 ? getDayDate(dayNum)          : "";
+    const dayDate  = Number.isFinite(dayNum) && dayNum > 0 ? getDayDate(dayNum)               : "";
     const dayType  = Number.isFinite(dayNum) && dayNum > 0 ? getDayType(dayNum, isRevisionDay) : "School Day";
-    const weekNum  = Number.isFinite(dayNum) && dayNum > 0 ? getWeekNum(dayNum)           : 1;
+    const weekNum  = Number.isFinite(dayNum) && dayNum > 0 ? getWeekNum(dayNum)                : 1;
     const dayStamp = dayNum > 0
       ? `Day ${dayNum}  ·  ${dayDate}  ·  ${dayType}  ·  Week ${weekNum}`
       : "";
-    // ────────────────────────────────────────────────────────
 
     const displaySubject = isRevisionDay
       ? `Week ${weekNum} Revision`
@@ -1116,10 +1178,11 @@ function ExaminerContent() {
         ? `${primary.subject}${secondary ? ` + ${secondary.subject}` : ""}`
         : (subject || "General");
 
+    // Updated totals: Daily = 30m/60min, Revision = 60m/120min
     const shauriPaperData = {
       isRevisionDay,
-      totalMarks:       isRevisionDay ? 50 : 25,
-      timeMinutes:      isRevisionDay ? 90 : 45,
+      totalMarks:       isRevisionDay ? 60 : 30,
+      timeMinutes:      isRevisionDay ? 120 : 60,
       primarySubject:   primary?.subject   || subject || "General",
       primaryTopic:     primary?.topic     || topic   || "General",
       secondarySubject: secondary?.subject || "",
@@ -1130,7 +1193,6 @@ function ExaminerContent() {
       dayNum,
       cycleNum,
       formatBlock,
-      // ── NEW: day stamp fields sent to route.ts ──
       dayDate,
       dayType,
       weekNum,

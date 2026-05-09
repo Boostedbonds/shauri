@@ -3,6 +3,10 @@
  * Knowledge Base integration added:
  * - searchKnowledge() called before every AI response
  * - KB context injected into system prompt automatically
+ *
+ * MARKING SYSTEM (updated):
+ *   Daily / Holiday test → 30 marks · 60 minutes
+ *   Revision test        → 60 marks · 120 minutes
  */
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "../../lib/supabase";
@@ -77,17 +81,23 @@ ${kb.context}
 }
 
 /* ------------------------------------------------------------------
-   PAPER PROMPT BUILDER (unchanged from original)
+   PAPER PROMPT BUILDER
+   Updated: Daily = 30 marks / 60 min | Revision = 60 marks / 120 min
 ------------------------------------------------------------------ */
 function buildPaperPrompt(shauriPaper: ShauriPaperData, student: StudentContext): string {
   const board     = student?.board || "CBSE";
   const className = student?.class || `Class ${syllabus.class}`;
   const name      = student?.name  || "Student";
-  const { isRevisionDay, totalMarks, timeMinutes, primarySubject, primaryTopic,
-          secondarySubject, secondaryTopic, writingSubject, writingSubjects,
-          weekCoverage, dayNum, formatBlock, dayDate, dayType, weekNum } = shauriPaper;
-  const marks   = totalMarks   || (isRevisionDay ? 50 : 25);
-  const minutes = timeMinutes  || (isRevisionDay ? 90 : 45);
+  const {
+    isRevisionDay, totalMarks, timeMinutes, primarySubject, primaryTopic,
+    secondarySubject, secondaryTopic, writingSubject, writingSubjects,
+    weekCoverage, dayNum, formatBlock, dayDate, dayType, weekNum,
+  } = shauriPaper;
+
+  // Updated defaults: Daily = 30m/60min, Revision = 60m/120min
+  const marks   = totalMarks   || (isRevisionDay ? 60 : 30);
+  const minutes = timeMinutes  || (isRevisionDay ? 120 : 60);
+
   const allowedSubjects: string[] = [];
   if (primarySubject)   allowedSubjects.push(primarySubject);
   if (secondarySubject) allowedSubjects.push(secondarySubject);
@@ -100,8 +110,13 @@ function buildPaperPrompt(shauriPaper: ShauriPaperData, student: StudentContext)
     `Total Marks: ${marks} | Time: ${minutes} minutes`,
     `Day: ${dayNum || "?"} | ${dayDate || ""} | ${dayType || "School Day"} | Week ${weekNum || "?"}`,
     formatBlock || "",
-    `Generate a complete ${isRevisionDay ? "REVISION DAY (50 mark)" : "STUDY DAY (25 mark)"} CBSE question paper.`,
-    `Sections A(MCQ) + B(VSA) + C(SA) + D(Case Study) + E(Writing). All marks must add up correctly.`,
+    isRevisionDay
+      ? `Generate a complete REVISION DAY (60 mark / 120 min) CBSE question paper.`
+      : `Generate a complete STUDY DAY (30 mark / 60 min) CBSE question paper.`,
+    `Sections A(MCQ) + B(VSA) + C(SA) + D(Case Study) + E(Writing+Vocab). All marks must add up correctly.`,
+    isRevisionDay
+      ? `MARK VERIFICATION: A(10) + B(10) + C(12) + D(10) + E(18) = 60`
+      : `MARK VERIFICATION: A(5) + B(6) + C(6) + D(5) + E(8) = 30`,
     `Include day stamp at top. Only use allowed subjects. No answer key.`,
   ].filter(Boolean).join("\n");
 }
@@ -192,7 +207,6 @@ export async function POST(req: NextRequest) {
       if (isGreeting(message)) {
         return NextResponse.json({ reply: `Hi ${student?.name || ""}! I am Shauri — your AI tutor. What shall we study today?` });
       }
-      // Build system prompt WITH KB context injected
       const sysWithKB = await buildSystemWithKB("teacher", undefined, student, message);
       const reply = await callAI(sysWithKB, [{ role: "user", content: message }]);
       return NextResponse.json({ reply });
@@ -211,26 +225,48 @@ export async function POST(req: NextRequest) {
         let paperPromptContent: string;
         let subjectForMeta: string;
         let isRevisionDay = false;
-        let totalMarks    = 25;
+        // Updated defaults: Daily = 30m, Revision = 60m
+        let totalMarks    = 30;
 
         if (shauriPaper?.formatBlock) {
           paperPromptContent = buildPaperPrompt(shauriPaper, student);
           subjectForMeta     = shauriPaper.primarySubject || "General";
           isRevisionDay      = shauriPaper.isRevisionDay  || false;
-          totalMarks         = shauriPaper.totalMarks     || (isRevisionDay ? 50 : 25);
+          totalMarks         = shauriPaper.totalMarks     || (isRevisionDay ? 60 : 30);
         } else if (confirmedSubject) {
           subjectForMeta     = confirmedSubject;
-          paperPromptContent = `Generate a CBSE Class ${student?.class || "10"} test paper for: ${confirmedSubject}.\n${getSyllabusSummary()}\nTotal Marks: 25 | Time: 45 minutes`;
+          // Updated: 30 marks / 60 minutes for daily
+          paperPromptContent = [
+            `Generate a CBSE Class ${student?.class || "10"} test paper for: ${confirmedSubject}.`,
+            getSyllabusSummary(),
+            `Total Marks: 30 | Time: 60 minutes`,
+            `Sections: A(5×1=5) + B(3×2=6) + C(2×3=6) + D(1×5=5) + E(Writing 3m + Vocab 5×1=5m = 8m) = 30`,
+            `MARK VERIFICATION: A(5) + B(6) + C(6) + D(5) + E(8) = 30`,
+          ].join("\n");
+          totalMarks = 30;
         } else if (uploadedText && uploadType === "syllabus") {
           subjectForMeta     = "Uploaded Syllabus";
-          paperPromptContent = `Generate a CBSE Class ${student?.class || "10"} test paper based on:\n${uploadedText}\nTotal Marks: 25 | Time: 45 minutes`;
+          paperPromptContent = [
+            `Generate a CBSE Class ${student?.class || "10"} test paper based on:`,
+            uploadedText,
+            `Total Marks: 30 | Time: 60 minutes`,
+            `Sections: A(5×1=5) + B(3×2=6) + C(2×3=6) + D(1×5=5) + E(Writing 3m + Vocab 5×1=5m = 8m) = 30`,
+            `MARK VERIFICATION: A(5) + B(6) + C(6) + D(5) + E(8) = 30`,
+          ].join("\n");
+          totalMarks = 30;
         } else {
           const subjectRequest = message.replace(/^start\s*/i, "").trim();
           subjectForMeta       = subjectRequest || "General";
-          paperPromptContent   = `Generate a CBSE Class ${student?.class || "10"} test paper${subjectRequest ? ` for ${subjectRequest}` : ""}.\n${getSyllabusSummary()}\nTotal Marks: 25 | Time: 45 minutes`;
+          paperPromptContent   = [
+            `Generate a CBSE Class ${student?.class || "10"} test paper${subjectRequest ? ` for ${subjectRequest}` : ""}.`,
+            getSyllabusSummary(),
+            `Total Marks: 30 | Time: 60 minutes`,
+            `Sections: A(5×1=5) + B(3×2=6) + C(2×3=6) + D(1×5=5) + E(Writing 3m + Vocab 5×1=5m = 8m) = 30`,
+            `MARK VERIFICATION: A(5) + B(6) + C(6) + D(5) + E(8) = 30`,
+          ].join("\n");
+          totalMarks = 30;
         }
 
-        // Inject KB context into examiner system prompt too
         const examSys = await buildSystemWithKB("examiner", subjectForMeta, student, paperPromptContent);
         const paper = await callAI(examSys, [{ role: "user", content: paperPromptContent }], 55000);
         if (paper.startsWith("⚠️")) return NextResponse.json({ reply: paper });
@@ -238,16 +274,20 @@ export async function POST(req: NextRequest) {
         const resolvedMarks   = extractTotalMarks(paper, totalMarks);
         const resolvedSubject = extractSubjectFromPaper(paper) || subjectForMeta;
 
-        session = { ...session, status: "IN_EXAM", question_paper: paper, answer_log: [],
+        session = {
+          ...session, status: "IN_EXAM", question_paper: paper, answer_log: [],
           subject: resolvedSubject, subject_request: subjectForMeta,
           started_at: Date.now(), total_marks: resolvedMarks,
           student_name: student?.name || session.student_name,
           student_class: student?.class || session.student_class,
-          student_board: student?.board || session.student_board };
+          student_board: student?.board || session.student_board,
+        };
 
         await supabase.from("exam_sessions").upsert(session, { onConflict: "session_key" });
-        return NextResponse.json({ startTime: session.started_at, paper, subject: resolvedSubject, isRevisionDay,
-          reply: "✅ Paper ready! Write your answers and type **submit** when done." });
+        return NextResponse.json({
+          startTime: session.started_at, paper, subject: resolvedSubject, isRevisionDay,
+          reply: "✅ Paper ready! Write your answers and type **submit** when done.",
+        });
       }
 
       /* ── SUBMIT ── */
@@ -261,8 +301,8 @@ export async function POST(req: NextRequest) {
           `Evaluate this CBSE exam for: ${session.student_name || "Student"}.`,
           `Question Paper:\n${session.question_paper}`,
           `Student Answers:\n${session.answer_log.join("\n")}`,
-          `Mark every question. Give total out of ${session.total_marks || 25}.`,
-          `End with exactly:\n"Marks Obtained: X/${session.total_marks || 25}"\n"Percentage: Y%"`,
+          `Mark every question. Give total out of ${session.total_marks || 30}.`,
+          `End with exactly:\n"Marks Obtained: X/${session.total_marks || 30}"\n"Percentage: Y%"`,
         ].join("\n\n");
 
         const evalSys = await buildSystemWithKB("examiner", session.subject, student, evalPrompt);
@@ -271,17 +311,21 @@ export async function POST(req: NextRequest) {
         const marksMatch    = evalResult.match(/Marks\s+Obtained\s*[:\-]\s*(\d+)\s*\/\s*(\d+)/i);
         const pctMatch      = evalResult.match(/Percentage\s*[:\-]\s*(\d+(?:\.\d+)?)\s*%/i);
         const marksObtained = marksMatch ? parseInt(marksMatch[1]) : 0;
-        const totalMarks2   = marksMatch ? parseInt(marksMatch[2]) : (session.total_marks || 25);
+        const totalMarks2   = marksMatch ? parseInt(marksMatch[2]) : (session.total_marks || 30);
         const percentage    = pctMatch ? parseFloat(pctMatch[1]) : (totalMarks2 > 0 ? Math.round((marksObtained / totalMarks2) * 100) : 0);
         const timeTaken     = session.started_at
-          ? (() => { const s = Math.floor((Date.now() - session.started_at) / 1000);
-              return `${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m ${s%60}s`; })()
+          ? (() => {
+              const s = Math.floor((Date.now() - session.started_at) / 1000);
+              return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m ${s % 60}s`;
+            })()
           : "—";
 
         await supabase.from("exam_sessions").upsert({ ...session, status: "READY" }, { onConflict: "session_key" });
-        return NextResponse.json({ examEnded: true, reply: evalResult, marksObtained,
+        return NextResponse.json({
+          examEnded: true, reply: evalResult, marksObtained,
           totalMarks: totalMarks2, percentage, timeTaken,
-          subject: session.subject || session.subject_request || "General" });
+          subject: session.subject || session.subject_request || "General",
+        });
       }
 
       /* ── ANSWER LOGGING ── */
@@ -296,7 +340,10 @@ export async function POST(req: NextRequest) {
       const confirmSys   = await buildSystemWithKB("examiner", undefined, student, subjectMsg);
       const confirmReply = await callAI(confirmSys, [
         ...history,
-        { role: "user", content: `Student wants to be tested on: ${subjectMsg}. Confirm and tell them to type START. ${getSyllabusSummary()}` },
+        {
+          role: "user",
+          content: `Student wants to be tested on: ${subjectMsg}. Confirm and tell them to type START. ${getSyllabusSummary()}`,
+        },
       ]);
       return NextResponse.json({ reply: confirmReply });
     }
