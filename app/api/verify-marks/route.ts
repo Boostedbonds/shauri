@@ -1,93 +1,83 @@
 /**
  * app/api/verify-marks/route.ts
  *
- * Accepts two modes:
+ * THREE upload modes:
+ *   MODE A — QP + Answer Sheet  (typed PDF + handwritten images/PDF)
+ *   MODE B — Result Summary     (scanned teacher-checked sheet with marks written on it)
  *
- * MODE A — QP + Answer Sheet (typed paper + handwritten answers)
- *   { qpUrl, asUrls[], marks, total, subject, chapter, day, sections? }
+ * Section mark schema:
+ *   Daily   (30m): A=5  B=6  C=6  D=5  E-Writing=3  E-Vocab=5  → 30
+ *   Revision(60m): A=10 B=10 C=12 D=10 E-Writing=6  E-Vocab=10 → 60
  *
- * MODE B — Result Summary only (pre-marked sheet / teacher-marked scan)
- *   { summaryUrls[], marks, total, subject, chapter, day, sections? }
- *
- * sections: optional array sent from frontend, e.g.:
- *   [
- *     { name: "Section A (MCQ)",        obtained: 4,  total: 5  },
- *     { name: "Section B (VSA)",         obtained: 5,  total: 6  },
- *     { name: "Section C (SA)",          obtained: 4,  total: 6  },
- *     { name: "Section D (Case Study)", obtained: 4,  total: 5  },
- *     { name: "Writing",                 obtained: 2,  total: 3  },
- *     { name: "Vocabulary",              obtained: 4,  total: 5  },
- *   ]
- *
- * Returns:
- *   {
- *     reply: string,          // full evaluator narrative
- *     score: string,          // "X/Y"
- *     sections: SectionResult[],
- *     errors: string[],
- *     strengths: string[],
- *     improvements: string[],
- *     feedback: string,
- *   }
+ * Returns: { reply, sectionBreakdown, errorLog }
  */
+
 import { del } from "@vercel/blob";
 import { NextRequest, NextResponse } from "next/server";
 
 export const maxDuration = 60;
 export const runtime = "nodejs";
-const MAX_FILES_PER_REQUEST = 12;
-const MAX_URL_LENGTH = 2048;
 
-// ─────────────────────────────────────────────────────────────
-// TYPES
-// ─────────────────────────────────────────────────────────────
-
-interface SectionInput {
-  name: string;
+/* ─────────────────────────────────────────────
+   TYPES
+───────────────────────────────────────────── */
+export interface SectionScore {
+  key: string;         // "A" | "B" | "C" | "D" | "E-Writing" | "E-Vocab"
+  label: string;       // "Section A – MCQs"
   obtained: number;
   total: number;
+  status: "strong" | "good" | "needs_attention" | "weak";
 }
 
-interface SectionResult {
-  name: string;
-  obtained: number;
-  total: number;
-  percentage: number;
-  status: "strong" | "average" | "weak" | "critical";
-  note?: string;
+export interface ErrorEntry {
+  section: string;     // "A" | "B" | "C" | "D" | "E-Writing" | "E-Vocab"
+  qNum?: string;       // "Q3", "Q7(ii)"
+  topic: string;       // CBSE concept
+  issue: string;       // what the student did wrong
+  severity: "minor" | "moderate" | "critical";
 }
 
-type WeaknessSeverity = "low" | "medium" | "high" | "critical";
-interface CategoryPerformanceItem {
-  category:
-    | "Primary Conceptual"
-    | "Secondary Conceptual"
-    | "Writing/Presentation"
-    | "Vocabulary/Language"
-    | "Accuracy"
-    | "Attempt Quality";
-  obtained: number;
-  total: number;
-  percentage: number;
-  weaknessSeverity: WeaknessSeverity;
-  notes?: string;
+/* ─────────────────────────────────────────────
+   HELPERS
+───────────────────────────────────────────── */
+function scoreStatus(obtained: number, total: number): SectionScore["status"] {
+  if (total === 0) return "good";
+  const pct = obtained / total;
+  if (pct >= 0.85) return "strong";
+  if (pct >= 0.65) return "good";
+  if (pct >= 0.40) return "needs_attention";
+  return "weak";
 }
 
-function isAllowedBlobUrl(value: string): boolean {
-  try {
-    const u = new URL(value);
-    if (u.protocol !== "https:") return false;
-    const host = u.hostname.toLowerCase();
-    return host.endsWith(".vercel-storage.com") || host === "blob.vercel-storage.com";
-  } catch {
-    return false;
-  }
+function sectionConfig(isRevision: boolean) {
+  return isRevision
+    ? {
+        A: { label: "Section A – MCQs", total: 10 },
+        B: { label: "Section B – Very Short Answer", total: 10 },
+        C: { label: "Section C – Short Answer", total: 12 },
+        D: { label: "Section D – Case Study", total: 10 },
+        "E-Writing": { label: "Section E – Writing Task", total: 6 },
+        "E-Vocab":   { label: "Section E – Vocabulary", total: 10 },
+      }
+    : {
+        A: { label: "Section A – MCQs", total: 5 },
+        B: { label: "Section B – Very Short Answer", total: 6 },
+        C: { label: "Section C – Short Answer", total: 6 },
+        D: { label: "Section D – Case Study", total: 5 },
+        "E-Writing": { label: "Section E – Writing Task", total: 3 },
+        "E-Vocab":   { label: "Section E – Vocabulary", total: 5 },
+      };
 }
 
-// ─────────────────────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────────────────────
+function sectionTotalsLine(isRevision: boolean) {
+  return isRevision
+    ? "A=10, B=10, C=12, D=10, E-Writing=6, E-Vocab=10  →  Total=60"
+    : "A=5,  B=6,  C=6,  D=5,  E-Writing=3, E-Vocab=5   →  Total=30";
+}
 
+/* ─────────────────────────────────────────────
+   PDF TEXT EXTRACTION
+───────────────────────────────────────────── */
 async function extractPdfText(buffer: Buffer): Promise<string> {
   try {
     const pdfModule = await import("pdf-parse");
@@ -99,50 +89,108 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
   }
 }
 
-function classifySection(pct: number): SectionResult["status"] {
-  if (pct >= 80) return "strong";
-  if (pct >= 60) return "average";
-  if (pct >= 40) return "weak";
-  return "critical";
+/* ─────────────────────────────────────────────
+   PARSE AI RESPONSE → structured data
+───────────────────────────────────────────── */
+function parseAIResponse(
+  raw: string,
+  total: number,
+  isRevision: boolean
+): { sectionBreakdown: SectionScore[]; errorLog: ErrorEntry[] } {
+  const cfg = sectionConfig(isRevision);
+  const sectionBreakdown: SectionScore[] = [];
+
+  // Match lines like: SECTION_A: 4/5  or  SECTION_E-Writing: 2/3
+  const secRegex = /SECTION[_\s-]?(A|B|C|D|E[\s_-]?Writing|E[\s_-]?Vocab)\s*:\s*(\d+)(?:\/\d+)?/gi;
+  const found: Record<string, number> = {};
+  let m: RegExpExecArray | null;
+  while ((m = secRegex.exec(raw)) !== null) {
+    const rawKey = m[1].replace(/[\s_-]/g, "");
+    const key =
+      rawKey === "EWriting" ? "E-Writing" :
+      rawKey === "EVocab"   ? "E-Vocab"   : rawKey;
+    found[key] = parseInt(m[2]);
+  }
+
+  for (const [key, { label, total: secTotal }] of Object.entries(cfg)) {
+    const obtained = found[key] ?? -1;
+    if (obtained >= 0) {
+      sectionBreakdown.push({
+        key, label,
+        obtained: Math.min(obtained, secTotal),
+        total: secTotal,
+        status: scoreStatus(obtained, secTotal),
+      });
+    }
+  }
+
+  // ── Error log ─────────────────────────────────────────────────
+  const errorLog: ErrorEntry[] = [];
+
+  function detectSection(text: string): string {
+    if (/[Ee][\s-]?[Vv]ocab/i.test(text))   return "E-Vocab";
+    if (/[Ee][\s-]?[Ww]rit/i.test(text))     return "E-Writing";
+    if (/[Ss]ection\s*[Dd]|case\s*study/i.test(text)) return "D";
+    if (/[Ss]ection\s*[Cc]|short\s*ans/i.test(text))  return "C";
+    if (/[Ss]ection\s*[Bb]|very\s*short/i.test(text)) return "B";
+    if (/[Ss]ection\s*[Aa]|\bmcq\b/i.test(text))      return "A";
+    return "?";
+  }
+
+  function detectSeverity(text: string): ErrorEntry["severity"] {
+    const loss = text.match(/-\s*(\d+)\s*mark/i);
+    if (!loss) return "minor";
+    const n = parseInt(loss[1]);
+    if (n >= 3) return "critical";
+    if (n >= 2) return "moderate";
+    return "minor";
+  }
+
+  // ERRORS: csv
+  const errorsBlock = raw.match(/ERRORS:\s*([^\n]+)/i)?.[1] || "";
+  errorsBlock.split(",").forEach(e => {
+    const topic = e.trim().replace(/\.$/, "");
+    if (topic && topic.toLowerCase() !== "none") {
+      errorLog.push({ section: "?", topic, issue: `Weak concept: ${topic}`, severity: "moderate" });
+    }
+  });
+
+  // DEDUCTIONS: line-by-line
+  const deductionBlock = raw.match(/DEDUCTIONS:([\s\S]*?)(?:\n[A-Z_]+:|$)/)?.[1] || "";
+  deductionBlock.split("\n").forEach(line => {
+    const clean = line.trim();
+    if (!clean || /^none$/i.test(clean) || clean.startsWith("(")) return;
+    const qNum = clean.match(/^(Q[\d.]+[a-z]?(?:\([ivxIVX]+\))?)/i)?.[1];
+    const section = detectSection(clean);
+    const topic = clean.match(/[Tt]opic:\s*([^.\n]+)/)?.[1]?.trim()
+      || clean.match(/\bfor\s+([A-Za-z '\/]+?)(?:\.|,|-\d|$)/i)?.[1]?.trim()
+      || "General";
+    errorLog.push({ section, qNum, topic, issue: clean, severity: detectSeverity(clean) });
+  });
+
+  return { sectionBreakdown, errorLog };
 }
 
-function weaknessSeverityFromPct(pct: number): WeaknessSeverity {
-  if (pct >= 80) return "low";
-  if (pct >= 60) return "medium";
-  if (pct >= 40) return "high";
-  return "critical";
-}
-
-function buildSectionTable(sections: SectionInput[]): string {
-  if (!sections?.length) return "";
-  return (
-    "\nSECTION-WISE MARKS (student-reported):\n" +
-    sections
-      .map(
-        (s) =>
-          `  ${s.name}: ${s.obtained}/${s.total} (${Math.round((s.obtained / s.total) * 100)}%)`
-      )
-      .join("\n") +
-    "\n"
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
-// GEMINI VISION — QP + Answer Sheet mode
-// ─────────────────────────────────────────────────────────────
-
-async function callGeminiQP_AS(
+/* ─────────────────────────────────────────────
+   GEMINI — MODE A: QP + Answer Sheet
+───────────────────────────────────────────── */
+async function callGeminiQPAS(
   qpText: string,
   asPages: { buffer: Buffer; mimeType: string }[],
-  marks: number,
+  claimedMarks: number,
   total: number,
   subject: string,
   chapter: string,
   day: string,
-  sections: SectionInput[]
+  isRevision: boolean
 ): Promise<string | null> {
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   if (!geminiKey) return null;
+
+  const cfg = sectionConfig(isRevision);
+  const sectionLines = Object.entries(cfg)
+    .map(([k, v]) => `SECTION_${k}: X/${v.total}`)
+    .join("\n");
 
   const asParts = asPages.map(({ buffer, mimeType }) => ({
     inlineData: {
@@ -151,69 +199,37 @@ async function callGeminiQP_AS(
     },
   }));
 
-  const sectionTable = buildSectionTable(sections);
+  const prompt = `You are a strict CBSE board examiner checking a student's handwritten answer sheet.
 
-  const promptText = `You are a strict CBSE board examiner checking a student's handwritten answer sheet.
-
-Subject: ${subject}
-Chapter/Topic: ${chapter}
-Day: ${day}
-Student's claimed total score: ${marks}/${total}
-${sectionTable}
-Answer sheet pages: ${asPages.length}
+Subject: ${subject} | Chapter/Topic: ${chapter} | Day: ${day}
+Student's claimed total: ${claimedMarks}/${total}
+Section totals: ${sectionTotalsLine(isRevision)}
+Answer sheet pages attached: ${asPages.length}
 
 QUESTION PAPER TEXT:
 ${qpText}
 
-The handwritten answer sheet pages are attached (${asPages.length} page${asPages.length > 1 ? "s" : ""}). Read ALL pages before scoring.
+Read ALL answer sheet pages before scoring.
 
-STRICT RULES:
-- Read every page of the answer sheet.
-- For MCQs: 1 mark each. Compare student's option to correct answer.
-- For short/long answers: check accuracy against the QP.
-- Only deduct marks for genuinely wrong/incomplete answers.
-- Do NOT hallucinate errors. If correct, confirm it.
-- State question number, what student wrote, what was correct, marks affected.
-- If you cannot read a page clearly, say so — do not guess.
-- Analyse performance per section (MCQ / VSA / SA / Case Study / Writing / Vocab).
-- Identify strong topics, weak topics, and specific improvement areas.
+Reply in EXACTLY this format — no extra text:
 
-Reply EXACTLY in this format (no extra text before or after):
+SCORE: X/${total}
 
-SCORE: X/Y
-SECTION_ANALYSIS:
-Section A (MCQ): X/Y — [strong/average/weak/critical] — [one-line note]
-Section B (VSA): X/Y — [strong/average/weak/critical] — [one-line note]
-Section C (SA): X/Y — [strong/average/weak/critical] — [one-line note]
-Section D (Case Study): X/Y — [strong/average/weak/critical] — [one-line note]
-Writing: X/Y — [strong/average/weak/critical] — [one-line note]
-Vocabulary: X/Y — [strong/average/weak/critical] — [one-line note]
+${sectionLines}
+
 DEDUCTIONS:
-Q2: Student wrote (A), correct is (B). -1 mark
-Q11: Definition incomplete — missing key phrase. -1 mark
-(write "None" if score is confirmed correct)
-STRENGTHS: topic1, topic2
-ERRORS: topic1, topic2
-NEEDS_IMPROVEMENT: topic1, topic2
-FEEDBACK: 3-4 sentences of specific, actionable advice based on actual mistakes only.`;
-  const upgradedPrompt = `${promptText}
+Q2: Student wrote (A), correct is (B). Section A. -1 mark. Topic: Euclid's Division Lemma.
+Q11: Definition incomplete — missing key clause. Section B. -2 marks. Topic: HCF.
+(write "None" if no deductions)
 
-Also include:
-CATEGORY_PERFORMANCE:
-Primary Conceptual: X/Y - [low|medium|high|critical] - [short note]
-Secondary Conceptual: X/Y - [low|medium|high|critical] - [short note]
-Writing/Presentation: X/Y - [low|medium|high|critical] - [short note]
-Vocabulary/Language: X/Y - [low|medium|high|critical] - [short note]
-Accuracy: X/Y - [low|medium|high|critical] - [short note]
-Attempt Quality: X/Y - [low|medium|high|critical] - [short note]
-WEAKNESSES: item1, item2
-IMPROVEMENT_PRIORITY:
-1. item
-2. item
-3. item
-ERROR_LOG:
-- item
-- item`;
+ERRORS: topic1, topic2, topic3
+
+FEEDBACK: 2–3 sentences of specific improvement advice based on actual mistakes only.
+
+RULES:
+- Never hallucinate errors. If unsure, skip that question.
+- State Section label for every deduction.
+- For MCQs: compare student's choice vs correct answer explicitly.`;
 
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
@@ -221,115 +237,84 @@ ERROR_LOG:
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [...asParts, { text: upgradedPrompt }],
-          },
-        ],
+        contents: [{ role: "user", parts: [...asParts, { text: prompt }] }],
         generationConfig: { temperature: 0.1 },
       }),
     }
   );
 
-  const text = await res.text();
   if (!res.ok) {
-    console.error("[verify-marks] Gemini QP+AS error:", text.slice(0, 400));
+    console.error("[verify] Gemini QP+AS error:", (await res.text()).slice(0, 300));
     return null;
   }
   try {
-    const data = JSON.parse(text);
-    return data?.candidates?.[0]?.content?.parts?.[0]?.text || null;
-  } catch {
-    return null;
-  }
+    const d = await res.json();
+    return d?.candidates?.[0]?.content?.parts?.[0]?.text || null;
+  } catch { return null; }
 }
 
-// ─────────────────────────────────────────────────────────────
-// GEMINI VISION — Result Summary mode
-// Teacher-marked / pre-scored sheet sent as image(s)
-// ─────────────────────────────────────────────────────────────
-
-async function callGeminiSummary(
-  summaryPages: { buffer: Buffer; mimeType: string }[],
-  marks: number,
+/* ─────────────────────────────────────────────
+   GEMINI — MODE B: Result Summary
+   Teacher-checked sheet with marks written on it.
+───────────────────────────────────────────── */
+async function callGeminiResultSummary(
+  pages: { buffer: Buffer; mimeType: string }[],
   total: number,
   subject: string,
   chapter: string,
   day: string,
-  sections: SectionInput[]
+  isRevision: boolean
 ): Promise<string | null> {
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   if (!geminiKey) return null;
 
-  const summaryParts = summaryPages.map(({ buffer, mimeType }) => ({
+  const cfg = sectionConfig(isRevision);
+  const sectionLines = Object.entries(cfg)
+    .map(([k, v]) => `SECTION_${k}: X/${v.total}`)
+    .join("\n");
+
+  const parts = pages.map(({ buffer, mimeType }) => ({
     inlineData: {
       mimeType: mimeType.startsWith("image/") ? mimeType : "application/pdf",
       data: buffer.toString("base64"),
     },
   }));
 
-  const sectionTable = buildSectionTable(sections);
+  const prompt = `You are a CBSE board examiner reading a student's already-marked result summary.
 
-  const promptText = `You are a strict CBSE board examiner analysing a student's result summary / marked answer sheet.
+Subject: ${subject} | Chapter/Topic: ${chapter} | Day: ${day}
+Total marks for this paper: ${total}
+Section totals: ${sectionTotalsLine(isRevision)}
+Pages provided: ${pages.length}
 
-Subject: ${subject}
-Chapter/Topic: ${chapter}
-Day: ${day}
-Student's total score: ${marks}/${total}
-${sectionTable}
-The result summary image(s) are attached (${summaryPages.length} page${summaryPages.length > 1 ? "s" : ""}).
-This may be a teacher-marked paper, a result card, or a pre-scored answer sheet.
+This is a RESULT SUMMARY — the teacher has already written marks on it.
+Look for: circled answers, red-pen corrections, marks written as "2/3", ticks (✓) and crosses (✗), totals per section.
 
-YOUR TASK:
-1. Read every mark written on the document carefully.
-2. Extract per-question marks if visible.
-3. Extract per-section totals if visible.
-4. Identify which questions/topics the student lost marks on.
-5. Identify strong areas (scored well), weak areas (lost marks), and topics needing improvement.
-6. Give actionable feedback based only on what you can see.
+Reply in EXACTLY this format — no extra text:
 
-STRICT RULES:
-- Do NOT hallucinate errors. Only report what is visible.
-- If a section is not visible, mark it as "Not visible in summary".
-- Be specific: Q3 wrong → state topic of Q3 from the subject.
+SCORE: X/${total}
 
-Reply EXACTLY in this format:
+${sectionLines}
 
-SCORE: X/Y
-SECTION_ANALYSIS:
-Section A (MCQ): X/Y — [strong/average/weak/critical] — [one-line note]
-Section B (VSA): X/Y — [strong/average/weak/critical] — [one-line note]
-Section C (SA): X/Y — [strong/average/weak/critical] — [one-line note]
-Section D (Case Study): X/Y — [strong/average/weak/critical] — [one-line note]
-Writing: X/Y — [strong/average/weak/critical] — [one-line note]
-Vocabulary: X/Y — [strong/average/weak/critical] — [one-line note]
 DEDUCTIONS:
-Q2: Lost 1 mark — wrong option selected
-Q11: Lost 1 mark — definition incomplete
-(write "None visible" if no deductions readable)
-STRENGTHS: topic1, topic2
-ERRORS: topic1, topic2
-NEEDS_IMPROVEMENT: topic1, topic2
-FEEDBACK: 3-4 sentences of specific, actionable advice based on the result summary.`;
-  const upgradedPrompt = `${promptText}
+Q2: Marked wrong by teacher. Section A. -1 mark. Topic: Euclid's Division Lemma.
+Q7(ii): Partial — teacher wrote 1/3. Section C. -2 marks. Topic: Irrational number proof.
+(write "None" if no deductions visible)
 
-Also include these blocks exactly:
-CATEGORY_PERFORMANCE:
-Primary Conceptual: X/Y - [low|medium|high|critical] - [short note]
-Secondary Conceptual: X/Y - [low|medium|high|critical] - [short note]
-Writing/Presentation: X/Y - [low|medium|high|critical] - [short note]
-Vocabulary/Language: X/Y - [low|medium|high|critical] - [short note]
-Accuracy: X/Y - [low|medium|high|critical] - [short note]
-Attempt Quality: X/Y - [low|medium|high|critical] - [short note]
-WEAKNESSES: item1, item2
-IMPROVEMENT_PRIORITY:
-1. item
-2. item
-3. item
-ERROR_LOG:
-- item
-- item`;
+ERRORS: topic1, topic2, topic3
+
+FEEDBACK: 2–3 sentences of specific improvement advice.
+
+STRENGTHS: SectionA, SectionD
+(sections where student scored ≥ 80%)
+
+IMPROVEMENT_NEEDED: SectionC, SectionE-Writing
+(sections where student scored < 60%)
+
+RULES:
+- Only report deductions explicitly marked by the teacher.
+- If a section score is not visible, write "Not visible" for that line.
+- Never invent marks — only read what is shown.`;
 
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
@@ -337,102 +322,66 @@ ERROR_LOG:
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [...summaryParts, { text: upgradedPrompt }],
-          },
-        ],
+        contents: [{ role: "user", parts: [...parts, { text: prompt }] }],
         generationConfig: { temperature: 0.1 },
       }),
     }
   );
 
-  const text = await res.text();
   if (!res.ok) {
-    console.error("[verify-marks] Gemini Summary error:", text.slice(0, 400));
+    console.error("[verify] Gemini Result Summary error:", (await res.text()).slice(0, 300));
     return null;
   }
   try {
-    const data = JSON.parse(text);
-    return data?.candidates?.[0]?.content?.parts?.[0]?.text || null;
-  } catch {
-    return null;
-  }
+    const d = await res.json();
+    return d?.candidates?.[0]?.content?.parts?.[0]?.text || null;
+  } catch { return null; }
 }
 
-// ─────────────────────────────────────────────────────────────
-// GROQ FALLBACK — text only
-// ─────────────────────────────────────────────────────────────
-
+/* ─────────────────────────────────────────────
+   GROQ FALLBACK — text only
+───────────────────────────────────────────── */
 async function callGroqFallback(
   qpText: string,
-  asText: string,
-  marks: number,
+  docText: string,
+  claimedMarks: number,
   total: number,
   subject: string,
   chapter: string,
   day: string,
-  sections: SectionInput[],
-  mode: "qp_as" | "summary"
+  isRevision: boolean,
+  mode: "qp_as" | "result_summary"
 ): Promise<string | null> {
   if (!process.env.GROQ_API_KEY) return null;
 
-  const sectionTable = buildSectionTable(sections);
+  const cfg = sectionConfig(isRevision);
+  const sectionLines = Object.entries(cfg)
+    .map(([k, v]) => `SECTION_${k}: X/${v.total}`)
+    .join("\n");
 
-  const modeNote =
-    mode === "summary"
-      ? "The text below is extracted from a result summary / pre-marked sheet."
-      : "The answer sheet text below is OCR-extracted from a handwritten scan and may be incomplete.";
+  const modeNote = mode === "result_summary"
+    ? "The text below is from a RESULT SUMMARY — a teacher-checked paper with marks written on it. Extract per-question marks from the text."
+    : "The text below is OCR-extracted from a handwritten answer sheet and may be incomplete. Only deduct marks where 100% certain.";
 
   const prompt = `You are a strict CBSE board examiner.
-
 Subject: ${subject} | Chapter: ${chapter} | Day: ${day}
-Student claims: ${marks}/${total}
-${sectionTable}
+Claimed: ${claimedMarks}/${total} | Sections: ${sectionTotalsLine(isRevision)}
+
 ${modeNote}
-Only mark deductions where you are 100% certain. Do NOT hallucinate.
 
-QUESTION PAPER / CONTEXT:
-${qpText}
-
-STUDENT ANSWERS / RESULT SUMMARY (OCR — may be incomplete):
-${asText}
+${qpText ? `QUESTION PAPER:\n${qpText}\n\n` : ""}STUDENT DOCUMENT:\n${docText}
 
 Reply EXACTLY in this format:
 
-SCORE: X/Y
-SECTION_ANALYSIS:
-Section A (MCQ): X/Y — [strong/average/weak/critical] — [note]
-Section B (VSA): X/Y — [strong/average/weak/critical] — [note]
-Section C (SA): X/Y — [strong/average/weak/critical] — [note]
-Section D (Case Study): X/Y — [strong/average/weak/critical] — [note]
-Writing: X/Y — [strong/average/weak/critical] — [note]
-Vocabulary: X/Y — [strong/average/weak/critical] — [note]
-DEDUCTIONS:
-(list or write "None — could not read clearly enough to verify")
-STRENGTHS: topic1, topic2
-ERRORS: topic1, topic2
-NEEDS_IMPROVEMENT: topic1, topic2
-FEEDBACK: text`;
-  const upgradedPrompt = `${prompt}
+SCORE: X/${total}
 
-Also include:
-CATEGORY_PERFORMANCE:
-Primary Conceptual: X/Y - [low|medium|high|critical] - [short note]
-Secondary Conceptual: X/Y - [low|medium|high|critical] - [short note]
-Writing/Presentation: X/Y - [low|medium|high|critical] - [short note]
-Vocabulary/Language: X/Y - [low|medium|high|critical] - [short note]
-Accuracy: X/Y - [low|medium|high|critical] - [short note]
-Attempt Quality: X/Y - [low|medium|high|critical] - [short note]
-WEAKNESSES: item1, item2
-IMPROVEMENT_PRIORITY:
-1. item
-2. item
-3. item
-ERROR_LOG:
-- item
-- item`;
+${sectionLines}
+
+DEDUCTIONS:
+(list or "None — could not verify")
+
+ERRORS: topic1, topic2
+FEEDBACK: text`;
 
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
@@ -443,299 +392,121 @@ ERROR_LOG:
     body: JSON.stringify({
       model: "llama-3.3-70b-versatile",
       messages: [
-        {
-          role: "system",
-          content: "You are a strict CBSE examiner. Never hallucinate mark deductions.",
-        },
-        { role: "user", content: upgradedPrompt },
+        { role: "system", content: "You are a strict CBSE examiner. Never hallucinate mark deductions." },
+        { role: "user", content: prompt },
       ],
       temperature: 0.1,
     }),
   });
 
-  const text = await res.text();
   if (!res.ok) {
-    console.error("[verify-marks] Groq error:", text.slice(0, 300));
+    console.error("[verify] Groq error:", (await res.text()).slice(0, 300));
     return null;
   }
   try {
-    const data = JSON.parse(text);
-    return data?.choices?.[0]?.message?.content || null;
-  } catch {
-    return null;
-  }
+    const d = await res.json();
+    return d?.choices?.[0]?.message?.content || null;
+  } catch { return null; }
 }
 
-// ─────────────────────────────────────────────────────────────
-// PARSE AI RESPONSE → structured data
-// ─────────────────────────────────────────────────────────────
-
-function parseAIResponse(
-  raw: string,
-  sectionsInput: SectionInput[]
-): {
-  score: string;
-  sections: SectionResult[];
-  deductions: string[];
-  strengths: string[];
-  errors: string[];
-  improvements: string[];
-  weaknesses: string[];
-  errorLog: string[];
-  categoryPerformance: CategoryPerformanceItem[];
-  feedback: string;
-} {
-  const get = (key: string) => {
-    const re = new RegExp(`${key}:\\s*([^\\n]+)`, "i");
-    return raw.match(re)?.[1]?.trim() || "";
-  };
-
-  const getBlock = (key: string, nextKey: string) => {
-    const re = new RegExp(`${key}:[\\s\\S]*?(?=${nextKey}:|$)`, "i");
-    const block = raw.match(re)?.[0] || "";
-    return block
-      .replace(new RegExp(`^${key}:`, "i"), "")
-      .split("\n")
-      .map((l) => l.trim())
-      .filter((l) => l && l !== "None" && l !== "None visible");
-  };
-
-  const score = get("SCORE");
-
-  // Parse SECTION_ANALYSIS block
-  const sectionBlock = raw.match(/SECTION_ANALYSIS:([\s\S]*?)(?=DEDUCTIONS:|STRENGTHS:|ERRORS:|$)/i)?.[1] || "";
-  const sectionLines = sectionBlock.split("\n").map((l) => l.trim()).filter(Boolean);
-
-  const sections: SectionResult[] = [];
-
-  // First try to build from AI-parsed lines
-  for (const line of sectionLines) {
-    // e.g. "Section A (MCQ): 4/5 — strong — Good recall of concepts"
-    const m = line.match(/^(.+?):\s*(\d+)\/(\d+)\s*[—–-]\s*(strong|average|weak|critical)\s*[—–-]?\s*(.*)/i);
-    if (m) {
-      const obtained = parseInt(m[2]);
-      const total    = parseInt(m[3]);
-      const pct      = total > 0 ? Math.round((obtained / total) * 100) : 0;
-      sections.push({
-        name:       m[1].trim(),
-        obtained,
-        total,
-        percentage: pct,
-        status:     m[4].toLowerCase() as SectionResult["status"],
-        note:       m[5].trim() || undefined,
-      });
-    }
-  }
-
-  // If AI didn't give section breakdown but frontend sent sections[], use those
-  if (sections.length === 0 && sectionsInput?.length) {
-    for (const s of sectionsInput) {
-      const pct = s.total > 0 ? Math.round((s.obtained / s.total) * 100) : 0;
-      sections.push({
-        name:       s.name,
-        obtained:   s.obtained,
-        total:      s.total,
-        percentage: pct,
-        status:     classifySection(pct),
-      });
-    }
-  }
-
-  const deductionLines = getBlock("DEDUCTIONS", "STRENGTHS");
-  const errorLogLines = getBlock("ERROR_LOG", "FEEDBACK");
-  const strengthsRaw   = get("STRENGTHS");
-  const weaknessesRaw  = get("WEAKNESSES");
-  const errorsRaw      = get("ERRORS");
-  const improvRaw      = get("NEEDS_IMPROVEMENT");
-  const improvRaw2     = getBlock("IMPROVEMENT_PRIORITY", "ERROR_LOG").join(", ");
-  const feedback       = get("FEEDBACK");
-
-  const splitComma = (s: string) =>
-    s ? s.split(",").map((x) => x.trim()).filter(Boolean) : [];
-
-  const categoryPerformance: CategoryPerformanceItem[] = [];
-  const categoryBlock = raw.match(/CATEGORY_PERFORMANCE:([\s\S]*?)(?=WEAKNESSES:|ERROR_LOG:|DEDUCTIONS:|STRENGTHS:|$)/i)?.[1] || "";
-  for (const line of categoryBlock.split("\n").map((x) => x.trim()).filter(Boolean)) {
-    const m = line.match(/^([^:]+):\s*(\d+)\/(\d+)\s*[-–—]\s*(low|medium|high|critical)\s*[-–—]?\s*(.*)$/i);
-    if (!m) continue;
-    const obtained = parseInt(m[2]);
-    const total = parseInt(m[3]);
-    const pct = total > 0 ? Math.round((obtained / total) * 100) : 0;
-    categoryPerformance.push({
-      category: m[1].trim() as CategoryPerformanceItem["category"],
-      obtained,
-      total,
-      percentage: pct,
-      weaknessSeverity: (m[4].toLowerCase() as WeaknessSeverity) || weaknessSeverityFromPct(pct),
-      notes: m[5].trim() || undefined,
-    });
-  }
-
-  return {
-    score,
-    sections,
-    deductions:   deductionLines,
-    strengths:    splitComma(strengthsRaw),
-    weaknesses:   splitComma(weaknessesRaw),
-    errors:       splitComma(errorsRaw),
-    improvements: splitComma(improvRaw || improvRaw2),
-    errorLog: errorLogLines.length ? errorLogLines : deductionLines,
-    categoryPerformance,
-    feedback,
-  };
-}
-
-// ─────────────────────────────────────────────────────────────
-// MAIN HANDLER
-// ─────────────────────────────────────────────────────────────
-
+/* ─────────────────────────────────────────────
+   MAIN POST HANDLER
+───────────────────────────────────────────── */
 export async function POST(req: NextRequest) {
   const uploadedBlobs: string[] = [];
 
   try {
     const body = await req.json();
     const {
-      marks,
-      total,
+      marks,        // number: student's claimed total (optional for result_summary mode)
+      total,        // number: paper total marks
       subject,
       chapter,
       day,
-      sections,          // SectionInput[] | undefined
-      // QP + AS mode
-      qpUrl,
-      asUrls,
-      asUrl,             // legacy single
-      // Result Summary mode
-      summaryUrls,
-      summaryUrl,        // legacy single
+      isRevision,   // boolean
+      qpUrl,        // string  — MODE A
+      asUrls,       // string[] — MODE A answer sheet pages
+      resultUrls,   // string[] — MODE B result summary pages
     } = body;
 
-    if (!Number.isFinite(marks) || !Number.isFinite(total) || total <= 0) {
-      return NextResponse.json({ reply: "Missing or invalid marks/total." }, { status: 400 });
+    const isRevisionDay = Boolean(isRevision);
+    const hasResultSummary = Array.isArray(resultUrls) && resultUrls.length > 0;
+    const asUrlList: string[] = Array.isArray(asUrls) ? asUrls : asUrls ? [asUrls] : [];
+    const mode: "qp_as" | "result_summary" = hasResultSummary ? "result_summary" : "qp_as";
+
+    if (!Number.isFinite(total) || total <= 0) {
+      return NextResponse.json({ reply: "Missing or invalid total marks." }, { status: 400 });
+    }
+    if (mode === "qp_as" && (!qpUrl || asUrlList.length === 0)) {
+      return NextResponse.json({ reply: "Upload both question paper and answer sheet." }, { status: 400 });
     }
     if (!process.env.GROQ_API_KEY && !process.env.GEMINI_API_KEY && !process.env.GOOGLE_API_KEY) {
-      return NextResponse.json(
-        { reply: "Missing AI keys. Configure GROQ_API_KEY or GEMINI_API_KEY." },
-        { status: 500 }
-      );
+      return NextResponse.json({ reply: "Missing AI keys." }, { status: 500 });
     }
 
-    const sectionsInput: SectionInput[] = Array.isArray(sections) ? sections : [];
-
-    // Determine mode
-    const summaryUrlList: string[] = Array.isArray(summaryUrls)
-      ? summaryUrls
-      : summaryUrl
-      ? [summaryUrl]
-      : [];
-
-    const asUrlList: string[] = Array.isArray(asUrls)
-      ? asUrls
-      : asUrl
-      ? [asUrl]
-      : body.asUrl
-      ? [body.asUrl]
-      : [];
-
-    const isSummaryMode = summaryUrlList.length > 0;
-    const isQPASMode    = !!qpUrl && asUrlList.length > 0;
-
-    if (summaryUrlList.length > MAX_FILES_PER_REQUEST || asUrlList.length > MAX_FILES_PER_REQUEST) {
-      return NextResponse.json({ reply: "Too many files in one request." }, { status: 400 });
-    }
-
-    const allUrls = [
-      ...(qpUrl ? [String(qpUrl)] : []),
-      ...asUrlList.map(String),
-      ...summaryUrlList.map(String),
-    ].filter(Boolean);
-
-    if (allUrls.some((u) => u.length > MAX_URL_LENGTH || !isAllowedBlobUrl(u))) {
-      return NextResponse.json(
-        { reply: "Invalid file URL. Please re-upload documents." },
-        { status: 400 }
-      );
-    }
-
-    if (!isSummaryMode && !isQPASMode) {
-      return NextResponse.json(
-        { reply: "Provide either (qpUrl + asUrls) or summaryUrls." },
-        { status: 400 }
-      );
-    }
+    if (mode === "qp_as") uploadedBlobs.push(qpUrl, ...asUrlList);
+    else uploadedBlobs.push(...resultUrls);
 
     let rawReply: string | null = null;
 
-    // ── MODE B: Result Summary ──────────────────────────────
-    if (isSummaryMode) {
-      uploadedBlobs.push(...summaryUrlList);
-
-      const summaryPages: { buffer: Buffer; mimeType: string }[] = [];
-      for (const url of summaryUrlList) {
-        const r = await fetch(url);
-        if (!r.ok) throw new Error("Failed to fetch summary page from Blob.");
-        const contentType = r.headers.get("content-type") || "image/jpeg";
-        summaryPages.push({
-          buffer: Buffer.from(await r.arrayBuffer()),
-          mimeType: contentType,
-        });
-      }
-
-      rawReply = await callGeminiSummary(
-        summaryPages, marks, total, subject, chapter, day, sectionsInput
-      );
-
-      // Groq fallback for summary (best-effort text extraction from first page)
-      if (!rawReply) {
-        console.log("[verify-marks] Gemini Summary failed, falling back to Groq.");
-        let summaryText = "[Could not extract text from result summary]";
-        try {
-          const pdfModule = await import("pdf-parse");
-          const pdfParse  = (pdfModule as any).default || pdfModule;
-          const parsed    = await pdfParse(summaryPages[0].buffer);
-          summaryText     = parsed?.text?.slice(0, 15000) || summaryText;
-        } catch {}
-        rawReply = await callGroqFallback(
-          "", summaryText, marks, total, subject, chapter, day, sectionsInput, "summary"
-        );
-      }
-    }
-
-    // ── MODE A: QP + Answer Sheet ───────────────────────────
-    else {
-      uploadedBlobs.push(qpUrl, ...asUrlList);
-
+    /* ── MODE A: QP + Answer Sheet ── */
+    if (mode === "qp_as") {
       const qpRes = await fetch(qpUrl);
-      if (!qpRes.ok) throw new Error("Failed to fetch question paper from Blob.");
-      const qpBuffer = Buffer.from(await qpRes.arrayBuffer());
-      const qpText   = await extractPdfText(qpBuffer);
+      if (!qpRes.ok) throw new Error("Failed to fetch question paper.");
+      const qpText = await extractPdfText(Buffer.from(await qpRes.arrayBuffer()));
 
       const asPages: { buffer: Buffer; mimeType: string }[] = [];
       for (const url of asUrlList) {
         const r = await fetch(url);
-        if (!r.ok) throw new Error("Failed to fetch answer sheet page from Blob.");
-        const contentType = r.headers.get("content-type") || "image/jpeg";
+        if (!r.ok) throw new Error("Failed to fetch answer sheet page.");
         asPages.push({
           buffer: Buffer.from(await r.arrayBuffer()),
-          mimeType: contentType,
+          mimeType: r.headers.get("content-type") || "image/jpeg",
         });
       }
 
-      rawReply = await callGeminiQP_AS(
-        qpText, asPages, marks, total, subject, chapter, day, sectionsInput
+      rawReply = await callGeminiQPAS(
+        qpText, asPages, marks ?? 0, total, subject, chapter, day, isRevisionDay
       );
 
       if (!rawReply) {
-        console.log("[verify-marks] Gemini QP+AS failed, falling back to Groq.");
-        let asText = "[Could not extract text from handwritten answer sheet]";
+        let asText = "[Could not extract text from handwritten sheet]";
         try {
           const pdfModule = await import("pdf-parse");
-          const pdfParse  = (pdfModule as any).default || pdfModule;
-          const parsed    = await pdfParse(asPages[0].buffer);
-          asText          = parsed?.text?.slice(0, 15000) || asText;
+          const pp = (pdfModule as any).default || pdfModule;
+          asText = (await pp(asPages[0].buffer))?.text?.slice(0, 15000) || asText;
         } catch {}
         rawReply = await callGroqFallback(
-          qpText, asText, marks, total, subject, chapter, day, sectionsInput, "qp_as"
+          qpText, asText, marks ?? 0, total, subject, chapter, day, isRevisionDay, "qp_as"
+        );
+      }
+    }
+
+    /* ── MODE B: Result Summary ── */
+    if (mode === "result_summary") {
+      const pages: { buffer: Buffer; mimeType: string }[] = [];
+      for (const url of resultUrls) {
+        const r = await fetch(url);
+        if (!r.ok) throw new Error("Failed to fetch result summary.");
+        pages.push({
+          buffer: Buffer.from(await r.arrayBuffer()),
+          mimeType: r.headers.get("content-type") || "image/jpeg",
+        });
+      }
+
+      rawReply = await callGeminiResultSummary(
+        pages, total, subject, chapter, day, isRevisionDay
+      );
+
+      if (!rawReply) {
+        let resText = "[Could not extract text]";
+        try {
+          const pdfModule = await import("pdf-parse");
+          const pp = (pdfModule as any).default || pdfModule;
+          resText = (await pp(pages[0].buffer))?.text?.slice(0, 15000) || resText;
+        } catch {}
+        rawReply = await callGroqFallback(
+          "", resText, marks ?? 0, total, subject, chapter, day, isRevisionDay, "result_summary"
         );
       }
     }
@@ -747,23 +518,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Parse into structured response
-    const parsed = parseAIResponse(rawReply, sectionsInput);
+    const { sectionBreakdown, errorLog } = parseAIResponse(rawReply, total, isRevisionDay);
 
-    return NextResponse.json({
-      reply:        rawReply,          // full raw text (for display / logging)
-      score:        parsed.score,
-      sections:     parsed.sections,
-      deductions:   parsed.deductions,
-      strengths:    parsed.strengths,
-      weaknesses:   parsed.weaknesses,
-      errors:       parsed.errors,
-      improvements: parsed.improvements,
-      errorLog:     parsed.errorLog,
-      categoryPerformance: parsed.categoryPerformance,
-      feedback:     parsed.feedback,
-      mode:         isSummaryMode ? "summary" : "qp_as",
-    });
+    return NextResponse.json({ reply: rawReply, sectionBreakdown, errorLog });
 
   } catch (err: any) {
     console.error("[verify-marks ERROR]:", err.message);
@@ -771,7 +528,7 @@ export async function POST(req: NextRequest) {
 
   } finally {
     if (uploadedBlobs.length > 0) {
-      await Promise.all(uploadedBlobs.map((url) => del(url))).catch((e) =>
+      await Promise.all(uploadedBlobs.map(url => del(url))).catch(e =>
         console.warn("[verify-marks] Blob cleanup failed:", e)
       );
     }

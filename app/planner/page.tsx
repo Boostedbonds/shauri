@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import Header from "../components/Header";
 import ManualMarksModal from "../components/ManualMarksModal";
+import SubmitMarksModal from "../components/SubmitMarksModal";
 import {
   THIRTY_DAY_PLAN,
   getActivityLogs,

@@ -1,9 +1,8 @@
 "use client";
 
 // ============================================================
-// /components/lab/MCQQuiz.tsx
-// MCQ quiz engine with per-question feedback, scoring,
-// explanations, and retry support.
+// /components/lab/MCQQuiz.tsx — SHAURI Premium Redesign
+// All logic preserved exactly. UI elevated to SHAURI design.
 // ============================================================
 
 import React, { useState, useCallback } from "react";
@@ -19,10 +18,13 @@ export default function MCQQuiz({ questions, experimentTitle }: MCQQuizProps) {
   const [selections, setSelections] = useState<Record<string, string>>({});
   const [result, setResult] = useState<MCQResult | null>(null);
 
-  const handleSelect = useCallback((questionId: string, optionId: string) => {
-    if (result) return; // lock after submission
-    setSelections((prev) => ({ ...prev, [questionId]: optionId }));
-  }, [result]);
+  const handleSelect = useCallback(
+    (questionId: string, optionId: string) => {
+      if (result) return;
+      setSelections((prev) => ({ ...prev, [questionId]: optionId }));
+    },
+    [result]
+  );
 
   const handleSubmit = useCallback(() => {
     const attempts: MCQAttempt[] = questions.map((q) => ({
@@ -41,63 +43,125 @@ export default function MCQQuiz({ questions, experimentTitle }: MCQQuizProps) {
   const allAnswered = questions.every((q) => Boolean(selections[q.id]));
 
   const scoreColor = (pct: number) =>
-    pct >= 80 ? "text-green-700" : pct >= 50 ? "text-yellow-700" : "text-red-600";
+    pct >= 80 ? "#1E6B3C" : pct >= 50 ? "#C17B2F" : "#B5271A";
 
   const scoreBg = (pct: number) =>
-    pct >= 80 ? "bg-green-50 border-green-300" : pct >= 50 ? "bg-yellow-50 border-yellow-300" : "bg-red-50 border-red-300";
+    pct >= 80 ? "#EDFAF3" : pct >= 50 ? "#FDF6EC" : "#FDF0EE";
+
+  const scoreBorder = (pct: number) =>
+    pct >= 80 ? "#8FD4A8" : pct >= 50 ? "#E8C98A" : "#E8A8A0";
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <h4 className="text-sm font-semibold text-gray-700">
-          Practice MCQ — {experimentTitle}
-        </h4>
-        <span className="text-xs text-gray-400">{questions.length} questions</span>
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div>
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 800,
+              color: "#9B8A6E",
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              marginBottom: 4,
+            }}
+          >
+            Practice MCQ
+          </div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: "#1C3A6E" }}>
+            {experimentTitle}
+          </div>
+        </div>
+        <div
+          style={{
+            fontSize: 12,
+            fontWeight: 700,
+            color: "#9B8A6E",
+            background: "#F0E8D4",
+            padding: "4px 12px",
+            borderRadius: 99,
+          }}
+        >
+          {questions.length} questions
+        </div>
       </div>
 
       {/* Questions */}
-      <div className="space-y-5">
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {questions.map((question, qIdx) => {
           const selected = selections[question.id];
           const attempt = result?.attempts.find((a) => a.questionId === question.id);
           const isCorrect = attempt?.correct;
           const showResult = Boolean(result);
 
+          const cardBg = showResult
+            ? isCorrect
+              ? "#EDFAF3"
+              : "#FDF0EE"
+            : "#FDFAF3";
+          const cardBorder = showResult
+            ? isCorrect
+              ? "#8FD4A8"
+              : "#E8A8A0"
+            : "#D4C4A0";
+
           return (
             <div
               key={question.id}
-              className={`rounded-lg border p-4 space-y-3 transition-colors
-                ${showResult
-                  ? isCorrect
-                    ? "border-green-300 bg-green-50"
-                    : "border-red-300 bg-red-50"
-                  : "border-gray-200 bg-white"
-                }`}
+              style={{
+                background: cardBg,
+                border: `1.5px solid ${cardBorder}`,
+                borderRadius: 16,
+                padding: "18px 20px",
+                transition: "all 0.25s",
+              }}
             >
-              {/* Question text */}
-              <p className="text-sm font-medium text-gray-800">
-                <span className="text-gray-400 mr-2">Q{qIdx + 1}.</span>
+              {/* Question */}
+              <p
+                style={{
+                  fontSize: 14,
+                  fontWeight: 700,
+                  color: "#1C3A6E",
+                  lineHeight: 1.5,
+                  marginBottom: 14,
+                }}
+              >
+                <span style={{ color: "#9B8A6E", fontWeight: 600, marginRight: 6 }}>
+                  Q{qIdx + 1}.
+                </span>
                 {question.question}
               </p>
 
               {/* Options */}
-              <div className="space-y-2">
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {question.options.map((option) => {
                   const isSelected = selected === option.id;
                   const isCorrectOption = option.id === question.correctOptionId;
 
-                  let optionStyle = "border-gray-200 bg-white text-gray-700 hover:border-indigo-300 hover:bg-indigo-50";
+                  let bg = "#FDFAF3";
+                  let border = "#D4C4A0";
+                  let color = "#3A3020";
+                  let textDecoration = "none";
 
                   if (showResult) {
                     if (isCorrectOption) {
-                      optionStyle = "border-green-400 bg-green-100 text-green-800";
+                      bg = "#EDFAF3";
+                      border = "#1E6B3C";
+                      color = "#1E6B3C";
                     } else if (isSelected && !isCorrectOption) {
-                      optionStyle = "border-red-400 bg-red-100 text-red-700 line-through";
+                      bg = "#FDF0EE";
+                      border = "#B5271A";
+                      color = "#9B8A6E";
+                      textDecoration = "line-through";
                     } else {
-                      optionStyle = "border-gray-100 bg-gray-50 text-gray-400";
+                      bg = "#F5EED8";
+                      border = "#E8DCC8";
+                      color = "#B8A88A";
                     }
                   } else if (isSelected) {
-                    optionStyle = "border-indigo-500 bg-indigo-50 text-indigo-800";
+                    bg = "#EEF3FC";
+                    border = "#1E4D91";
+                    color = "#1E4D91";
                   }
 
                   return (
@@ -105,29 +169,63 @@ export default function MCQQuiz({ questions, experimentTitle }: MCQQuizProps) {
                       key={option.id}
                       onClick={() => handleSelect(question.id, option.id)}
                       disabled={showResult}
-                      className={`w-full text-left text-sm px-3 py-2 rounded-lg border-2 transition-all duration-100
-                        ${optionStyle}
-                        disabled:cursor-not-allowed`}
+                      style={{
+                        background: bg,
+                        border: `1.5px solid ${border}`,
+                        borderRadius: 10,
+                        padding: "10px 14px",
+                        cursor: showResult ? "not-allowed" : "pointer",
+                        textAlign: "left",
+                        fontSize: 13,
+                        color,
+                        fontWeight: isSelected || isCorrectOption ? 700 : 500,
+                        transition: "all 0.18s",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        textDecoration,
+                        width: "100%",
+                      }}
                     >
-                      <span className="font-semibold mr-2 uppercase text-xs opacity-60">
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 800,
+                          opacity: 0.6,
+                          textTransform: "uppercase",
+                          flexShrink: 0,
+                          textDecoration: "none",
+                        }}
+                      >
                         {option.id}.
                       </span>
-                      {option.text}
+                      <span style={{ flex: 1 }}>{option.text}</span>
                       {showResult && isCorrectOption && (
-                        <span className="ml-2 text-green-600">✓</span>
+                        <span style={{ color: "#1E6B3C", fontSize: 16, textDecoration: "none" }}>✓</span>
                       )}
                       {showResult && isSelected && !isCorrectOption && (
-                        <span className="ml-2 text-red-500">✗</span>
+                        <span style={{ color: "#B5271A", fontSize: 16, textDecoration: "none" }}>✗</span>
                       )}
                     </button>
                   );
                 })}
               </div>
 
-              {/* Explanation (after submission) */}
+              {/* Explanation */}
               {showResult && (
-                <div className="text-xs bg-white border border-gray-200 rounded-md px-3 py-2 text-gray-600 leading-relaxed">
-                  <span className="font-semibold text-gray-700">Explanation: </span>
+                <div
+                  style={{
+                    marginTop: 14,
+                    background: "#F5EED8",
+                    border: "1.5px solid #D4C4A0",
+                    borderRadius: 10,
+                    padding: "10px 14px",
+                    fontSize: 12,
+                    color: "#4A3C28",
+                    lineHeight: 1.7,
+                  }}
+                >
+                  <span style={{ fontWeight: 800, color: "#6B5B3E" }}>Explanation: </span>
                   {question.explanation}
                 </div>
               )}
@@ -136,52 +234,111 @@ export default function MCQQuiz({ questions, experimentTitle }: MCQQuizProps) {
         })}
       </div>
 
-      {/* Submit / Retry */}
+      {/* Submit / Score */}
       {!result ? (
-        <button
-          onClick={handleSubmit}
-          disabled={!allAnswered}
-          className="w-full py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold
-            hover:bg-indigo-700 transition-colors
-            disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          Submit Quiz
-        </button>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <button
+            onClick={handleSubmit}
+            disabled={!allAnswered}
+            style={{
+              width: "100%",
+              padding: "14px",
+              borderRadius: 12,
+              background: allAnswered ? "#1C3A6E" : "#E8DCC8",
+              color: allAnswered ? "#fff" : "#9B8A6E",
+              border: "none",
+              fontWeight: 800,
+              fontSize: 14,
+              cursor: allAnswered ? "pointer" : "not-allowed",
+              letterSpacing: "0.04em",
+              transition: "all 0.2s",
+            }}
+          >
+            Submit Quiz
+          </button>
+          {!allAnswered && (
+            <p style={{ fontSize: 12, color: "#9B8A6E", textAlign: "center" }}>
+              Answer all {questions.length} questions to submit.
+            </p>
+          )}
+        </div>
       ) : (
-        <div className={`rounded-lg border-2 p-4 space-y-3 ${scoreBg(result.percentage)}`}>
-          <div className="flex items-center justify-between">
+        <div
+          style={{
+            background: scoreBg(result.percentage),
+            border: `2px solid ${scoreBorder(result.percentage)}`,
+            borderRadius: 16,
+            padding: "20px 22px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 14,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">Your Score</p>
-              <p className={`text-2xl font-bold ${scoreColor(result.percentage)}`}>
+              <div
+                style={{
+                  fontSize: 10,
+                  fontWeight: 800,
+                  color: "#9B8A6E",
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                  marginBottom: 4,
+                }}
+              >
+                Your Score
+              </div>
+              <div
+                style={{
+                  fontSize: 28,
+                  fontWeight: 900,
+                  color: scoreColor(result.percentage),
+                }}
+              >
                 {result.score} / {result.total}
-                <span className="text-base ml-2 font-normal">({result.percentage}%)</span>
-              </p>
+                <span
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 600,
+                    marginLeft: 8,
+                    color: scoreColor(result.percentage) + "AA",
+                  }}
+                >
+                  ({result.percentage}%)
+                </span>
+              </div>
             </div>
-            <div className="text-4xl">
-              {result.percentage >= 80 ? "🏆" : result.percentage >= 50 ? "📚" : "💪"}
+            <div style={{ fontSize: 40 }}>
+              {result.percentage >= 80 ? "🏆" : result.percentage >= 50 ? "📖" : "💪"}
             </div>
           </div>
-          <p className="text-xs text-gray-600">
+
+          <p style={{ fontSize: 13, color: "#4A3C28", lineHeight: 1.6, margin: 0 }}>
             {result.percentage >= 80
               ? "Excellent! You're well prepared for this topic."
               : result.percentage >= 50
               ? "Good effort. Review the explanations above and try again."
               : "Keep practicing! Read the explanations carefully and retry."}
           </p>
+
           <button
             onClick={handleRetry}
-            className="text-sm px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700
-              hover:bg-gray-50 transition-colors"
+            style={{
+              alignSelf: "flex-start",
+              background: "#FDFAF3",
+              border: "1.5px solid #D4C4A0",
+              borderRadius: 10,
+              padding: "9px 20px",
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: "pointer",
+              color: "#4A3C28",
+              transition: "all 0.18s",
+            }}
           >
-            Retry Quiz
+            ↺ Retry Quiz
           </button>
         </div>
-      )}
-
-      {!allAnswered && !result && (
-        <p className="text-xs text-gray-400 text-center">
-          Answer all {questions.length} questions to submit.
-        </p>
       )}
     </div>
   );

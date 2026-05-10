@@ -1,10 +1,8 @@
 "use client";
 
 // ============================================================
-// /components/lab/VivaQA.tsx
-// Reveal-style viva question & answer component.
-// Student reads question, thinks, then reveals answer.
-// Tracks how many they've revealed.
+// /components/lab/VivaQA.tsx — SHAURI Premium Redesign
+// All logic preserved exactly. UI elevated to SHAURI design.
 // ============================================================
 
 import React, { useState, useCallback } from "react";
@@ -21,7 +19,7 @@ export default function VivaQA({ questions, experimentTitle }: VivaQAProps) {
   const toggle = useCallback((id: string) => {
     setRevealed((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) { next.delete(id); } else { next.add(id); }
+      next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
   }, []);
@@ -35,23 +33,46 @@ export default function VivaQA({ questions, experimentTitle }: VivaQAProps) {
   }, []);
 
   const revealedCount = revealed.size;
+  const pct = questions.length > 0 ? Math.round((revealedCount / questions.length) * 100) : 0;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
         <div>
-          <h4 className="text-sm font-semibold text-gray-700">
-            Viva Q&A — {experimentTitle}
-          </h4>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 800,
+              color: "#9B8A6E",
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              marginBottom: 4,
+            }}
+          >
+            Viva Voce Preparation
+          </div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: "#1C3A6E" }}>
+            {experimentTitle}
+          </div>
+          <div style={{ fontSize: 12, color: "#9B8A6E", marginTop: 3 }}>
             {revealedCount} of {questions.length} revealed
-          </p>
+          </div>
         </div>
-        <div className="flex gap-2">
+        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
           {revealedCount < questions.length && (
             <button
               onClick={revealAll}
-              className="text-xs text-indigo-600 hover:text-indigo-800 underline underline-offset-2"
+              style={{
+                background: "none",
+                border: "1.5px solid #D4C4A0",
+                borderRadius: 8,
+                padding: "6px 14px",
+                cursor: "pointer",
+                fontSize: 12,
+                fontWeight: 700,
+                color: "#1E4D91",
+              }}
             >
               Reveal All
             </button>
@@ -59,7 +80,16 @@ export default function VivaQA({ questions, experimentTitle }: VivaQAProps) {
           {revealedCount > 0 && (
             <button
               onClick={resetAll}
-              className="text-xs text-gray-400 hover:text-gray-600 underline underline-offset-2"
+              style={{
+                background: "none",
+                border: "1.5px solid #D4C4A0",
+                borderRadius: 8,
+                padding: "6px 14px",
+                cursor: "pointer",
+                fontSize: 12,
+                fontWeight: 700,
+                color: "#9B8A6E",
+              }}
             >
               Reset
             </button>
@@ -68,46 +98,135 @@ export default function VivaQA({ questions, experimentTitle }: VivaQAProps) {
       </div>
 
       {/* Progress bar */}
-      <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+      <div
+        style={{
+          height: 6,
+          borderRadius: 99,
+          background: "#E8DCC8",
+          overflow: "hidden",
+        }}
+      >
         <div
-          className="h-1.5 bg-indigo-400 rounded-full transition-all duration-300"
-          style={{ width: `${questions.length > 0 ? (revealedCount / questions.length) * 100 : 0}%` }}
+          style={{
+            height: "100%",
+            width: `${pct}%`,
+            borderRadius: 99,
+            background: pct === 100 ? "#1E6B3C" : "#1E4D91",
+            transition: "width 0.4s ease",
+          }}
         />
       </div>
 
       {/* Questions */}
-      <div className="space-y-3">
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {questions.map((q, idx) => {
           const isRevealed = revealed.has(q.id);
           return (
             <div
               key={q.id}
-              className="rounded-lg border border-gray-200 overflow-hidden"
+              style={{
+                borderRadius: 14,
+                border: `1.5px solid ${isRevealed ? "#B5CCE8" : "#D4C4A0"}`,
+                overflow: "hidden",
+                transition: "border-color 0.2s",
+              }}
             >
               {/* Question row */}
               <button
                 onClick={() => toggle(q.id)}
-                className="w-full text-left flex items-start gap-3 px-4 py-3 bg-white hover:bg-gray-50 transition-colors"
+                style={{
+                  width: "100%",
+                  textAlign: "left",
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 12,
+                  padding: "14px 16px",
+                  background: isRevealed ? "#EEF3FC" : "#FDFAF3",
+                  border: "none",
+                  cursor: "pointer",
+                  transition: "background 0.2s",
+                }}
               >
-                <span className="flex-shrink-0 mt-0.5 w-6 h-6 rounded-full bg-indigo-100 text-indigo-700
-                  text-xs font-bold flex items-center justify-center">
+                {/* Number badge */}
+                <div
+                  style={{
+                    flexShrink: 0,
+                    width: 26,
+                    height: 26,
+                    borderRadius: "50%",
+                    background: isRevealed ? "#1E4D91" : "#F0E8D4",
+                    color: isRevealed ? "#fff" : "#6B5B3E",
+                    fontSize: 12,
+                    fontWeight: 800,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginTop: 1,
+                    transition: "all 0.2s",
+                  }}
+                >
                   {idx + 1}
-                </span>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-800">{q.question}</p>
                 </div>
-                <span className="flex-shrink-0 text-gray-300 text-lg mt-0.5">
+
+                {/* Question text */}
+                <p
+                  style={{
+                    flex: 1,
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: isRevealed ? "#1C3A6E" : "#3A3020",
+                    lineHeight: 1.6,
+                    margin: 0,
+                  }}
+                >
+                  {q.question}
+                </p>
+
+                {/* Toggle indicator */}
+                <span
+                  style={{
+                    flexShrink: 0,
+                    fontSize: 18,
+                    color: isRevealed ? "#1E4D91" : "#C4B89A",
+                    marginTop: 2,
+                    transition: "color 0.2s",
+                  }}
+                >
                   {isRevealed ? "▲" : "▼"}
                 </span>
               </button>
 
               {/* Answer */}
               {isRevealed && (
-                <div className="px-4 py-3 bg-indigo-50 border-t border-indigo-100">
-                  <div className="flex gap-2">
-                    <span className="text-indigo-400 text-sm mt-0.5 flex-shrink-0">💡</span>
-                    <p className="text-sm text-indigo-900 leading-relaxed">{q.answer}</p>
-                  </div>
+                <div
+                  style={{
+                    padding: "14px 16px",
+                    background: "#F5EED8",
+                    borderTop: "1.5px solid #D4C4A0",
+                    display: "flex",
+                    gap: 10,
+                    alignItems: "flex-start",
+                  }}
+                >
+                  <span
+                    style={{
+                      flexShrink: 0,
+                      fontSize: 16,
+                      marginTop: 1,
+                    }}
+                  >
+                    💡
+                  </span>
+                  <p
+                    style={{
+                      fontSize: 13,
+                      color: "#3A3020",
+                      lineHeight: 1.7,
+                      margin: 0,
+                    }}
+                  >
+                    {q.answer}
+                  </p>
                 </div>
               )}
             </div>
@@ -115,11 +234,42 @@ export default function VivaQA({ questions, experimentTitle }: VivaQAProps) {
         })}
       </div>
 
+      {/* Completion banner */}
       {revealedCount === questions.length && (
-        <div className="text-center py-3 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg">
-          ✅ All viva answers reviewed. You're ready for the practical exam!
+        <div
+          style={{
+            background: "#EDFAF3",
+            border: "1.5px solid #8FD4A8",
+            borderRadius: 12,
+            padding: "14px 18px",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            fontSize: 13,
+            fontWeight: 700,
+            color: "#1E6B3C",
+          }}
+        >
+          <span style={{ fontSize: 18 }}>✅</span>
+          All viva answers reviewed. You're ready for the practical exam!
         </div>
       )}
+
+      {/* Study tip */}
+      <div
+        style={{
+          background: "#FDF6EC",
+          border: "1.5px solid #E8C98A",
+          borderRadius: 12,
+          padding: "12px 16px",
+          fontSize: 12,
+          color: "#5A4020",
+          lineHeight: 1.7,
+        }}
+      >
+        <span style={{ fontWeight: 800, color: "#C17B2F" }}>💡 Board Tip: </span>
+        Read each question, think of your answer first, then reveal. This active recall method is proven to improve viva performance significantly.
+      </div>
     </div>
   );
 }
