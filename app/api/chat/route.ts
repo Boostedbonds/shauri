@@ -7,6 +7,8 @@
  * MARKING SYSTEM (updated):
  *   Daily / Holiday test → 30 marks · 60 minutes
  *   Revision test        → 60 marks · 120 minutes
+ *
+ * FIX: Teacher mode now passes full conversation history to callAI
  */
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "../../lib/supabase";
@@ -341,7 +343,12 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ reply: `Hi ${student?.name || ""}! I am Shauri — your AI tutor. What shall we study today?` });
       }
       const sysWithKB = await buildSystemWithKB("teacher", undefined, student, message);
-      const reply = await callAI(sysWithKB, [{ role: "user", content: message }]);
+
+      // ✅ FIX: Pass full conversation history so AI remembers prior context
+      const reply = await callAI(sysWithKB, [
+        ...history,
+        { role: "user", content: message },
+      ]);
       return NextResponse.json({ reply });
     }
 

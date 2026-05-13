@@ -213,9 +213,9 @@ I can explain concepts step-by-step, simplify difficult topics, help with revisi
   const autoTriggeredRef = useRef(false);
 
   useEffect(() => { msgsRef.current = messages; }, [messages]);
-useEffect(() => {
-  setMessages([{ role: "assistant", content: greeting }]);
-}, [greeting]);
+  useEffect(() => {
+    setMessages([{ role: "assistant", content: greeting }]);
+  }, [greeting]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
   useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
 
@@ -334,7 +334,9 @@ useEffect(() => {
         body: JSON.stringify({
           mode:    "teacher",
           message: trimmed,
-          history: updated.slice(1, -1).map(m => ({ role: m.role, content: m.content })),
+          // ✅ FIX: slice(0, -1) sends all messages except the current one being sent
+          // Previously slice(1, -1) was incorrectly dropping both the first and last message
+          history: updated.slice(0, -1).map(m => ({ role: m.role, content: m.content })),
           student: { name: student?.name || "Student", class: student?.class || "", board: student?.board || "CBSE" },
         }),
       });
