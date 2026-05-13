@@ -155,23 +155,29 @@ function SavedBanner({ subject, elapsed, quizScore }: {
 }
 
 // ─── Main Page ────────────────────────────────────────────────
+const FALLBACK_GREETING = `Hi! 👋 I'm SHAURI — your AI learning companion.
+
+Tell me:
+• Which subject you're studying
+• Which chapter, topic, or concept you'd like help with
+
+I can explain concepts step-by-step, simplify difficult topics, help with revision, generate quick quizzes, and support your daily learning journey.`;
+
 export default function TeacherPage() {
-  const [greeting, setGreeting] = useState(
-  "Hi! 👋 I'm SHAURI — your AI learning companion."
-);
+  // SSR-safe: start with static fallback (server & client match), then
+  // patch just the greeting message after mount — only if no conversation yet.
+  const [messages, setMessages] = useState<Message[]>([
+    { role: "assistant", content: FALLBACK_GREETING },
+  ]);
 
-useEffect(() => {
-  try {
-    const stored = localStorage.getItem("shauri_student");
-
-    if (stored) {
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("shauri_student");
+      if (!stored) return;
       const student = JSON.parse(stored);
-
       const name = student?.name || "Student";
-      const cls = student?.class || "";
-
-      setGreeting(
-        `Hi ${name}${cls ? `, Class ${cls}` : ""}! 👋
+      const cls  = student?.class || "";
+      const personalised = `Hi ${name}${cls ? `, Class ${cls}` : ""}! 👋
 
 I'm SHAURI — your AI learning companion.
 
@@ -179,15 +185,15 @@ Tell me:
 • Which subject you're studying
 • Which chapter, topic, or concept you'd like help with
 
-I can explain concepts step-by-step, simplify difficult topics, help with revision, generate quick quizzes, and support your daily learning journey.`
+I can explain concepts step-by-step, simplify difficult topics, help with revision, generate quick quizzes, and support your daily learning journey.`;
+      // Only update the greeting if the user hasn't typed anything yet
+      setMessages(prev =>
+        prev.length === 1 && prev[0].role === "assistant"
+          ? [{ role: "assistant", content: personalised }]
+          : prev
       );
-    }
-  } catch {
-    // fallback greeting
-  }
-}, []);
-
-  const [messages, setMessages] = useState<Message[]>([]);
+    } catch { /* keep fallback */ }
+  }, []);
   const [inputText,  setInputText]  = useState("");
   const [loading,    setLoading]    = useState(false);
   const [subject,    setSubject]    = useState("");
@@ -213,9 +219,6 @@ I can explain concepts step-by-step, simplify difficult topics, help with revisi
   const autoTriggeredRef = useRef(false);
 
   useEffect(() => { msgsRef.current = messages; }, [messages]);
-  useEffect(() => {
-    setMessages([{ role: "assistant", content: greeting }]);
-  }, [greeting]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
   useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
 

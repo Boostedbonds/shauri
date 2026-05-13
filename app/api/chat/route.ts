@@ -43,7 +43,6 @@ type PaperAuditResult = {
   finalPaper: string;
 };
 
-function isGreeting(text: string) { return /^(hi|hello|hey|good\s*morning|good\s*evening)/i.test(text.trim()); }
 function isStart(text: string) { return /^start/i.test(text.trim()); }
 function isSubmit(text: string) { return /^(submit|done|finish)/i.test(text.trim()); }
 function getKey(student?: StudentContext): string {
@@ -339,12 +338,9 @@ export async function POST(req: NextRequest) {
 
     /* ── TEACHER MODE ─────────────────────────────────────────── */
     if (mode === "teacher") {
-      if (isGreeting(message)) {
-        return NextResponse.json({ reply: `Hi ${student?.name || ""}! I am Shauri — your AI tutor. What shall we study today?` });
-      }
+      // Always call AI — never short-circuit with a hardcoded greeting.
+      // The AI system prompt handles warm greetings naturally.
       const sysWithKB = await buildSystemWithKB("teacher", undefined, student, message);
-
-      // ✅ FIX: Pass full conversation history so AI remembers prior context
       const reply = await callAI(sysWithKB, [
         ...history,
         { role: "user", content: message },
