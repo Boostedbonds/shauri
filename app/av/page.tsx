@@ -128,7 +128,7 @@ export default function AVPage() {
   const [quizAnswered, setQuizAnswered] = useState<number | null>(null);
   const aiRef = useRef<HTMLDivElement>(null);
 
-  const ytKey = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY || "";
+  const ytKey = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY || "AIzaSyBDgiaSyx8jWquH_sRFn56a0WPLZU5-POM";
 
   useEffect(() => {
     try {
