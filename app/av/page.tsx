@@ -28,73 +28,32 @@ function mdToJsx(text: string) {
 // BEST INDIAN CBSE TEACHER CHANNELS — curated & tiered
 // ─────────────────────────────────────────────────────────────
 
-// TIER 1: India's most trusted CBSE/JEE/NEET educators
-// These are the channels students and parents swear by.
 const TIER1_INDIAN = [
-  "physics wallah",
-  "pw",                        // Physics Wallah short name
-  "alakh pandey",              // Physics Wallah founder
-  "vedantu",
-  "vedantu math",
-  "vedantu science",
-  "vedantu class 9 and 10",
-  "unacademy",
-  "unacademy class 9 and 10",
-  "magnet brains",             // Huge CBSE channel, all subjects
-  "doubtnut",
-  "khan sir",                  // Khan GS Research Centre
-  "khan sir patna",
-  "byju's",
-  "byjus",
-  "byju",
-  "class 9 10",
-  "cbse class 10",
+  "physics wallah", "pw", "alakh pandey",
+  "vedantu", "vedantu math", "vedantu science", "vedantu class 9 and 10",
+  "unacademy", "unacademy class 9 and 10",
+  "magnet brains", "doubtnut",
+  "khan sir", "khan sir patna",
+  "byju's", "byjus", "byju",
+  "class 9 10", "cbse class 10",
 ];
 
-// TIER 2: Excellent subject-specific Indian educators
 const TIER2_INDIAN = [
-  "dronstudy",
-  "learnohub",
-  "meritnation",
-  "toppr",
-  "exam fear",                 // Ekeeda / ExamFear Education — loved for science
-  "examfear",
-  "aakash",
-  "allen career",
-  "motion education",
-  "arvind academy",            // Great for Maths
-  "ncert wallah",
-  "science and fun",
-  "infinity learn",
-  "oswaal",
-  "cbse",
-  "ncert",
-  "hindi medium",
-  "success roar",
-  "tiwari academy",
-  "amrit pal singh",           // Great science educator
-  "science sir",
-  "let's learn india",
-  "letslearn",
-  "green board",
-  "next door engineer",        // Physics
-  "prashant kirad",            // Maths
-  "amit sengupta",
-  "pmt corner",
-  "bright tutee",
+  "dronstudy", "learnohub", "meritnation", "toppr",
+  "exam fear", "examfear", "aakash", "allen career",
+  "motion education", "arvind academy", "ncert wallah",
+  "science and fun", "infinity learn", "oswaal",
+  "cbse", "ncert", "hindi medium", "success roar",
+  "tiwari academy", "amrit pal singh", "science sir",
+  "let's learn india", "letslearn", "green board",
+  "next door engineer", "prashant kirad", "amit sengupta",
+  "pmt corner", "bright tutee",
 ];
 
-// TIER 3: Global quality fallback (only if no Indian teacher found)
 const TIER3_GLOBAL = [
-  "khan academy",
-  "3blue1brown",
-  "veritasium",
-  "crashcourse",
-  "ted-ed",
-  "organic chemistry tutor",
-  "professor leonard",
-  "bozeman science",
-  "kurzgesagt",
+  "khan academy", "3blue1brown", "veritasium",
+  "crashcourse", "ted-ed", "organic chemistry tutor",
+  "professor leonard", "bozeman science", "kurzgesagt",
 ];
 
 function scoreVideo(item: any): number {
@@ -102,14 +61,11 @@ function scoreVideo(item: any): number {
   const title = (item.snippet.title || "").toLowerCase();
   const desc = (item.snippet.description || "").toLowerCase();
   const combined = `${ch} ${title} ${desc}`;
-
-  // Bonus signals in title/description
   const cbseBonus = /cbse|ncert|class 10|class 9|board exam|10th|9th/.test(combined) ? 1 : 0;
-
   if (TIER1_INDIAN.some(t => combined.includes(t))) return 10 + cbseBonus;
-  if (TIER2_INDIAN.some(t => combined.includes(t))) return  5 + cbseBonus;
-  if (TIER3_GLOBAL.some(t => combined.includes(t))) return  2;
-  return cbseBonus; // Unknown channel but has CBSE context
+  if (TIER2_INDIAN.some(t => combined.includes(t))) return 5 + cbseBonus;
+  if (TIER3_GLOBAL.some(t => combined.includes(t))) return 2;
+  return cbseBonus;
 }
 
 export default function AVPage() {
@@ -126,9 +82,8 @@ export default function AVPage() {
   const [chatHistory, setChatHistory] = useState<{ role: string; content: string }[]>([]);
   const [followups, setFollowups] = useState<{ q: string; a: string }[]>([]);
   const [quizAnswered, setQuizAnswered] = useState<number | null>(null);
+  const [videoError, setVideoError] = useState(false);
   const aiRef = useRef<HTMLDivElement>(null);
-
-  const ytKey = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY || "AIzaSyBDgiaSyx8jWquH_sRFn56a0WPLZU5-POM";
 
   useEffect(() => {
     try {
@@ -152,6 +107,7 @@ export default function AVPage() {
     setVideoId(null);
     setVideoTitle("");
     setVideoChannel("");
+    setVideoError(false);
     setTab("explain");
     setFollowups([]);
     setChatHistory([]);
@@ -195,7 +151,6 @@ KEY_TAKEAWAYS and RELATED must be valid JSON arrays. QUIZ must be valid JSON obj
       });
       const data = await res.json();
       if (data.error) { console.error(data.error); return; }
-
       const text: string = data.text || "";
       setChatHistory([
         { role: "user", content: `Teach me: ${t}` },
@@ -209,78 +164,36 @@ KEY_TAKEAWAYS and RELATED must be valid JSON arrays. QUIZ must be valid JSON obj
 
   function parseLesson(text: string) {
     let explain = "", summary: string[] = [], quiz = null, related: string[] = [];
-
     const em = text.match(/EXPLANATION:\s*([\s\S]*?)(?=KEY_TAKEAWAYS:|$)/);
     if (em) explain = em[1].trim();
-
     const km = text.match(/KEY_TAKEAWAYS:\s*(\[[\s\S]*?\])/);
     if (km) { try { summary = JSON.parse(km[1]); } catch {} }
-
     const qm = text.match(/QUIZ:\s*(\{[\s\S]*?\})/);
     if (qm) { try { quiz = JSON.parse(qm[1]); } catch {} }
-
     const rm = text.match(/RELATED:\s*(\[[\s\S]*?\])/);
     if (rm) { try { related = JSON.parse(rm[1]); } catch {} }
-
     setLesson({ explain, summary, quiz, related });
   }
 
+  // ─── YouTube search via server-side API route (key stays secret) ───
   async function fetchVideo(t: string) {
-    if (!ytKey) return;
-
-    // Run TWO searches in parallel:
-    // Search 1 — Indian CBSE specific (highest chance of Vedantu/PW/Magnet Brains)
-    // Search 2 — Broader topic search (catches any great video we might miss)
-    const queries = [
-      `${t} CBSE class ${student?.class} explained`,
-      `${t} class ${student?.class} in english India`,
-    ];
-
     try {
-      const results = await Promise.all(
-        queries.map(q =>
-          fetch(
-            `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(q)}&type=video&videoEmbeddable=true&relevanceLanguage=en&regionCode=IN&maxResults=10&key=${ytKey}`
-          ).then(r => r.json())
-        )
-      );
-
-      // Merge all items, deduplicate by videoId
-      const seen = new Set<string>();
-      const allItems: any[] = [];
-      for (const data of results) {
-        if (data.error || !data.items?.length) continue;
-        for (const item of data.items) {
-          const vid = item?.id?.videoId;
-          if (vid && !seen.has(vid)) {
-            seen.add(vid);
-            allItems.push(item);
-          }
-        }
+      const res = await fetch("/api/youtube", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic: t, studentClass: student?.class }),
+      });
+      const data = await res.json();
+      if (data.error || !data.videoId) {
+        setVideoError(true);
+        return;
       }
-
-      if (!allItems.length) return;
-
-      // Score every candidate
-      const scored = allItems.map(item => ({ item, score: scoreVideo(item) }));
-
-      // Sort descending by score
-      scored.sort((a, b) => b.score - a.score);
-
-      // Pick the best
-      const best = scored[0].item;
-
-      console.log("🎯 Top video picks:");
-      scored.slice(0, 5).forEach((s, i) =>
-        console.log(`  ${i + 1}. [${s.score}] ${s.item.snippet.channelTitle} — ${s.item.snippet.title}`)
-      );
-
-      setVideoId(best.id.videoId);
-      setVideoTitle(best.snippet.title);
-      setVideoChannel(best.snippet.channelTitle);
-
+      setVideoId(data.videoId);
+      setVideoTitle(data.title);
+      setVideoChannel(data.channel);
     } catch (e) {
       console.error("fetchVideo error:", e);
+      setVideoError(true);
     }
   }
 
@@ -289,10 +202,8 @@ KEY_TAKEAWAYS and RELATED must be valid JSON arrays. QUIZ must be valid JSON obj
     if (!q || qaLoading) return;
     setQaInput("");
     setQaLoading(true);
-
     const newHistory = [...chatHistory, { role: "user", content: q }];
     setChatHistory(newHistory);
-
     try {
       const res = await fetch("/api/av", {
         method: "POST",
@@ -381,13 +292,6 @@ KEY_TAKEAWAYS and RELATED must be valid JSON arrays. QUIZ must be valid JSON obj
           </div>
         </div>
 
-        {/* NO YT KEY WARNING */}
-        {!ytKey && (
-          <div style={{ background: "#FAEEDA", border: "1px solid #FAC775", borderRadius: 10, padding: "10px 16px", fontSize: 11, color: "#633806", marginBottom: 16, letterSpacing: "0.06em" }}>
-            ⚠️ Add <strong>NEXT_PUBLIC_YOUTUBE_API_KEY</strong> to your .env.local to enable video search.
-          </div>
-        )}
-
         {/* CLASSROOM */}
         {(lesson || loading) && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
@@ -427,7 +331,9 @@ KEY_TAKEAWAYS and RELATED must be valid JSON arrays. QUIZ must be valid JSON obj
               ) : (
                 <div style={{ aspectRatio: "16/9", background: "#0a0a0a", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8 }}>
                   <div style={{ fontSize: 28 }}>📺</div>
-                  <div style={{ fontSize: 12, color: "#555" }}>Add YouTube API key to enable videos</div>
+                  <div style={{ fontSize: 12, color: "#555" }}>
+                    {videoError ? "Could not load video. Check YouTube API key or quota." : "No video found for this topic."}
+                  </div>
                 </div>
               )}
             </div>
@@ -508,6 +414,8 @@ KEY_TAKEAWAYS and RELATED must be valid JSON arrays. QUIZ must be valid JSON obj
               {/* Q&A */}
               <div style={{ padding: 12, borderTop: "1px solid rgba(212,175,55,0.2)", display: "flex", gap: 8 }}>
                 <input
+                  id="qa-input"
+                  name="qa-input"
                   value={qaInput}
                   onChange={e => setQaInput(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && askQuestion()}
