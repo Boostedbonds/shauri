@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Header from "./Header";
 import { Orbitron } from "next/font/google";
+import { generateCbseBoardPlan, rebalancePlanFromDay, type PlannerDay } from "@/lib/studyPlannerEngine";
 
 const orbitron = Orbitron({ subsets: ["latin"], weight: ["400", "600", "700"] });
 
@@ -521,39 +522,8 @@ const UPSC_RESOURCES = [
   ]},
 ];
 
-type TimetableEntry = { day: string; subject: string; topic: string; hours: number; notes: string };
 
-async function generateTimetable(exam: string, weeks: number, hoursPerDay: number, name: string): Promise<TimetableEntry[]> {
-  try {
-    const key = process.env.NEXT_PUBLIC_GROQ_API_KEY;
-    if (!key) throw new Error("No key");
-    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        max_tokens: 1000,
-        messages: [
-          { role: "system", content: `You are a CBSE expert study planner. Return ONLY a valid JSON array of 7 objects. No markdown, no explanation. Each object: { "day": "Monday", "subject": "Physics", "topic": "Laws of Motion", "hours": 2, "notes": "Focus on numericals" }. Sunday must be rest day with hours: 1.` },
-          { role: "user",   content: `Weekly study plan for ${name} preparing for ${exam}. ${weeks} weeks left, ${hoursPerDay} hours/day available. Make it balanced and CBSE-realistic. Return only the JSON array.` },
-        ],
-      }),
-    });
-    const data = await res.json();
-    const text = data?.choices?.[0]?.message?.content || "[]";
-    return JSON.parse(text.replace(/```json|```/g, "").trim());
-  } catch {
-    return [
-      { day: "Monday",    subject: exam,  topic: "Chapters 1–3 Review",   hours: hoursPerDay, notes: "Concepts + examples" },
-      { day: "Tuesday",   subject: exam,  topic: "Chapters 4–6 Review",   hours: hoursPerDay, notes: "MCQ practice" },
-      { day: "Wednesday", subject: exam,  topic: "Chapters 7–9 Review",   hours: hoursPerDay, notes: "Previous year Qs" },
-      { day: "Thursday",  subject: exam,  topic: "Chapters 10–12 Review", hours: hoursPerDay, notes: "Short answers" },
-      { day: "Friday",    subject: exam,  topic: "Full Revision",          hours: hoursPerDay, notes: "Mind maps & notes" },
-      { day: "Saturday",  subject: exam,  topic: "Mock Test + Analysis",   hours: hoursPerDay, notes: "Timed paper" },
-      { day: "Sunday",    subject: "Rest",topic: "Light reading only",     hours: 1,           notes: "Relax & recharge 🌟" },
-    ];
-  }
-}
+type PlannerCard = PlannerDay & { completed?: boolean };
 
 function openPdf(url: string) {
   window.open(url, "_blank", "noopener,noreferrer");
@@ -1011,89 +981,164 @@ function CareerTab({ studentName }: { studentName: string }) {
 
 function TimetableTab({ student }: { student: StudentContext }) {
   const cls = getClassNum(student.class);
-  const EXAMS_10 = ["Science", "Mathematics", "Social Science", "English", "Hindi"];
-  const EXAMS_12 = ["Physics", "Chemistry", "Biology", "Mathematics", "Accountancy", "Business Studies", "Economics", "History", "Political Science", "Geography", "English (Core)"];
-  const EXAMS_COMP = ["JEE Main", "NEET UG", "UPSC CSE", "CA Foundation", "CUET UG", "CLAT", "NDA", "JEE Advanced", "BITSAT"];
-  const ALL_EXAMS = cls >= 11 ? [...EXAMS_12, ...EXAMS_COMP] : [...EXAMS_10, ...EXAMS_COMP];
+  const SUBJECTS_10 = ["Mathematics", "Science", "Social Science", "English", "Hindi"];
+  const SUBJECTS_12 = ["Mathematics", "Physics", "Chemistry", "Biology", "English"];
+  const SUBJECTS = cls >= 11 ? SUBJECTS_12 : SUBJECTS_10;
 
-  const [exam, setExam]           = useState(ALL_EXAMS[0]);
-  const [weeks, setWeeks]         = useState(4);
-  const [hours, setHours]         = useState(3);
-  const [timetable, setTimetable] = useState<TimetableEntry[]>([]);
-  const [loading, setLoading]     = useState(false);
-  const [editing, setEditing]     = useState<number | null>(null);
-  const [editVal, setEditVal]     = useState<TimetableEntry | null>(null);
+  const [exam, setExam] = useState(cls >= 11 ? "Class 12 Board" : "Class 10 Board");
+  const [weeks, setWeeks] = useState(12);
+  const [hours, setHours] = useState(3);
+  const [targetMarks, setTargetMarks] = useState(90);
+  const [primary, setPrimary] = useState(SUBJECTS[0]);
+  const [secondary, setSecondary] = useState(SUBJECTS[1] || SUBJECTS[0]);
+  const [syllabusDone, setSyllabusDone] = useState(25);
+  const [weakRaw, setWeakRaw] = useState("Science, Social Science");
+
+  const [plan, setPlan] = useState<PlannerCard[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [editing, setEditing] = useState<number | null>(null);
+  const [editedTopic, setEditedTopic] = useState("");
 
   async function handleGenerate() {
     setLoading(true);
-    const t = await generateTimetable(exam, weeks, hours, student.name);
-    setTimetable(t); setLoading(false);
+    const generated = generateCbseBoardPlan({
+      studentName: student.name,
+      classLevel: cls,
+      board: student.board,
+      examName: exam,
+      weeksUntilExam: weeks,
+      hoursPerDay: hours,
+      targetMarks,
+      primarySubject: primary,
+      secondarySubject: secondary,
+      weakSubjects: weakRaw.split(",").map((v) => v.trim()).filter(Boolean),
+      syllabusCompletionPct: syllabusDone,
+    }).map((d) => ({ ...d, completed: false }));
+    setPlan(generated);
+    setLoading(false);
   }
 
-  function saveEdit(i: number) {
-    if (!editVal) return;
-    const updated = [...timetable]; updated[i] = editVal;
-    setTimetable(updated); setEditing(null); setEditVal(null);
+  function toggleComplete(index: number) {
+    const next = [...plan];
+    next[index] = { ...next[index], completed: !next[index].completed };
+    setPlan(next);
+  }
+
+  function applyEdit(index: number) {
+    if (!editedTopic.trim()) return;
+    const next = [...plan];
+    const first = next[index].tasks[0];
+    next[index] = {
+      ...next[index],
+      tasks: [{ ...first, topic: editedTopic.trim(), objective: `${first.objective} (customized)` }, ...next[index].tasks.slice(1)],
+    };
+    setPlan(next);
+    setEditing(null);
+    setEditedTopic("");
+  }
+
+  function handleRebalance(fromDay: number) {
+    setPlan(rebalancePlanFromDay(plan, fromDay));
   }
 
   return (
     <div>
-      <p style={{ color: "#5c6f82", fontSize: 13, marginBottom: 14 }}>Generate a personalised AI study plan — then edit each day to match your schedule.</p>
+      <p style={{ color: "#5c6f82", fontSize: 13, marginBottom: 14 }}>
+        Board-strategy planner: exact chapter focus, revision loops, weak-topic resurfacing, and daily exam intent.
+      </p>
       <div style={{ background: "rgba(255,255,255,0.6)", borderRadius: 14, padding: "16px", border: "1px solid rgba(212,175,55,0.3)", marginBottom: 14 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10, marginBottom: 10 }}>
           <div>
-            <label style={{ fontSize: 12, fontWeight: 700, color: "#5c6f82", display: "block", marginBottom: 5 }}>Exam / Subject</label>
-            <select value={exam} onChange={e => setExam(e.target.value)}
-              style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid rgba(212,175,55,0.4)", background: "rgba(255,255,255,0.9)", fontSize: 13, fontFamily: "inherit", outline: "none" }}>
-              {ALL_EXAMS.map(e => <option key={e}>{e}</option>)}
-            </select>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#5c6f82", display: "block", marginBottom: 5 }}>Exam Track</label>
+            <input value={exam} onChange={(e) => setExam(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid rgba(212,175,55,0.4)", background: "rgba(255,255,255,0.9)", fontSize: 13, fontFamily: "inherit", outline: "none" }} />
           </div>
           <div>
             <label style={{ fontSize: 12, fontWeight: 700, color: "#5c6f82", display: "block", marginBottom: 5 }}>Weeks Until Exam</label>
-            <select value={weeks} onChange={e => setWeeks(parseInt(e.target.value))}
-              style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid rgba(212,175,55,0.4)", background: "rgba(255,255,255,0.9)", fontSize: 13, fontFamily: "inherit", outline: "none" }}>
-              {[2, 4, 6, 8, 12, 16, 24, 48].map(w => <option key={w} value={w}>{w} weeks</option>)}
+            <select value={weeks} onChange={e => setWeeks(parseInt(e.target.value, 10))} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid rgba(212,175,55,0.4)", background: "rgba(255,255,255,0.9)", fontSize: 13, fontFamily: "inherit", outline: "none" }}>
+              {[4, 6, 8, 10, 12, 16].map(w => <option key={w} value={w}>{w} weeks</option>)}
             </select>
           </div>
           <div>
-            <label style={{ fontSize: 12, fontWeight: 700, color: "#5c6f82", display: "block", marginBottom: 5 }}>Hours Per Day</label>
-            <select value={hours} onChange={e => setHours(parseInt(e.target.value))}
-              style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid rgba(212,175,55,0.4)", background: "rgba(255,255,255,0.9)", fontSize: 13, fontFamily: "inherit", outline: "none" }}>
-              {[1, 2, 3, 4, 5, 6, 8].map(h => <option key={h} value={h}>{h}h/day</option>)}
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#5c6f82", display: "block", marginBottom: 5 }}>Hours/Day</label>
+            <select value={hours} onChange={e => setHours(parseInt(e.target.value, 10))} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid rgba(212,175,55,0.4)", background: "rgba(255,255,255,0.9)", fontSize: 13, fontFamily: "inherit", outline: "none" }}>
+              {[2, 3, 4, 5, 6].map(h => <option key={h} value={h}>{h}h/day</option>)}
             </select>
           </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#5c6f82", display: "block", marginBottom: 5 }}>Target %</label>
+            <input type="number" min={60} max={100} value={targetMarks} onChange={e => setTargetMarks(parseInt(e.target.value || "90", 10))} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid rgba(212,175,55,0.4)", background: "rgba(255,255,255,0.9)", fontSize: 13, fontFamily: "inherit", outline: "none" }} />
+          </div>
         </div>
-        <button onClick={handleGenerate} disabled={loading}
-          style={{ width: "100%", padding: "11px", borderRadius: 10, border: "none", background: loading ? "#a0aec0" : "linear-gradient(135deg, #D4AF37, #92400e)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: loading ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
-          {loading ? "⏳ Generating AI Timetable..." : "✨ Generate My Personalised Study Plan"}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10, marginBottom: 12 }}>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#5c6f82", display: "block", marginBottom: 5 }}>Primary Focus</label>
+            <select value={primary} onChange={e => setPrimary(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid rgba(212,175,55,0.4)", background: "rgba(255,255,255,0.9)", fontSize: 13, fontFamily: "inherit", outline: "none" }}>
+              {SUBJECTS.map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#5c6f82", display: "block", marginBottom: 5 }}>Secondary Focus</label>
+            <select value={secondary} onChange={e => setSecondary(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid rgba(212,175,55,0.4)", background: "rgba(255,255,255,0.9)", fontSize: 13, fontFamily: "inherit", outline: "none" }}>
+              {SUBJECTS.map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#5c6f82", display: "block", marginBottom: 5 }}>Syllabus Done %</label>
+            <input type="number" min={0} max={100} value={syllabusDone} onChange={e => setSyllabusDone(parseInt(e.target.value || "0", 10))} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid rgba(212,175,55,0.4)", background: "rgba(255,255,255,0.9)", fontSize: 13, fontFamily: "inherit", outline: "none" }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#5c6f82", display: "block", marginBottom: 5 }}>Weak Subjects</label>
+            <input value={weakRaw} onChange={e => setWeakRaw(e.target.value)} placeholder="Science, Hindi" style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid rgba(212,175,55,0.4)", background: "rgba(255,255,255,0.9)", fontSize: 13, fontFamily: "inherit", outline: "none" }} />
+          </div>
+        </div>
+        <button onClick={handleGenerate} disabled={loading || primary === secondary} style={{ width: "100%", padding: "11px", borderRadius: 10, border: "none", background: loading || primary === secondary ? "#a0aec0" : "linear-gradient(135deg, #D4AF37, #92400e)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: loading || primary === secondary ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+          {loading ? "Generating Strategic Plan..." : "Generate Board Strategy Plan"}
         </button>
+        {primary === secondary && <p style={{ marginTop: 8, color: "#b45309", fontSize: 12 }}>Primary and Secondary subjects must be different.</p>}
       </div>
-      {timetable.length > 0 && (
+
+      {plan.length > 0 && (
         <div>
           <p style={{ fontSize: 13, fontWeight: 700, color: "#0a2540", marginBottom: 10 }}>
-            📅 {student.name}'s Weekly Plan — {exam}
-            <span style={{ fontSize: 11, fontWeight: 400, color: "#5c6f82", marginLeft: 8 }}>✏️ Click any row to edit</span>
+            {student.name}'s {plan.length}-Day Board Plan ? Class {cls}
+            <span style={{ fontSize: 11, fontWeight: 400, color: "#5c6f82", marginLeft: 8 }}>Click a day to customize and rebalance missed study.</span>
           </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            {timetable.map((entry, i) => (
-              <div key={i}>
-                {editing === i && editVal ? (
-                  <div style={{ background: "rgba(212,175,55,0.12)", borderRadius: 10, padding: "10px 12px", border: "2px solid #D4AF37", display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 8, alignItems: "center" }}>
-                    <input value={editVal.subject} onChange={e => setEditVal({ ...editVal, subject: e.target.value })} placeholder="Subject" style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #D4AF37", fontSize: 13, fontFamily: "inherit" }} />
-                    <input value={editVal.topic}   onChange={e => setEditVal({ ...editVal, topic: e.target.value })}   placeholder="Topic"   style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #D4AF37", fontSize: 13, fontFamily: "inherit" }} />
-                    <input value={editVal.notes}   onChange={e => setEditVal({ ...editVal, notes: e.target.value })}   placeholder="Notes"   style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #D4AF37", fontSize: 13, fontFamily: "inherit" }} />
-                    <button onClick={() => saveEdit(i)} style={{ padding: "6px 12px", borderRadius: 6, border: "none", background: "#D4AF37", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>✓</button>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 520, overflow: "auto", paddingRight: 2 }}>
+            {plan.map((entry, i) => (
+              <div key={entry.dayIndex} style={{ background: entry.completed ? "rgba(34,197,94,0.12)" : "rgba(255,255,255,0.62)", borderRadius: 10, border: "1px solid rgba(212,175,55,0.25)", padding: "10px 12px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontWeight: 700, fontSize: 13, color: "#92400e" }}>{entry.dayLabel}</span>
+                    <span style={{ fontSize: 11, color: "#5c6f82" }}>{entry.phase.toUpperCase()} ? {entry.totalMinutes} min</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => toggleComplete(i)} style={{ padding: "5px 8px", borderRadius: 8, border: "1px solid rgba(34,197,94,0.5)", background: entry.completed ? "#22c55e" : "#fff", color: entry.completed ? "#fff" : "#166534", fontSize: 11, cursor: "pointer" }}>{entry.completed ? "Completed" : "Mark Done"}</button>
+                    <button onClick={() => handleRebalance(entry.dayIndex)} style={{ padding: "5px 8px", borderRadius: 8, border: "1px solid rgba(59,130,246,0.5)", background: "#fff", color: "#1d4ed8", fontSize: 11, cursor: "pointer" }}>Rebalance Missed</button>
+                  </div>
+                </div>
+
+                {editing === i ? (
+                  <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr auto", gap: 8 }}>
+                    <input value={editedTopic} onChange={e => setEditedTopic(e.target.value)} placeholder="Edit primary task topic" style={{ padding: "8px", borderRadius: 8, border: "1px solid #D4AF37", fontFamily: "inherit", fontSize: 12 }} />
+                    <button onClick={() => applyEdit(i)} style={{ padding: "8px 10px", borderRadius: 8, border: "none", background: "#D4AF37", color: "white", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Save</button>
                   </div>
                 ) : (
-                  <div onClick={() => { setEditing(i); setEditVal({ ...entry }); }}
-                    style={{ display: "grid", gridTemplateColumns: "80px 110px 1fr 50px 1fr", gap: 10, alignItems: "center", padding: "10px 14px", background: entry.subject === "Rest" ? "rgba(148,163,184,0.1)" : "rgba(255,255,255,0.6)", borderRadius: 10, border: "1px solid rgba(212,175,55,0.2)", cursor: "pointer" }}>
-                    <span style={{ fontWeight: 700, fontSize: 13, color: "#D4AF37" }}>{entry.day}</span>
-                    <span style={{ fontWeight: 600, fontSize: 13, color: "#0a2540" }}>{entry.subject}</span>
-                    <span style={{ fontSize: 12, color: "#425466" }}>{entry.topic}</span>
-                    <span style={{ fontSize: 12, color: "#5c6f82" }}>{entry.hours}h</span>
-                    <span style={{ fontSize: 12, color: "#5c6f82", fontStyle: "italic" }}>{entry.notes}</span>
-                  </div>
+                  <button onClick={() => { setEditing(i); setEditedTopic(entry.tasks[0]?.topic || ""); }} style={{ marginTop: 8, padding: "5px 8px", borderRadius: 8, border: "1px solid rgba(212,175,55,0.5)", background: "#fff", color: "#92400e", fontSize: 11, cursor: "pointer" }}>Edit Day Focus</button>
                 )}
+
+                <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
+                  {entry.tasks.slice(0, 4).map((task, idx) => (
+                    <div key={`${entry.dayIndex}-${idx}`} style={{ background: "rgba(255,255,255,0.78)", border: "1px solid rgba(212,175,55,0.2)", borderRadius: 8, padding: "8px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                        <strong style={{ color: "#0a2540", fontSize: 12 }}>{task.subject}</strong>
+                        <span style={{ color: "#64748b", fontSize: 11 }}>{task.estimatedMinutes} min ? {task.focus}</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: "#334155", marginTop: 4 }}>{task.chapter} ? {task.topic}</div>
+                      <div style={{ fontSize: 11, color: "#64748b", marginTop: 3 }}>Objective: {task.objective}</div>
+                      <div style={{ fontSize: 11, color: "#64748b" }}>Practice: {task.practiceType}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
@@ -1102,6 +1147,7 @@ function TimetableTab({ student }: { student: StudentContext }) {
     </div>
   );
 }
+
 
 function ImportantDatesTab() {
   return (
