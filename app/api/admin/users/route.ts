@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { readDB, upsertUser, removeUser } from "../../../../lib/db";
 
 export async function GET() {

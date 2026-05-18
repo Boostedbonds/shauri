@@ -1,12 +1,12 @@
-﻿/**
+/**
  * app/api/chat/route.ts
  * Knowledge Base integration added:
  * - searchKnowledge() called before every AI response
  * - KB context injected into system prompt automatically
  *
  * MARKING SYSTEM (updated):
- *   Daily / Holiday test → 30 marks · 60 minutes
- *   Revision test        → 60 marks · 120 minutes
+ *   Daily / Holiday test ? 30 marks � 60 minutes
+ *   Revision test        ? 60 marks � 120 minutes
  *
  * FIX: Teacher mode now passes full conversation history to callAI
  */
@@ -14,7 +14,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "../../lib/supabase";
 import { systemPrompt } from "../../lib/prompts";
 import { syllabus } from "../../lib/syllabus";
-import { searchKnowledge } from "../../lib/knowledgeBase";
+import { searchKnowledge } from "../../lib/knowledgeBase.server";
 
 export const runtime = "nodejs";
 const MAX_MESSAGE_CHARS = 12000;
@@ -82,7 +82,7 @@ async function buildSystemWithKB(
             .join("\n")
         : "No ranked match metadata";
       const kbBlock = `
-══════════════════════════════════════════════════
+--------------------------------------------------
 KNOWLEDGE BASE CONTEXT (Admin-uploaded reference material)
 Treat this as authoritative academic memory. Use it aggressively when relevant.
 Priority order for conflict resolution:
@@ -97,9 +97,9 @@ Avoid hallucinations when KB contains directly relevant information.
 Sources: ${kb.sources.join(", ")}
 Ranked retrieval:
 ${retrievalHints}
-══════════════════════════════════════════════════
+--------------------------------------------------
 ${kb.context}
-══════════════════════════════════════════════════
+--------------------------------------------------
 `;
       return kbBlock + "\n\n" + base;
     }
@@ -254,16 +254,16 @@ function extractTotalMarks(paper: string, fallback: number): number {
 function extractSubjectFromPaper(paper: string): string {
   const m = paper.match(/^Subject\s*[:\|]\s*(.+)$/im);
   if (!m) return "";
-  return m[1].trim().replace(/\s*[–—\-]\s*Class\s*\d+.*$/i, "").trim();
+  return m[1].trim().replace(/\s*[��\-]\s*Class\s*\d+.*$/i, "").trim();
 }
 
 /* ------------------------------------------------------------------
-   CORE AI CALLER WITH FALLBACK (Groq → Gemini)
+   CORE AI CALLER WITH FALLBACK (Groq ? Gemini)
 ------------------------------------------------------------------ */
 async function callAI(sysPrompt: string, messages: ChatMessage[], timeoutMs = 55000): Promise<string> {
   const groqKey   = process.env.GROQ_API_KEY;
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-  if (!groqKey && !geminiKey) return "⚠️ Missing AI keys.";
+  if (!groqKey && !geminiKey) return "?? Missing AI keys.";
 
   async function tryGroq(model: string): Promise<string | null> {
     const ctrl = new AbortController();
@@ -308,7 +308,7 @@ async function callAI(sysPrompt: string, messages: ChatMessage[], timeoutMs = 55
     } catch (e) { console.error("Gemini fallback error:", e); }
   }
 
-  return result || "⚠️ AI unavailable. Try again.";
+  return result || "?? AI unavailable. Try again.";
 }
 
 /* ------------------------------------------------------------------
@@ -336,9 +336,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ reply: "Message too long. Please shorten and retry." }, { status: 400 });
     }
 
-    /* ── TEACHER MODE ─────────────────────────────────────────── */
+    /* -- TEACHER MODE ------------------------------------------- */
     if (mode === "teacher") {
-      // Always call AI — never short-circuit with a hardcoded greeting.
+      // Always call AI � never short-circuit with a hardcoded greeting.
       // The AI system prompt handles warm greetings naturally.
       const sysWithKB = await buildSystemWithKB("teacher", undefined, student, message);
       const reply = await callAI(sysWithKB, [
@@ -348,7 +348,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ reply });
     }
 
-    /* ── EXAMINER MODE ────────────────────────────────────────── */
+    /* -- EXAMINER MODE ------------------------------------------ */
     if (mode === "examiner") {
       const key = getKey(student);
       const { data: existing } = await supabase.from("exam_sessions").select("*").eq("session_key", key).maybeSingle();
@@ -356,7 +356,7 @@ export async function POST(req: NextRequest) {
         ? { ...existing, answer_log: Array.isArray(existing.answer_log) ? existing.answer_log : [] }
         : { session_key: key, status: "IDLE", answer_log: [], student_name: student?.name, student_class: student?.class, student_board: student?.board };
 
-      /* ── START ── */
+      /* -- START -- */
       if (isStart(message)) {
         let paperPromptContent: string;
         let subjectForMeta: string;
@@ -388,7 +388,7 @@ export async function POST(req: NextRequest) {
         const examSys = `${buildStrictExaminerSystem(student)}\n\n${examSysBase}`;
 
         const draftPaper = await callAI(examSys, [{ role: "user", content: paperPromptContent }], 55000);
-        if (draftPaper.startsWith("⚠️")) return NextResponse.json({ reply: draftPaper });
+        if (draftPaper.startsWith("??")) return NextResponse.json({ reply: draftPaper });
 
         const audit = await auditAndRepairPaper(student, draftPaper, paperPromptContent);
         const paper = audit.finalPaper || draftPaper;
@@ -409,12 +409,12 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({
           startTime: session.started_at, paper, subject: resolvedSubject, isRevisionDay,
           reply: audit.pass
-            ? "✅ Paper ready! Internal CBSE audit passed. Write your answers and type **submit** when done."
-            : "✅ Paper ready! Internal audit auto-fixed scope/quality issues before publishing.",
+            ? "? Paper ready! Internal CBSE audit passed. Write your answers and type **submit** when done."
+            : "? Paper ready! Internal audit auto-fixed scope/quality issues before publishing.",
         });
       }
 
-      /* ── SUBMIT ── */
+      /* -- SUBMIT -- */
       if (isSubmit(message)) {
         if (session.status !== "IN_EXAM" || !session.question_paper)
           return NextResponse.json({ reply: "No active exam. Type START to begin." });
@@ -448,7 +448,7 @@ export async function POST(req: NextRequest) {
               const s = Math.floor((Date.now() - session.started_at) / 1000);
               return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m ${s % 60}s`;
             })()
-          : "—";
+          : "�";
 
         await supabase.from("exam_sessions").upsert({ ...session, status: "READY" }, { onConflict: "session_key" });
         return NextResponse.json({
@@ -458,14 +458,14 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      /* ── ANSWER LOGGING ── */
+      /* -- ANSWER LOGGING -- */
       if (session.status === "IN_EXAM") {
         session = { ...session, answer_log: [...session.answer_log, message] };
         await supabase.from("exam_sessions").upsert(session, { onConflict: "session_key" });
-        return NextResponse.json({ reply: "✅ Answer saved. Send next answer or type **submit**." });
+        return NextResponse.json({ reply: "? Answer saved. Send next answer or type **submit**." });
       }
 
-      /* ── IDLE/READY: subject selection ── */
+      /* -- IDLE/READY: subject selection -- */
       const subjectMsg   = confirmedSubject || message;
       const confirmSys   = await buildSystemWithKB("examiner", undefined, student, subjectMsg);
       const confirmReply = await callAI(confirmSys, [

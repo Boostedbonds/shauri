@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { addKnowledge } from "../../../lib/db";
 
 export async function POST(req: NextRequest) {

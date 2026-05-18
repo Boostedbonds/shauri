@@ -1,4 +1,4 @@
-﻿import { put } from "@vercel/blob";
+import { put } from "@vercel/blob";
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { NextRequest, NextResponse } from "next/server";
 

@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { PDFDocument, StandardFonts, type PDFPage, type PDFFont } from "pdf-lib";
 
 const PAGE_WIDTH = 595; // A4
@@ -20,24 +20,24 @@ const LEAK_MARKERS = [
 ];
 
 const COMMON_MOJIBAKE: Array<[RegExp, string]> = [
-  [/â€”/g, "—"],
-  [/â€“/g, "–"],
-  [/â€˜/g, "‘"],
-  [/â€™/g, "’"],
-  [/â€œ/g, "“"],
-  [/â€/g, "”"],
-  [/â€¦/g, "…"],
-  [/Â·/g, "·"],
-  [/Â/g, ""],
-  [/Ã—/g, "×"],
-  [/Î±/g, "α"],
-  [/Î²/g, "β"],
-  [/Î³/g, "γ"],
-  [/âˆš/g, "√"],
-  [/â‰ /g, "≠"],
-  [/â†’/g, "→"],
-  [/â†/g, "←"],
-  [/âœ…/g, "✓"],
+  [/—/g, "�"],
+  [/–/g, "�"],
+  [/‘/g, "�"],
+  [/’/g, "�"],
+  [/“/g, "�"],
+  [/�/g, "�"],
+  [/…/g, "�"],
+  [/·/g, "�"],
+  [/�/g, ""],
+  [/×/g, "�"],
+  [/α/g, "a"],
+  [/β/g, "�"],
+  [/γ/g, "?"],
+  [/√/g, "v"],
+  [/� /g, "?"],
+  [/→/g, "?"],
+  [/←/g, "?"],
+  [/✅/g, "?"],
 ];
 
 type RenderLine = {
@@ -73,7 +73,7 @@ function sanitizePaper(raw: string): string {
     .replace(/<w:[^>]+>/g, "")
     .replace(/<\\\/w:[^>]+>/g, "")
     .replace(/^\s*--\s*\d+\s+of\s+\d+\s*--\s*$/gim, "")
-    .replace(/^\s*S\s*H\s*A\s*U\s*R\s*I[\sA-Z·\-]*$/gim, "")
+    .replace(/^\s*S\s*H\s*A\s*U\s*R\s*I[\sA-Z�\-]*$/gim, "")
     .replace(/\t/g, " ")
     .replace(/[ \u00A0]+/g, " ")
     .replace(/\n{3,}/g, "\n\n")
@@ -84,7 +84,7 @@ function sanitizePaper(raw: string): string {
 
 function normalizeForPdf(text: string): string {
   return text
-    .replace(/[^\x20-\x7E\nαβγ√×·→←–—’“”…]/g, " ")
+    .replace(/[^\x20-\x7E\na�?v׷??������]/g, " ")
     .replace(/[ ]{2,}/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
@@ -144,7 +144,7 @@ function classifyLine(rawLine: string): RenderLine {
 function drawHeader(page: PDFPage, boldFont: PDFFont, regularFont: PDFFont): number {
   let y = PAGE_HEIGHT - MARGIN_TOP;
 
-  page.drawText("SHAURI — CBSE ALIGNED QUESTION PAPER", {
+  page.drawText("SHAURI � CBSE ALIGNED QUESTION PAPER", {
     x: MARGIN_X,
     y,
     size: 13,

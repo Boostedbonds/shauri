@@ -1,15 +1,12 @@
 ﻿/**
  * app/lib/knowledgeBase.ts
- * Searches Supabase knowledge_base table.
- * Called automatically by chat/route.ts before every AI response.
+ * Pure utility functions only — NO Supabase imports.
+ * Safe to import from client components.
+ *
+ * All DB functions (searchKnowledge, addKBEntry, listKBEntries, deleteKBEntry)
+ * have been moved to knowledgeBase.server.ts — import from there in
+ * server-only code (API routes, Server Actions, Server Components).
  */
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { persistSession: false, autoRefreshToken: false } }
-);
 
 export type KBEntry = {
   id: string;
@@ -44,12 +41,12 @@ export type KBInferredMeta = {
   chapter: string;
   topics: string[];
   difficulty: "foundation" | "moderate" | "advanced";
-  examRelevance: number; // 0-100
-  conceptualImportance: number; // 0-100
-  answerWritingRelevance: number; // 0-100
-  evaluationRelevance: number; // 0-100
-  syllabusRelevance: number; // 0-100
-  priorityScore: number; // 0-100
+  examRelevance: number;
+  conceptualImportance: number;
+  answerWritingRelevance: number;
+  evaluationRelevance: number;
+  syllabusRelevance: number;
+  priorityScore: number;
   priorityLabel: "critical" | "high" | "medium" | "low";
 };
 
@@ -72,11 +69,11 @@ export type KBMatch = {
   };
 };
 
-function tokenize(text: string): string[] {
+export function tokenize(text: string): string[] {
   return (text.toLowerCase().match(/[a-z0-9]{2,}/g) || []).slice(0, 800);
 }
 
-function inferDocumentType(text: string, fileName = "", tags: string[] = []): KBDocumentType {
+export function inferDocumentType(text: string, fileName = "", tags: string[] = []): KBDocumentType {
   const hay = `${text} ${fileName} ${(tags || []).join(" ")}`.toLowerCase();
   if (/\b(syllabus|curriculum|learning outcomes|course structure)\b/.test(hay)) return "Syllabus";
   if (/\b(ncert|national council|chapter exercises)\b/.test(hay)) return "NCERT";
@@ -93,14 +90,14 @@ function inferDocumentType(text: string, fileName = "", tags: string[] = []): KB
   return "General";
 }
 
-function inferClassLevel(text: string, fallback: string): string {
+export function inferClassLevel(text: string, fallback: string): string {
   if (fallback && fallback !== "All") return fallback;
   const m = text.match(/\bclass\s*(6|7|8|9|10|11|12)\b/i);
   if (m) return m[1];
   return "All";
 }
 
-function inferSubject(text: string, fallback: string): string {
+export function inferSubject(text: string, fallback: string): string {
   if (fallback && fallback !== "General") return fallback;
   const hay = text.toLowerCase();
   if (/\b(algebra|geometry|trigonometry|mensuration|quadratic|polynomials)\b/.test(hay)) return "Mathematics";
@@ -118,7 +115,7 @@ function inferSubject(text: string, fallback: string): string {
   return "General";
 }
 
-function inferTopics(text: string): string[] {
+export function inferTopics(text: string): string[] {
   const hay = text.toLowerCase();
   const topicHints = [
     "algebra", "trigonometry", "geometry", "carbon and its compounds", "acids bases and salts",
@@ -128,14 +125,14 @@ function inferTopics(text: string): string[] {
   return topicHints.filter((t) => hay.includes(t)).slice(0, 8);
 }
 
-function inferDifficulty(text: string): "foundation" | "moderate" | "advanced" {
+export function inferDifficulty(text: string): "foundation" | "moderate" | "advanced" {
   const hay = text.toLowerCase();
   if (/\b(hots|advanced|olympiad|challenging|higher order)\b/.test(hay)) return "advanced";
   if (/\b(basic|intro|foundation|beginner)\b/.test(hay)) return "foundation";
   return "moderate";
 }
 
-function toPriorityLabel(score: number): "critical" | "high" | "medium" | "low" {
+export function toPriorityLabel(score: number): "critical" | "high" | "medium" | "low" {
   if (score >= 80) return "critical";
   if (score >= 65) return "high";
   if (score >= 45) return "medium";
@@ -185,7 +182,7 @@ export function inferKBMetadata(entry: KBEntry): KBInferredMeta {
   };
 }
 
-function chunkText(content: string, chunkSize = 1100, overlap = 180): string[] {
+export function chunkText(content: string, chunkSize = 1100, overlap = 180): string[] {
   if (!content) return [];
   const clean = content.replace(/\s+/g, " ").trim();
   const out: string[] = [];
@@ -199,7 +196,7 @@ function chunkText(content: string, chunkSize = 1100, overlap = 180): string[] {
   return out.slice(0, 120);
 }
 
-function scoreChunk(queryTokens: string[], chunk: string): number {
+export function scoreChunk(queryTokens: string[], chunk: string): number {
   const lc = chunk.toLowerCase();
   let s = 0;
   for (const t of queryTokens) {
@@ -209,7 +206,7 @@ function scoreChunk(queryTokens: string[], chunk: string): number {
   return s;
 }
 
-function scoreEntry(queryTokens: string[], entry: KBEntry, classLevel?: string): number {
+export function scoreEntry(queryTokens: string[], entry: KBEntry, classLevel?: string): number {
   const meta = inferKBMetadata(entry);
   const haystack = [entry.title, entry.subject, entry.content.slice(0, 6000), ...(entry.tags || [])]
     .join(" ")
@@ -226,156 +223,10 @@ function scoreEntry(queryTokens: string[], entry: KBEntry, classLevel?: string):
     classBoost = String(meta.classLevel) === String(classLevel) ? 10 : -4;
   }
 
-  const syllabusBoost = Math.round(meta.syllabusRelevance / 7); // 0..14
-  const evalBoost = Math.round(meta.evaluationRelevance / 12); // 0..8
-  const writingBoost = Math.round(meta.answerWritingRelevance / 12); // 0..8
-  const priorityBoost = Math.round(meta.priorityScore / 10); // 0..10
+  const syllabusBoost = Math.round(meta.syllabusRelevance / 7);
+  const evalBoost = Math.round(meta.evaluationRelevance / 12);
+  const writingBoost = Math.round(meta.answerWritingRelevance / 12);
+  const priorityBoost = Math.round(meta.priorityScore / 10);
 
   return lexical + classBoost + syllabusBoost + evalBoost + writingBoost + priorityBoost;
-}
-
-/**
- * Main function: searches KB and returns top matching context for the AI.
- * Call this before every AI response in chat/route.ts
- */
-export async function searchKnowledge(
-  query: string,
-  classLevel?: string
-): Promise<KBMatch> {
-  try {
-    const { data, error } = await supabase
-      .from("knowledge_base")
-      .select("id, title, subject, class_level, content, tags, file_name, created_at")
-      .eq("active", true)
-      .order("created_at", { ascending: false })
-      .limit(300);
-
-    if (error || !data || data.length === 0) {
-      return { matched: false, context: "", sources: [], score: 0 };
-    }
-
-    const queryTokens = tokenize(query);
-    if (!queryTokens.length) {
-      return { matched: false, context: "", sources: [], score: 0 };
-    }
-
-    const scoredEntries = data
-      .map((entry: KBEntry) => {
-        const meta = inferKBMetadata(entry);
-        const relevanceScore = scoreEntry(queryTokens, entry, classLevel);
-        return { entry, meta, relevanceScore };
-      })
-      .filter(({ relevanceScore }) => relevanceScore >= 4)
-      .sort((a, b) => b.relevanceScore - a.relevanceScore)
-      .slice(0, 10);
-
-    if (!scoredEntries.length) {
-      return { matched: false, context: "", sources: [], score: 0 };
-    }
-
-    const chunkCandidates: Array<{
-      entry: KBEntry;
-      meta: KBInferredMeta;
-      chunk: string;
-      score: number;
-      idx: number;
-    }> = [];
-
-    for (const s of scoredEntries) {
-      const chunks = chunkText(s.entry.content);
-      chunks.forEach((chunk, idx) => {
-        const chunkLex = scoreChunk(queryTokens, chunk);
-        const score =
-          chunkLex +
-          Math.round(s.meta.syllabusRelevance / 10) +
-          Math.round(s.meta.priorityScore / 12) +
-          (s.meta.documentType === "Syllabus" ? 10 : 0) +
-          (s.meta.documentType === "NCERT" ? 6 : 0) +
-          (s.meta.documentType === "Teacher Notes" ? 4 : 0) +
-          (s.meta.documentType === "Marking Scheme" ? 5 : 0) +
-          (s.meta.documentType === "Topper Answer" ? 2 : 0);
-
-        if (score >= 5) {
-          chunkCandidates.push({ entry: s.entry, meta: s.meta, chunk, score, idx });
-        }
-      });
-    }
-
-    const rankedChunks = chunkCandidates
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 8);
-
-    if (!rankedChunks.length) {
-      return { matched: false, context: "", sources: [], score: 0 };
-    }
-
-    const contextParts = rankedChunks.map((c) => {
-      return [
-        `[KB: ${c.entry.title}]`,
-        `Type: ${c.meta.documentType} | Subject: ${c.meta.subject} | Class: ${c.meta.classLevel} | Priority: ${c.meta.priorityLabel}`,
-        `Syllabus relevance: ${c.meta.syllabusRelevance}/100 | Retrieval score: ${c.score}`,
-        c.chunk.slice(0, 1500),
-      ].join("\n");
-    });
-
-    const dedupSources = Array.from(new Set(rankedChunks.map((c) => c.entry.title)));
-
-    return {
-      matched: true,
-      context: contextParts.join("\n\n---\n\n"),
-      sources: dedupSources,
-      score: rankedChunks[0].score,
-      retrieval: {
-        query,
-        classLevel,
-        topMatches: scoredEntries.slice(0, 6).map((s) => ({
-          title: s.entry.title,
-          subject: s.meta.subject,
-          classLevel: s.meta.classLevel,
-          documentType: s.meta.documentType,
-          syllabusRelevance: s.meta.syllabusRelevance,
-          relevanceScore: s.relevanceScore,
-        })),
-      },
-    };
-  } catch (e) {
-    console.error("[KB search error]", e);
-    return { matched: false, context: "", sources: [], score: 0 };
-  }
-}
-
-/**
- * Add a new KB entry (used by admin upload API)
- */
-export async function addKBEntry(entry: Omit<KBEntry, "id" | "created_at">): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("knowledge_base")
-    .insert({ ...entry, active: true })
-    .select("id")
-    .single();
-  if (error) { console.error("[KB add error]", error); return null; }
-  return data?.id || null;
-}
-
-/**
- * List all KB entries (admin panel)
- */
-export async function listKBEntries(): Promise<KBEntry[]> {
-  const { data, error } = await supabase
-    .from("knowledge_base")
-    .select("id, title, subject, class_level, tags, file_name, created_at, content")
-    .order("created_at", { ascending: false });
-  if (error) { console.error("[KB list error]", error); return []; }
-  return data || [];
-}
-
-/**
- * Delete a KB entry (admin panel)
- */
-export async function deleteKBEntry(id: string): Promise<boolean> {
-  const { error } = await supabase
-    .from("knowledge_base")
-    .update({ active: false })
-    .eq("id", id);
-  return !error;
 }
