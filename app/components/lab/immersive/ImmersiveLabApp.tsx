@@ -29,6 +29,14 @@ const panelStyle: React.CSSProperties = {
 };
 
 export default function ImmersiveLabApp() {
+  // ── Pull student name from your auth session ──────────────────────────────
+  // Next-Auth:   const { data: session } = useSession();
+  //              const studentName = session?.user?.name ?? undefined;
+  // Supabase:    const { data: { user } } = useSupabaseClient().auth.getUser()
+  //              const studentName = user?.user_metadata?.full_name ?? undefined;
+  //
+  // Replace the line below once you wire up auth:
+  const studentName: string | undefined = undefined; // ← swap with real session value
   const [mode, setMode] = useState<LabModeType>("guided");
   const [classLevel, setClassLevel] = useState<ClassLevel | "all">(10);
   const [difficulty, setDifficulty] = useState<PracticalDifficulty | "all">("all");
@@ -189,6 +197,7 @@ export default function ImmersiveLabApp() {
               setRuntime={setRuntime}
               eventFeed={eventFeed}
               lastOutcome={lastOutcome}
+              studentName={studentName}
             />
           )}
 

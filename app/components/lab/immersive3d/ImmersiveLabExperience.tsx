@@ -19,8 +19,7 @@ import {
   useSpringJoint,
   type RapierRigidBody,
 } from "@react-three/rapier";
-import { EffectComposer, Bloom, Vignette, Noise, DepthOfField, ChromaticAberration } from "@react-three/postprocessing";
-import { BlendFunction } from "postprocessing";
+import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
 import * as THREE from "three";
 import type { Experiment, Subject } from "@/lib/lab/types";
 import type {
@@ -42,6 +41,63 @@ import {
   type ApparatusId,
   type ApparatusRecords,
 } from "@/lib/lab/immersive/apparatusLifecycle";
+
+// ─────────────────────────────────────────────────────────────
+// Graphics quality tiers
+// ─────────────────────────────────────────────────────────────
+
+export type GraphicsQuality = "low" | "medium" | "high";
+
+const QUALITY_CONFIG = {
+  low: {
+    label: "Low",
+    icon: "⚡",
+    shadows: false,
+    shadowMapSize: 512,
+    dpr: 1.0,
+    antialias: false,
+    precision: "lowp" as const,
+    multisampling: 0,
+    bloom: false,
+    vignette: false,
+    contactShadows: false,
+    fogFar: 40,
+    liquidParticles: 8,
+    stationGeomDetail: 10,
+  },
+  medium: {
+    label: "Medium",
+    icon: "🔋",
+    shadows: true,
+    shadowMapSize: 1024,
+    dpr: 1.5,
+    antialias: false,
+    precision: "mediump" as const,
+    multisampling: 0,
+    bloom: true,
+    vignette: false,
+    contactShadows: false,
+    fogFar: 52,
+    liquidParticles: 16,
+    stationGeomDetail: 18,
+  },
+  high: {
+    label: "High",
+    icon: "🌟",
+    shadows: true,
+    shadowMapSize: 2048,
+    dpr: 2.0,
+    antialias: false,
+    precision: "mediump" as const,
+    multisampling: 0,
+    bloom: true,
+    vignette: true,
+    contactShadows: true,
+    fogFar: 60,
+    liquidParticles: 24,
+    stationGeomDetail: 28,
+  },
+} satisfies Record<GraphicsQuality, object>;
 
 const KEYMAP = [
   { name: "forward", keys: ["KeyW", "ArrowUp"] },
@@ -264,7 +320,7 @@ function JointConstraintRigs({
   );
 }
 
-function PhysicsLayer({ highlightedId, grabbedId, onRegister, sourceFill, targetFill, reactionLevel, temperatureC, streamActive, streamPoints, jointControls }: {
+function PhysicsLayer({ highlightedId, grabbedId, onRegister, sourceFill, targetFill, reactionLevel, temperatureC, streamActive, streamPoints, jointControls, liquidParticles }: {
   highlightedId: string | null;
   grabbedId: string | null;
   onRegister: (id: string, rb: RapierRigidBody | null) => void;
@@ -274,6 +330,7 @@ function PhysicsLayer({ highlightedId, grabbedId, onRegister, sourceFill, target
   temperatureC: number;
   streamActive: boolean;
   streamPoints: { source: THREE.Vector3; target: THREE.Vector3 };
+  liquidParticles: number;
   jointControls: {
     microscopeFocus: number;
     microscopeFocusTarget: number;
@@ -290,7 +347,7 @@ function PhysicsLayer({ highlightedId, grabbedId, onRegister, sourceFill, target
       <RigidBody type="fixed" colliders="cuboid"><mesh position={[0, -0.5, 0]} visible={false}><boxGeometry args={[60, 1, 60]} /><meshBasicMaterial /></mesh></RigidBody>
       <GrabbableObjects highlightedId={highlightedId} grabbedId={grabbedId} onRegister={onRegister} />
       <JointConstraintRigs controls={jointControls} />
-      {Array.from({ length: 24 }).map((_, i) => (
+      {Array.from({ length: liquidParticles }).map((_, i) => (
         <RigidBody key={`liquid-${i}`} colliders="ball" restitution={0.62} friction={0.18} position={[4 + (i % 4) * 0.22, 2 + Math.floor(i / 4) * 0.18, -4 + (i % 3) * 0.15]}>
           <mesh castShadow><sphereGeometry args={[0.07, 16, 16]} /><meshStandardMaterial emissive="#66d9ff" emissiveIntensity={0.4 + reactionLevel * 0.5} color="#30a0dc" /></mesh>
         </RigidBody>
@@ -588,7 +645,7 @@ function useLabAudio(playerPos: THREE.Vector3, reactionLevel: number) {
   }, [playerPos, reactionLevel]);
 }
 
-export default function ImmersiveLabExperience({ subject, mode, experiment, onRunResult, runtime, setRuntime, eventFeed, lastOutcome }: {
+export default function ImmersiveLabExperience({ subject, mode, experiment, onRunResult, runtime, setRuntime, eventFeed, lastOutcome, studentName }: {
   subject: Subject;
   mode: LabModeType;
   experiment: Experiment;
@@ -597,6 +654,7 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
   setRuntime: React.Dispatch<React.SetStateAction<ExperimentRuntime>>;
   eventFeed: InteractionEvent[];
   lastOutcome: ExperimentOutcome | null;
+  studentName?: string;
 }) {
   const [nearStation, setNearStation] = useState(false);
   const [highlightedStationId, setHighlightedStationId] = useState<string | null>(null);
@@ -609,6 +667,10 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
   const [sourceFill, setSourceFill] = useState(0.62);
   const [targetFill, setTargetFill] = useState(0.22);
   const [spill, setSpill] = useState(0);
+
+  // ── Graphics quality ──────────────────────────────────────────────────────
+  const [quality, setQuality] = useState<GraphicsQuality>("medium");
+  const qc = QUALITY_CONFIG[quality];
   const [apparatusState, setApparatusState] = useState<Record<string, ApparatusState>>({
     microscope: "idle",
     burette: "mounted",
@@ -861,16 +923,73 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
     }
   }, [records]);
 
+  // ── FOV auto-zoom: lerp FOV toward 52 when near station, 70 when roaming ──
+  const fovRef = useRef(70);
+  function FovController({ near, grabbed }: { near: boolean; grabbed: string | null }) {
+    const { camera } = useThree();
+    useFrame((_, delta) => {
+      const targetFov = near ? (grabbed ? 46 : 52) : 70;
+      fovRef.current = THREE.MathUtils.lerp(fovRef.current, targetFov, delta * 3.5);
+      (camera as THREE.PerspectiveCamera).fov = fovRef.current;
+      (camera as THREE.PerspectiveCamera).updateProjectionMatrix();
+    });
+    return null;
+  }
+
   return (
     <div style={{ position: "relative", height: 560, borderRadius: 16, overflow: "hidden", border: "1px solid rgba(118,172,212,0.3)", background: "#040812" }}>
       <KeyboardControls map={KEYMAP as unknown as { name: string; keys: string[] }[]}>
-        <Canvas shadows camera={{ position: [0, 1.7, 7], fov: 70 }} gl={{ antialias: true, powerPreference: "high-performance" }} onCreated={({ gl }) => { gl.toneMapping = THREE.ACESFilmicToneMapping; gl.toneMappingExposure = 1.08; }}>
+        <Canvas
+          shadows={qc.shadows}
+          camera={{ position: [0, 1.7, 7], fov: 70 }}
+          gl={{
+            antialias: qc.antialias,
+            powerPreference: "high-performance",
+            precision: qc.precision,
+          }}
+          dpr={Math.min(typeof window !== "undefined" ? window.devicePixelRatio : 1, qc.dpr)}
+          onCreated={({ gl }) => {
+            gl.toneMapping = THREE.ACESFilmicToneMapping;
+            gl.toneMappingExposure = 1.08;
+          }}
+        >
           <color attach="background" args={["#030712"]} />
-          <fog attach="fog" args={["#07101d", 15 - reactionLevel * 4, 60 - reactionLevel * 8]} />
-          <ambientLight intensity={0.32} />
-          <directionalLight position={[8, 11, 3]} intensity={1.15} castShadow shadow-mapSize-width={2048} shadow-mapSize-height={2048} />
+          <fog attach="fog" args={["#07101d", 15 - reactionLevel * 4, qc.fogFar - reactionLevel * 8]} />
+          <ambientLight intensity={0.65} />
+
+          {/* Main overhead directional — soft top-down like a lab skylight */}
+          <directionalLight
+            position={[0, 14, 0]}
+            intensity={1.4}
+            castShadow={qc.shadows}
+            shadow-mapSize-width={qc.shadowMapSize}
+            shadow-mapSize-height={qc.shadowMapSize}
+            shadow-camera-near={0.5}
+            shadow-camera-far={60}
+            shadow-camera-left={-20}
+            shadow-camera-right={20}
+            shadow-camera-top={20}
+            shadow-camera-bottom={-20}
+          />
+
+          {/* Ceiling fluorescent panel lights — 4 panels matching room geometry */}
+          <pointLight position={[-9,  12, -9]}  intensity={3.2} distance={22} decay={2} color="#d6eeff" />
+          <pointLight position={[ 9,  12, -9]}  intensity={3.2} distance={22} decay={2} color="#d6eeff" />
+          <pointLight position={[-9,  12,  9]}  intensity={3.2} distance={22} decay={2} color="#d6eeff" />
+          <pointLight position={[ 9,  12,  9]}  intensity={3.2} distance={22} decay={2} color="#d6eeff" />
+
+          {/* Workbench spotlights — aimed down at the active station benches */}
+          <spotLight position={[-7, 7, -3.5]} angle={0.45} penumbra={0.4} intensity={4.5} distance={14} decay={2} color="#e8f4ff" castShadow={false} target-position={[-7, 0, -3.5]} />
+          <spotLight position={[ 0, 7, -4.5]} angle={0.45} penumbra={0.4} intensity={4.5} distance={14} decay={2} color="#e8f4ff" castShadow={false} target-position={[ 0, 0, -4.5]} />
+          <spotLight position={[ 6.5, 7, -3.5]} angle={0.45} penumbra={0.4} intensity={4.5} distance={14} decay={2} color="#e8f4ff" castShadow={false} target-position={[6.5, 0, -3.5]} />
+
+          {/* Subject-tint accent — chemistry blue, physics purple, biology teal */}
           <pointLight position={[-8, 3.6, -10]} intensity={1.8 + reactionLevel * 0.9} color={subject === "chemistry" ? "#3ca8ff" : subject === "physics" ? "#8c5dff" : "#23d1af"} />
+
+          {/* Reaction glow — intensifies during active experiment */}
           <pointLight position={[-7.2, 2.8, -3.2]} intensity={0.4 + reactionLevel * 2.6} color="#ff9f54" />
+
+          <FovController near={nearStation} grabbed={grabbedId} />
 
           <Suspense fallback={null}>
             <LabRoom subject={subject} pulse={pulse} />
@@ -884,6 +1003,7 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
               temperatureC={runtime.temperatureC}
               streamActive={transferActive}
               streamPoints={{ source: sourcePoint, target: targetPoint }}
+              liquidParticles={qc.liquidParticles}
               jointControls={{
                 microscopeFocus: mechanics.microscopeFocus,
                 microscopeFocusTarget: mechanics.microscopeFocusTarget,
@@ -914,26 +1034,35 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
             <Environment preset="city" />
           </Suspense>
 
-          <EffectComposer multisampling={4}>
-            <Bloom intensity={0.45 + reactionLevel * 0.5} luminanceThreshold={0.3} luminanceSmoothing={0.22} />
-            <DepthOfField focusDistance={0.018} focalLength={0.018} bokehScale={1.4} height={360} />
-            <Noise opacity={0.03} blendFunction={BlendFunction.SOFT_LIGHT} />
-            <ChromaticAberration offset={new THREE.Vector2(0.00025 + reactionLevel * 0.0005, 0.00025 + reactionLevel * 0.0005)} />
-            <Vignette eskil={false} offset={0.18} darkness={0.45} />
+          <EffectComposer multisampling={qc.multisampling}>
+            <Bloom
+              intensity={qc.bloom ? 0.45 + reactionLevel * 0.5 : 0}
+              luminanceThreshold={0.3}
+              luminanceSmoothing={0.22}
+            />
+            <Vignette
+              eskil={false}
+              offset={qc.vignette ? 0.18 : 0}
+              darkness={qc.vignette ? 0.45 : 0}
+            />
           </EffectComposer>
 
-          <ContactShadows position={[0, -0.01, 0]} scale={42} opacity={0.42} blur={2.7} far={16} />
+          {qc.contactShadows ? (
+            <ContactShadows position={[0, -0.01, 0]} scale={42} opacity={0.42} blur={2.7} far={16} />
+          ) : null}
         </Canvas>
       </KeyboardControls>
 
       <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
         <div style={{ position: "absolute", left: "50%", top: "50%", width: 14, height: 14, transform: `translate(-50%, -50%) translateY(${Math.sin(pulse * 2.6) * 0.6}px)`, border: `1px solid ${nearStation ? "#8ff8cc" : grabbedId ? "#ffd59f" : "#87b7df"}`, borderRadius: "50%", boxShadow: nearStation ? "0 0 18px rgba(143,248,204,0.6)" : grabbedId ? "0 0 18px rgba(255,213,159,0.6)" : "0 0 14px rgba(135,183,223,0.4)" }} />
 
-        <div style={{ position: "absolute", left: 12, top: 10, background: "rgba(5,13,24,0.78)", border: "1px solid rgba(120,170,214,0.35)", padding: "9px 10px", borderRadius: 10, color: "#daf0ff", maxWidth: 360 }}>
-          <div style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", opacity: 0.82 }}>AI Scientist</div>
+        <div style={{ position: "absolute", left: 12, top: 10, background: "rgba(5,13,24,0.78)", border: "1px solid rgba(120,170,214,0.35)", padding: "9px 10px", borderRadius: 10, color: "#daf0ff", maxWidth: 360, fontFamily: "'Orbitron', 'Segoe UI', system-ui, sans-serif" }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", opacity: 0.82 }}>
+            {studentName ? studentName : "Lab Guide"}
+          </div>
           <div style={{ marginTop: 4, fontSize: 12, lineHeight: 1.4 }}>{guideText}</div>
           {mechanicalAlerts.length > 0 && (
-            <div style={{ marginTop: 6, fontSize: 11, color: "#ffc9a8" }}>
+            <div style={{ marginTop: 6, fontSize: 11, color: "#87d4ff", borderTop: "1px solid rgba(120,170,214,0.25)", paddingTop: 5 }}>
               Alert: {mechanicalAlerts[0]}
             </div>
           )}
@@ -1004,8 +1133,42 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
           <button onClick={() => { setRuntime(getDefaultRuntime()); setSourceFill(0.62); setTargetFill(0.22); setSpill(0); }} style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid rgba(120,170,214,0.4)", background: "rgba(17,36,58,0.8)", color: "#d8efff", fontWeight: 600, cursor: "pointer" }}>Reset Rig</button>
         </div>
 
+        {/* ── Graphics quality switcher ─────────────────────────────────── */}
+        <div style={{ position: "absolute", left: 12, bottom: 12, display: "flex", gap: 5, pointerEvents: "auto", alignItems: "center" }}>
+          <span style={{ fontSize: 10, color: "rgba(180,210,240,0.6)", letterSpacing: "0.08em", textTransform: "uppercase", marginRight: 2 }}>Graphics</span>
+          {(["low", "medium", "high"] as GraphicsQuality[]).map((q) => {
+            const cfg = QUALITY_CONFIG[q];
+            const active = quality === q;
+            return (
+              <button
+                key={q}
+                onClick={() => setQuality(q)}
+                title={`${cfg.label} quality — ${q === "low" ? "best for slow devices" : q === "medium" ? "balanced" : "full visual fidelity"}`}
+                style={{
+                  padding: "5px 9px",
+                  borderRadius: 8,
+                  border: `1px solid ${active ? "rgba(120,200,255,0.7)" : "rgba(120,170,214,0.3)"}`,
+                  background: active ? "rgba(41,120,220,0.45)" : "rgba(5,13,24,0.72)",
+                  color: active ? "#e8f6ff" : "rgba(180,210,240,0.55)",
+                  fontSize: 11,
+                  fontWeight: active ? 700 : 400,
+                  cursor: "pointer",
+                  transition: "all 0.18s",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+              >
+                <span>{cfg.icon}</span>
+                <span>{cfg.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
         <div style={{ position: "absolute", right: 12, bottom: 12, background: "rgba(5,13,24,0.76)", border: "1px solid rgba(120,170,214,0.35)", padding: "8px 10px", borderRadius: 10, color: "#daf0ff", fontSize: 11 }}>
           WASD move | mouse look | Shift sprint | E grab/release | tilt down to pour
+          {nearStation && <span style={{ color: "#8ff8cc", marginLeft: 8 }}>● Near station — view zoomed in</span>}
         </div>
       </div>
     </div>
