@@ -1,13 +1,8 @@
 ﻿"use client";
 import AdminGate from "../components/AdminGate";
 import { useState, useEffect, useRef } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { supabaseClient as supabase } from "@/app/lib/supabase-client";
 import { inferKBMetadata, type KBDocumentType } from "@/app/lib/knowledgeBase";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 const SUBJECTS = ["General","Mathematics","Science","Physics","Chemistry","Biology","English","Hindi","SST","History","Geography","Civics","Economics"];
 const CLASSES  = ["All","6","7","8","9","10","11","12"];
