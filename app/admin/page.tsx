@@ -65,6 +65,7 @@ export default function AdminPage() {
   useEffect(()=>{ if(tab==="knowledge") fetchKB(); },[tab]);
 
   async function fetchAll() {
+    if (!supabase) return;
     setLoading(true);
     const {data} = await supabase
       .from("exam_attempts")

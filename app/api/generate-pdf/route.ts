@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PDFDocument, StandardFonts, type PDFPage, type PDFFont } from "pdf-lib";
 
-const PAGE_WIDTH = 595; // A4
+const PAGE_WIDTH = 595;
 const PAGE_HEIGHT = 842;
 const MARGIN_X = 48;
 const MARGIN_TOP = 54;
@@ -20,24 +20,22 @@ const LEAK_MARKERS = [
 ];
 
 const COMMON_MOJIBAKE: Array<[RegExp, string]> = [
-  [/‚Äî/g, "ó"],
-  [/‚Äì/g, "ñ"],
-  [/‚Äò/g, "ë"],
-  [/‚Äô/g, "í"],
-  [/‚Äú/g, "ì"],
-  [/‚Ä/g, "î"],
-  [/‚Ä¶/g, "Ö"],
-  [/¬∑/g, "∑"],
-  [/¬/g, ""],
-  [/√ó/g, "◊"],
-  [/Œ±/g, "a"],
-  [/Œ≤/g, "ﬂ"],
-  [/Œ≥/g, "?"],
-  [/‚àö/g, "v"],
-  [/‚â /g, "?"],
-  [/‚Üí/g, "?"],
-  [/‚Üê/g, "?"],
-  [/‚úÖ/g, "?"],
+  [/\u2013/g, "-"],
+  [/\u2014/g, "-"],
+  [/\u2018/g, "'"],
+  [/\u2019/g, "'"],
+  [/\u201C/g, '"'],
+  [/\u201D/g, '"'],
+  [/\u2026/g, "..."],
+  [/\u00A0/g, " "],
+  [/\u2022/g, "*"],
+  [/\u2212/g, "-"],
+  [/\u00E9/g, "e"],
+  [/\u00E0/g, "a"],
+  [/\u00FC/g, "u"],
+  [/\u2122/g, "TM"],
+  [/\u00AE/g, "(R)"],
+  [/\u00B0/g, " degrees"],
 ];
 
 type RenderLine = {
@@ -71,9 +69,9 @@ function sanitizePaper(raw: string): string {
 
   text = text
     .replace(/<w:[^>]+>/g, "")
-    .replace(/<\\\/w:[^>]+>/g, "")
+    .replace(/<\/w:[^>]+>/g, "")
     .replace(/^\s*--\s*\d+\s+of\s+\d+\s*--\s*$/gim, "")
-    .replace(/^\s*S\s*H\s*A\s*U\s*R\s*I[\sA-Z∑\-]*$/gim, "")
+    .replace(/^\s*S\s*H\s*A\s*U\s*R\s*I[\sA-Z-]*$/gim, "")
     .replace(/\t/g, " ")
     .replace(/[ \u00A0]+/g, " ")
     .replace(/\n{3,}/g, "\n\n")
@@ -84,7 +82,7 @@ function sanitizePaper(raw: string): string {
 
 function normalizeForPdf(text: string): string {
   return text
-    .replace(/[^\x20-\x7E\naﬂ?v◊∑??ñóíìîÖ]/g, " ")
+    .replace(/[^\x20-\x7E\n]/g, " ")
     .replace(/[ ]{2,}/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
@@ -114,57 +112,34 @@ function classifyLine(rawLine: string): RenderLine {
 
   if (!line) return { text: "", size: 11, bold: false, gapBefore: 0, gapAfter: 8 };
 
-  if (/^SHAURI\b|^DAILY\s+TEST\b|^CBSE\b/i.test(line)) {
+  if (/^SHAURI\b|^DAILY\s+TEST\b|^CBSE\b/i.test(line))
     return { text: line, size: 15, bold: true, gapBefore: 2, gapAfter: 6 };
-  }
 
-  if (/^SECTION\s+[A-E]\b/i.test(line)) {
+  if (/^SECTION\s+[A-E]\b/i.test(line))
     return { text: line, size: 12, bold: true, gapBefore: 10, gapAfter: 5 };
-  }
 
-  if (/^(GENERAL INSTRUCTIONS|Marks Summary|Vocabulary Test|Writing Task)\b/i.test(line)) {
+  if (/^(GENERAL INSTRUCTIONS|Marks Summary|Vocabulary Test|Writing Task)\b/i.test(line))
     return { text: line, size: 11, bold: true, gapBefore: 8, gapAfter: 4 };
-  }
 
-  if (/^Q\d+[\.).]/i.test(line) || /^\(\d+\)/.test(line)) {
+  if (/^Q\d+[\.).]/i.test(line) || /^\(\d+\)/.test(line))
     return { text: line, size: 11, bold: true, gapBefore: 6, gapAfter: 2 };
-  }
 
-  if (/^\(?[A-D]\)/.test(line) || /^[A-D]\)/.test(line)) {
+  if (/^\(?[A-D]\)/.test(line) || /^[A-D]\)/.test(line))
     return { text: `   ${line}`, size: 10.8, bold: false, gapBefore: 1, gapAfter: 1 };
-  }
 
-  if (/^Day\s*\d+|^Time Allowed:|^Maximum Marks:|^Subject:|^Class:/i.test(line)) {
+  if (/^Day\s*\d+|^Time Allowed:|^Maximum Marks:|^Subject:|^Class:/i.test(line))
     return { text: line, size: 10.5, bold: false, gapBefore: 1, gapAfter: 2 };
-  }
 
   return { text: line, size: 11, bold: false, gapBefore: 1, gapAfter: 2 };
 }
 
 function drawHeader(page: PDFPage, boldFont: PDFFont, regularFont: PDFFont): number {
   let y = PAGE_HEIGHT - MARGIN_TOP;
-
-  page.drawText("SHAURI ó CBSE ALIGNED QUESTION PAPER", {
-    x: MARGIN_X,
-    y,
-    size: 13,
-    font: boldFont,
-  });
+  page.drawText("SHAURI - CBSE ALIGNED QUESTION PAPER", { x: MARGIN_X, y, size: 13, font: boldFont });
   y -= 15;
-  page.drawText("Board-style daily/revision assessment", {
-    x: MARGIN_X,
-    y,
-    size: 9.8,
-    font: regularFont,
-  });
+  page.drawText("Board-style daily/revision assessment", { x: MARGIN_X, y, size: 9.8, font: regularFont });
   y -= 10;
-
-  page.drawLine({
-    start: { x: MARGIN_X, y },
-    end: { x: PAGE_WIDTH - MARGIN_X, y },
-    thickness: 0.8,
-  });
-
+  page.drawLine({ start: { x: MARGIN_X, y }, end: { x: PAGE_WIDTH - MARGIN_X, y }, thickness: 0.8 });
   return y - 16;
 }
 
@@ -190,56 +165,30 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       y = drawHeader(page, bold, regular);
     };
 
-    const ensure = (needed: number) => {
-      if (y - needed < MARGIN_BOTTOM) newPage();
-    };
+    const ensure = (needed: number) => { if (y - needed < MARGIN_BOTTOM) newPage(); };
 
-    const lines = cleaned.split("\n");
-    for (const rawLine of lines) {
+    for (const rawLine of cleaned.split("\n")) {
       const style = classifyLine(rawLine);
-
-      if (!style.text) {
-        y -= style.gapAfter;
-        continue;
-      }
+      if (!style.text) { y -= style.gapAfter; continue; }
 
       y -= style.gapBefore;
       const font = style.bold ? bold : regular;
-      const wrapped = wrapText(style.text, font, style.size, BODY_WIDTH);
-
-      for (const w of wrapped) {
+      for (const w of wrapText(style.text, font, style.size, BODY_WIDTH)) {
         ensure(style.size + 5);
-        page.drawText(w, {
-          x: MARGIN_X,
-          y,
-          size: style.size,
-          font,
-        });
+        page.drawText(w, { x: MARGIN_X, y, size: style.size, font });
         y -= style.size + 3.2;
       }
-
       y -= style.gapAfter;
     }
 
     const pageCount = pdfDoc.getPageCount();
     for (let i = 0; i < pageCount; i++) {
       const p = pdfDoc.getPage(i);
-      const footer = `Page ${i + 1} of ${pageCount}`;
-      p.drawLine({
-        start: { x: MARGIN_X, y: 30 },
-        end: { x: PAGE_WIDTH - MARGIN_X, y: 30 },
-        thickness: 0.5,
-      });
-      p.drawText(footer, {
-        x: PAGE_WIDTH / 2 - 24,
-        y: 18,
-        size: 9,
-        font: regular,
-      });
+      p.drawLine({ start: { x: MARGIN_X, y: 30 }, end: { x: PAGE_WIDTH - MARGIN_X, y: 30 }, thickness: 0.5 });
+      p.drawText(`Page ${i + 1} of ${pageCount}`, { x: PAGE_WIDTH / 2 - 24, y: 18, size: 9, font: regular });
     }
 
     const pdfBytes = await pdfDoc.save();
-
     return new NextResponse(Buffer.from(pdfBytes), {
       headers: {
         "Content-Type": "application/pdf",

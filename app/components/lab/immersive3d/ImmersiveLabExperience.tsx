@@ -125,56 +125,291 @@ type Grabbable = {
 };
 
 const GRABBABLES: Grabbable[] = [
-  { id: "beaker-a", label: "Beaker", kind: "beaker", position: [-7.2, 2.5, -3.4], color: "#a6e0ff", mass: 0.8, gripOffset: [0.18, -0.16, -0.45], linearFollow: 7.2, angularDamping: 4.2 },
-  { id: "flask-b", label: "Flask", kind: "flask", position: [-6.4, 2.8, -3.1], color: "#9ae6d0", mass: 0.95, gripOffset: [0.14, -0.2, -0.48], linearFollow: 6.6, angularDamping: 4.6 },
-  { id: "pipette-p", label: "Pipette", kind: "pipette", position: [-5.6, 2.86, -3.7], color: "#f5f3ff", mass: 0.45, gripOffset: [0.24, -0.08, -0.58], linearFollow: 8.7, angularDamping: 5.2 },
-  { id: "coil-core", label: "Coil Core", kind: "coil", position: [0.4, 2.6, -4.2], color: "#e8b3ff", mass: 1.4, gripOffset: [0.12, -0.24, -0.54], linearFollow: 5.9, angularDamping: 3.7 },
-  { id: "slide-tray", label: "Slide Tray", kind: "slide", position: [6.5, 2.45, -3.4], color: "#b3ffd0", mass: 0.65, gripOffset: [0.16, -0.1, -0.5], linearFollow: 7.8, angularDamping: 4.9 },
+  { id: "beaker-a", label: "Beaker", kind: "beaker", position: [-7.2, 1.85, -3.4], color: "#a6e0ff", mass: 0.8, gripOffset: [0.18, -0.16, -0.45], linearFollow: 7.2, angularDamping: 4.2 },
+  { id: "flask-b", label: "Flask", kind: "flask", position: [-6.4, 1.9, -3.1], color: "#9ae6d0", mass: 0.95, gripOffset: [0.14, -0.2, -0.48], linearFollow: 6.6, angularDamping: 4.6 },
+  { id: "pipette-p", label: "Pipette", kind: "pipette", position: [-5.6, 1.92, -3.7], color: "#f5f3ff", mass: 0.45, gripOffset: [0.24, -0.08, -0.58], linearFollow: 8.7, angularDamping: 5.2 },
+  { id: "coil-core", label: "Coil Core", kind: "coil", position: [0.4, 1.88, -4.2], color: "#e8b3ff", mass: 1.4, gripOffset: [0.12, -0.24, -0.54], linearFollow: 5.9, angularDamping: 3.7 },
+  { id: "slide-tray", label: "Slide Tray", kind: "slide", position: [6.5, 1.83, -3.4], color: "#b3ffd0", mass: 0.65, gripOffset: [0.16, -0.1, -0.5], linearFollow: 7.8, angularDamping: 4.9 },
 ];
 
+// ── Plain-English alert explanations ──────────────────────────────────────────
+function explainAlert(alert: string, studentName?: string): string {
+  const name = studentName ? studentName.split(" ")[0] : null;
+  const hey = name ? `${name}, ` : "";
+  const a = alert.toLowerCase();
+
+  if (a.includes("microscope") && a.includes("instability"))
+    return `${hey}the microscope is a bit wobbly right now — it happens when it's been used a lot. Head to the Maintenance Bay on the right side panel and click "Stabilize" for the microscope. Then come back and try again!`;
+  if (a.includes("valve") && a.includes("over-rotation"))
+    return `${hey}you've opened the burette valve quite far. Too much pressure can cause a leak. Try clicking the valve again to close it a little, or use "Recalibrate" in the Maintenance Bay.`;
+  if (a.includes("thermal") && a.includes("instability"))
+    return `${hey}the burner is getting very hot — we need to cool it down before it damages the equipment. Click the burner knob to turn the flame lower. Safety first!`;
+  if (a.includes("pressure integrity"))
+    return `${hey}the burette tube is leaking pressure. First clamp it (click the clamp on the burette), then use "Repair" in the Maintenance Bay on the right.`;
+  if (a.includes("electrical") || a.includes("circuit"))
+    return `${hey}the circuit connections don't match up. Make sure both socket A and socket B are connected at the same time — an unbalanced circuit can damage the equipment.`;
+  if (a.includes("contamination") || a.includes("spill"))
+    return `${hey}there's been a small spill! Don't worry — just use "Clean" in the Maintenance Bay on the right panel to clear it up before continuing.`;
+  if (a.includes("calibration"))
+    return `${hey}the microscope needs fine-tuning to work properly. Go to the Maintenance Bay on the right and click "Recalibrate" for the microscope.`;
+  if (a.includes("replace"))
+    return `${hey}one of the instruments is too worn to use safely. Go to the Maintenance Bay and choose "Replace" to swap it out with a fresh one.`;
+  if (a.includes("workflow completed"))
+    return `${hey}maintenance done! The instrument is back to good condition. You can continue your experiment now. 🎉`;
+  return `${hey}${alert}`;
+}
+
+// ── Distance-aware, personalised guide messages ────────────────────────────────
 function aiGuide(
   mode: LabModeType,
   subject: Subject,
   proximity: boolean,
+  distanceToStation: number,
   events: InteractionEvent[],
   grabbedLabel: string | null,
-  transferActive: boolean
+  transferActive: boolean,
+  studentName?: string
 ): string {
-  const last = events[0]?.message;
-  if (!proximity) return `Approach the ${subject} station to unlock contextual guidance and active tools.`;
-  if (transferActive) return "Liquid transfer in progress. Maintain tilt and hold steady to avoid spill loss.";
-  if (grabbedLabel) return `Stabilize ${grabbedLabel} using grip alignment before placement or activation.`;
-  if (last?.toLowerCase().includes("unsafe")) return "Safety warning detected. Stabilize thermal/electrical state before continuing.";
-  if (last?.toLowerCase().includes("missing")) return "Critical materials missing. Stage required apparatus and reagents first.";
-  if (mode === "exam") return "Exam mode active. Execute controlled actions with minimal retries.";
-  if (mode === "research") return "Research mode active. Vary one variable per run and track visual phase changes.";
-  return "Proceed with controlled setup. Use reticle + E to interact with physical instruments.";
+  const name = studentName ? studentName.split(" ")[0] : null;
+  const hey = name ? `Hey ${name}! ` : "";
+  const hi = name ? `${name}, ` : "";
+
+  if (transferActive)
+    return `${hi}nice work! Keep tilting steadily to pour the liquid into the target beaker. Don't rush — slow and steady gives the best results.`;
+  if (grabbedLabel)
+    return `${hi}you're holding the ${grabbedLabel}. Walk close to the station and look at it — then press E to place or interact with it.`;
+  if (!proximity) {
+    if (distanceToStation > 12)
+      return `${hey}walk toward the glowing ${subject} station — use W/A/S/D keys to move, and move your mouse to look around.`;
+    if (distanceToStation > 6)
+      return `${hi}you're getting closer! Keep walking toward the glowing ${subject} bay. You'll be able to interact when you're right in front of it.`;
+    return `${hi}almost there! Take a few more steps toward the ${subject} station — look for the glowing blue marker right in front of the bench.`;
+  }
+  // Near station
+  if (mode === "guided") {
+    const last = events[0]?.message;
+    if (last?.toLowerCase().includes("missing"))
+      return `${hi}looks like some materials are missing. Look at each item in the Materials Rig panel on the right and click "Load" to add them to the bench.`;
+    return `${hey}you're at the ${subject} bay! Look at any instrument and press E to interact with it. Start with loading your materials on the right panel →`;
+  }
+  if (mode === "exam")
+    return `${hi}exam mode — work carefully and press E on each instrument in order. Take your time before each step.`;
+  if (mode === "research")
+    return `${hi}research mode! Try changing one thing at a time and notice what happens. Record your observations in the Lab Record panel →`;
+  return `${hey}you're at the station! Press E while looking at any instrument to use it. Use the panel on the right to load materials.`;
 }
 
 function LabRoom({ subject, pulse }: { subject: Subject; pulse: number }) {
-  const tint = subject === "chemistry" ? "#1f4f78" : subject === "physics" ? "#3f2f7a" : "#1a675f";
+  const accent = subject === "chemistry" ? "#1f6fbf" : subject === "physics" ? "#6033bb" : "#0fa87e";
+  const wallTint = subject === "chemistry" ? "#0d2340" : subject === "physics" ? "#1a1035" : "#071e1a";
+  const stripeColor = subject === "chemistry" ? "#1e5fa0" : subject === "physics" ? "#5030a8" : "#0d8060";
+  const edgeGlow = subject === "chemistry" ? "#1a7aff" : subject === "physics" ? "#8855ff" : "#12d4a0";
+  const stationColor = subject === "chemistry" ? "#1e3852" : subject === "physics" ? "#261848" : "#0f2e26";
+
+  // Pre-allocate Color objects once — never re-create in render
+  const accentColor = useMemo(() => new THREE.Color(accent), [accent]);
+  const edgeGlowColor = useMemo(() => new THREE.Color(edgeGlow), [edgeGlow]);
+
   const blink = 0.55 + Math.sin(pulse * 3.4) * 0.25;
+  const flicker = 0.7 + Math.sin(pulse * 5.1) * 0.05;
+
+  // Floor grid lines
+  const gridLines = useMemo(() => {
+    const lines: React.ReactElement[] = [];
+    for (let i = -10; i <= 10; i += 2) {
+      lines.push(
+        <mesh key={`gx-${i}`} position={[i, 0.005, 0]}><boxGeometry args={[0.03, 0.01, 40]} /><meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.18} transparent opacity={0.35} /></mesh>
+      );
+      lines.push(
+        <mesh key={`gz-${i}`} position={[0, 0.005, i]}><boxGeometry args={[40, 0.01, 0.03]} /><meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.18} transparent opacity={0.35} /></mesh>
+      );
+    }
+    return lines;
+  }, [accent]);
+
+  // Poster / safety sign positions on back wall
+  const posters = [
+    { x: -16, y: 6.5, label: "⚗", sublabel: "SAFETY FIRST" },
+    { x: -8, y: 6.5, label: "🧪", sublabel: subject.toUpperCase() + " LAB" },
+    { x: 0, y: 6.5, label: "📐", sublabel: "MEASUREMENT" },
+    { x: 8, y: 6.5, label: "🔬", sublabel: "OBSERVE" },
+    { x: 16, y: 6.5, label: "📋", sublabel: "RECORD" },
+  ];
+
   return (
     <group>
+      {/* ── Floor ── */}
       <mesh position={[0, -0.02, 0]} receiveShadow>
         <boxGeometry args={[48, 0.04, 48]} />
-        <meshStandardMaterial color="#142233" roughness={0.25} metalness={0.45} />
+        <meshStandardMaterial color="#0e1a28" roughness={0.18} metalness={0.6} />
       </mesh>
-      <mesh position={[0, 7, -24]} receiveShadow><boxGeometry args={[48, 14, 0.2]} /><meshStandardMaterial color="#0e1623" roughness={0.55} /></mesh>
-      <mesh position={[0, 7, 24]} receiveShadow><boxGeometry args={[48, 14, 0.2]} /><meshStandardMaterial color="#0e1623" roughness={0.55} /></mesh>
-      <mesh position={[24, 7, 0]} receiveShadow><boxGeometry args={[0.2, 14, 48]} /><meshStandardMaterial color="#0b1320" roughness={0.52} /></mesh>
-      <mesh position={[-24, 7, 0]} receiveShadow><boxGeometry args={[0.2, 14, 48]} /><meshStandardMaterial color="#0b1320" roughness={0.52} /></mesh>
-      <mesh position={[0, 14, 0]}><boxGeometry args={[48, 0.2, 48]} /><meshStandardMaterial color="#070b12" /></mesh>
-      <mesh position={[0, 13.8, 0]}><boxGeometry args={[18, 0.1, 4]} /><meshStandardMaterial emissive={new THREE.Color(tint)} emissiveIntensity={0.45 + blink * 0.2} color="#0b1018" /></mesh>
-      {LAB_STATIONS.map((station, i) => (
-        <group key={station.id} position={[station.x * 2.5, 0, station.z * 1.5]}>
-          <mesh castShadow receiveShadow position={[0, 0.85, 0]}><boxGeometry args={[4.2, 1.7, 2.3]} /><meshStandardMaterial color="#2f3f54" metalness={0.45} roughness={0.36} /></mesh>
-          <mesh position={[0, 1.9, 0]}><boxGeometry args={[1.4, 0.05, 1.4]} /><meshStandardMaterial emissive={new THREE.Color(tint)} emissiveIntensity={0.2 + Math.abs(Math.sin(pulse * 2 + i)) * 0.35} color="#1a2435" /></mesh>
+      {/* Floor reflection strip down center aisle */}
+      <mesh position={[0, 0.003, 0]}><boxGeometry args={[1.2, 0.005, 40]} /><meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.12} transparent opacity={0.18} /></mesh>
+      {gridLines}
+
+      {/* ── Walls ── */}
+      {/* Back wall with coloured wainscot stripe */}
+      <mesh position={[0, 7, -24]} receiveShadow><boxGeometry args={[48, 14, 0.25]} /><meshStandardMaterial color={wallTint} roughness={0.45} /></mesh>
+      <mesh position={[0, 1.4, -23.88]}><boxGeometry args={[48, 2.8, 0.08]} /><meshStandardMaterial color={stripeColor} emissive={stripeColor} emissiveIntensity={0.22} roughness={0.4} /></mesh>
+      {/* Front wall */}
+      <mesh position={[0, 7, 24]}><boxGeometry args={[48, 14, 0.25]} /><meshStandardMaterial color={wallTint} roughness={0.45} /></mesh>
+      <mesh position={[0, 1.4, 23.88]}><boxGeometry args={[48, 2.8, 0.08]} /><meshStandardMaterial color={stripeColor} emissive={stripeColor} emissiveIntensity={0.15} roughness={0.4} /></mesh>
+      {/* Side walls */}
+      <mesh position={[24, 7, 0]}><boxGeometry args={[0.25, 14, 48]} /><meshStandardMaterial color={wallTint} roughness={0.45} /></mesh>
+      <mesh position={[-24, 7, 0]}><boxGeometry args={[0.25, 14, 48]} /><meshStandardMaterial color={wallTint} roughness={0.45} /></mesh>
+      {/* Accent stripe on side walls */}
+      <mesh position={[23.88, 1.4, 0]}><boxGeometry args={[0.08, 2.8, 48]} /><meshStandardMaterial color={stripeColor} emissive={stripeColor} emissiveIntensity={0.18} roughness={0.4} /></mesh>
+      <mesh position={[-23.88, 1.4, 0]}><boxGeometry args={[0.08, 2.8, 48]} /><meshStandardMaterial color={stripeColor} emissive={stripeColor} emissiveIntensity={0.18} roughness={0.4} /></mesh>
+
+      {/* ── Ceiling ── */}
+      <mesh position={[0, 14, 0]}><boxGeometry args={[48, 0.22, 48]} /><meshStandardMaterial color="#060c14" /></mesh>
+      {/* Ceiling light panels — 3 rows */}
+      {[-10, 0, 10].map((z, ri) =>
+        [-8, 8].map((x, ci) => (
+          <mesh key={`cpanel-${ri}-${ci}`} position={[x, 13.85, z]}>
+            <boxGeometry args={[3.8, 0.08, 1.2]} />
+            <meshStandardMaterial
+              color="#ffffff"
+              emissive="#d8efff"
+              emissiveIntensity={(0.6 + flicker * 0.3) * blink}
+            />
+          </mesh>
+        ))
+      )}
+      {/* Subject-tint accent ceiling strip */}
+      <mesh position={[0, 13.8, -8]}><boxGeometry args={[20, 0.07, 0.3]} /><meshStandardMaterial emissive={accentColor} emissiveIntensity={0.55 + blink * 0.25} color="#0b1018" /></mesh>
+
+      {/* ── Workbenches (stations) ── */}
+      {LAB_STATIONS.map((station, i) => {
+        const px = station.x * 2.5;
+        const pz = station.z * 1.5;
+        return (
+          <group key={station.id} position={[px, 0, pz]}>
+            {/* Bench body */}
+            <mesh castShadow receiveShadow position={[0, 0.85, 0]}>
+              <boxGeometry args={[4.2, 1.7, 2.3]} />
+              <meshStandardMaterial color={stationColor} metalness={0.55} roughness={0.3} />
+            </mesh>
+            {/* Bench top surface — reflective */}
+            <mesh position={[0, 1.71, 0]}>
+              <boxGeometry args={[4.2, 0.06, 2.3]} />
+              <meshStandardMaterial color="#223346" metalness={0.8} roughness={0.12} />
+            </mesh>
+            {/* Bench front edge glow strip */}
+            <mesh position={[0, 1.71, 1.18]}>
+              <boxGeometry args={[4.2, 0.04, 0.04]} />
+              <meshStandardMaterial emissive={edgeGlowColor} emissiveIntensity={0.4 + Math.abs(Math.sin(pulse * 2 + i)) * 0.45} color="#0a111e" />
+            </mesh>
+            {/* Under-bench LED strip */}
+            <mesh position={[0, 0.05, 1.0]}>
+              <boxGeometry args={[4.0, 0.04, 0.04]} />
+              <meshStandardMaterial emissive={edgeGlowColor} emissiveIntensity={0.22} color="#0a111e" transparent opacity={0.8} />
+            </mesh>
+            {/* Back splashboard */}
+            <mesh position={[0, 2.35, -1.1]}>
+              <boxGeometry args={[4.2, 1.3, 0.08]} />
+              <meshStandardMaterial color={stationColor} roughness={0.4} metalness={0.3} />
+            </mesh>
+            {/* Station label plate */}
+            <mesh position={[0, 2.95, -1.04]}>
+              <boxGeometry args={[1.4, 0.22, 0.03]} />
+              <meshStandardMaterial emissive={edgeGlowColor} emissiveIntensity={0.5} color="#0d1828" />
+            </mesh>
+            {/* Overhead task light boom */}
+            <mesh position={[0, 3.2, -0.6]}>
+              <boxGeometry args={[0.04, 2.8, 0.04]} />
+              <meshStandardMaterial color="#3a4d62" metalness={0.7} roughness={0.3} />
+            </mesh>
+            <mesh position={[0, 4.7, 0.1]}>
+              <cylinderGeometry args={[0.22, 0.22, 0.07, 20]} />
+              <meshStandardMaterial color="#ffffff" emissive="#e0f4ff" emissiveIntensity={0.7 + Math.sin(pulse * 2 + i * 1.3) * 0.1} />
+            </mesh>
+            {/* Reagent shelf above splashboard */}
+            <mesh position={[0, 3.45, -1.1]}>
+              <boxGeometry args={[4.2, 0.06, 0.32]} />
+              <meshStandardMaterial color="#1a2a3c" metalness={0.5} roughness={0.4} />
+            </mesh>
+          </group>
+        );
+      })}
+
+      {/* ── Poster panels on back wall ── */}
+      {posters.map((p, i) => (
+        <group key={`poster-${i}`} position={[p.x, p.y, -23.7]}>
+          <mesh>
+            <boxGeometry args={[2.8, 3.6, 0.05]} />
+            <meshStandardMaterial color={wallTint} roughness={0.5} />
+          </mesh>
+          {/* Coloured border */}
+          <mesh position={[0, 0, 0.03]}>
+            <boxGeometry args={[2.8, 0.06, 0.04]} />
+            <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.4} />
+          </mesh>
+          <mesh position={[0, 0, 0.03]} rotation={[0, 0, Math.PI / 2]}>
+            <boxGeometry args={[3.6, 0.06, 0.04]} />
+            <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.4} />
+          </mesh>
+          {/* Small glowing dot on each poster */}
+          <mesh position={[0, 1.4, 0.04]}>
+            <sphereGeometry args={[0.12, 12, 12]} />
+            <meshStandardMaterial emissive={accent} emissiveIntensity={1.2 + Math.sin(pulse * 2.4 + i) * 0.4} color={accent} />
+          </mesh>
         </group>
       ))}
-      {[[-11, 3.1, -18.6], [11, 3.1, -18.6], [-11, 3.1, 18.6], [11, 3.1, 18.6]].map((p, i) => (
-        <mesh key={`screen-${i}`} position={p as [number, number, number]}><boxGeometry args={[1.2, 0.7, 0.07]} /><meshStandardMaterial emissive="#6ed4ff" emissiveIntensity={0.5 + Math.sin(pulse * 2.6 + i) * 0.2} color="#0d2333" /></mesh>
+
+      {/* ── Monitor screens on side walls ── */}
+      {([[-20, 3.2, -10], [-20, 3.2, 0], [-20, 3.2, 10], [20, 3.2, -10], [20, 3.2, 0], [20, 3.2, 10]] as [number,number,number][]).map((pos, i) => (
+        <group key={`mon-${i}`} position={pos}>
+          <mesh rotation={[0, pos[0] < 0 ? Math.PI / 2 : -Math.PI / 2, 0]}>
+            <boxGeometry args={[1.6, 1.0, 0.08]} />
+            <meshStandardMaterial color="#0d1826" roughness={0.4} />
+          </mesh>
+          <mesh rotation={[0, pos[0] < 0 ? Math.PI / 2 : -Math.PI / 2, 0]} position={[0, 0, pos[0] < 0 ? 0.045 : -0.045]}>
+            <boxGeometry args={[1.45, 0.88, 0.01]} />
+            <meshStandardMaterial
+              emissive={subject === "chemistry" ? "#0a3a6e" : subject === "physics" ? "#200b52" : "#041f18"}
+              emissiveIntensity={0.7 + Math.sin(pulse * 1.8 + i) * 0.2}
+              color="#060c14"
+            />
+          </mesh>
+        </group>
       ))}
+
+      {/* ── Cabinet storage units along back wall ── */}
+      {([-18, -12, 12, 18] as number[]).map((x, i) => (
+        <group key={`cab-${i}`} position={[x, 0, -22.5]}>
+          <mesh castShadow position={[0, 2.0, 0]}>
+            <boxGeometry args={[3.5, 4.0, 0.9]} />
+            <meshStandardMaterial color={subject === "chemistry" ? "#112233" : subject === "physics" ? "#180f30" : "#071a14"} roughness={0.5} metalness={0.3} />
+          </mesh>
+          {/* Cabinet door lines */}
+          {[0.6, -0.6].map((dy, j) => (
+            <mesh key={`door-${j}`} position={[0, 2.0 + dy, 0.46]}>
+              <boxGeometry args={[3.3, 1.8, 0.04]} />
+              <meshStandardMaterial color={wallTint} roughness={0.35} metalness={0.5} />
+            </mesh>
+          ))}
+          {/* Handle */}
+          <mesh position={[0.6, 2.0, 0.51]}>
+            <cylinderGeometry args={[0.03, 0.03, 0.4, 10]} />
+            <meshStandardMaterial color="#8aa0b8" metalness={0.9} roughness={0.15} />
+          </mesh>
+        </group>
+      ))}
+
+      {/* ── Fume hood at back-left corner ── */}
+      <group position={[-20, 0, -20]}>
+        <mesh position={[0, 2.0, 0]}><boxGeometry args={[3.8, 4.0, 2.4]} /><meshStandardMaterial color={subject === "chemistry" ? "#0e2238" : "#160d2e"} roughness={0.4} metalness={0.3} /></mesh>
+        <mesh position={[0, 2.0, 1.21]}><boxGeometry args={[3.6, 3.0, 0.04]} /><meshPhysicalMaterial color="#a8d8ff" transmission={0.7} transparent opacity={0.28} roughness={0.05} /></mesh>
+        {/* Fume hood indicator light */}
+        <mesh position={[1.5, 3.8, 1.22]}><sphereGeometry args={[0.08, 10, 10]} /><meshStandardMaterial emissive="#00ff88" emissiveIntensity={1.5 + Math.sin(pulse * 4) * 0.3} color="#00ff88" /></mesh>
+      </group>
+
+      {/* ── Fire extinguisher near entrance ── */}
+      <group position={[22, 0, 6]}>
+        <mesh position={[0, 0.7, 0]}><cylinderGeometry args={[0.14, 0.14, 1.4, 16]} /><meshStandardMaterial color="#cc2200" roughness={0.35} metalness={0.5} /></mesh>
+        <mesh position={[0, 1.45, 0]}><cylinderGeometry args={[0.08, 0.08, 0.18, 12]} /><meshStandardMaterial color="#aaaaaa" metalness={0.9} roughness={0.2} /></mesh>
+      </group>
     </group>
   );
 }
@@ -366,7 +601,7 @@ function StationBeacons({ activeStationId, highlightedStationId }: { activeStati
         const isActive = station.id === activeStationId;
         const isHighlighted = station.id === highlightedStationId;
         return (
-          <group key={station.id} position={[station.x * 2.5, 2.75, station.z * 1.5]}>
+          <group key={station.id} position={[station.x * 2.5, 3.6, station.z * 1.5]}>
             <mesh userData={{ stationId: station.id }}><cylinderGeometry args={[0.55, 0.55, 0.35, 24]} /><meshStandardMaterial color={isActive ? "#44d3ff" : "#6c89aa"} emissive={isHighlighted ? "#9fe7ff" : isActive ? "#2f95d5" : "#1e3048"} emissiveIntensity={isHighlighted ? 1 : isActive ? 0.58 : 0.24} /></mesh>
             <Text fontSize={0.22} color="#dff4ff" anchorX="center" anchorY="middle" position={[0, 0.52, 0]}>{station.name}</Text>
           </group>
@@ -491,9 +726,22 @@ function PlayerController({ targetStationId, setNearStation, setHighlightedStati
   const side = useMemo(() => new THREE.Vector3(), []);
   const targetPos = useMemo(() => new THREE.Vector3(), []);
   const tmp = useMemo(() => new THREE.Vector3(), []);
+  const gripVec = useMemo(() => new THREE.Vector3(), []); // reuse instead of new every frame
+  const screenCenter = useMemo(() => new THREE.Vector2(0, 0), []); // reuse Vector2
   const t = useRef(0);
   const interactLatch = useRef(false);
-  const objects = useMemo(() => LAB_STATIONS.map((s) => ({ id: s.id, pos: new THREE.Vector3(s.x * 2.5, 1.2, s.z * 1.5) })), []);
+  const objects = useMemo(() => LAB_STATIONS.map((s) => ({ id: s.id, pos: new THREE.Vector3(s.x * 2.5, 3.0, s.z * 1.5) })), []);
+
+  // Cache interactable mesh list — rebuild only when scene graph changes, not every frame
+  const interactMeshes = useRef<THREE.Object3D[]>([]);
+  const meshCacheFrame = useRef(0);
+
+  // Throttle refs to avoid calling setPlayerState / setNearStation every single frame
+  const lastNear = useRef(false);
+  const lastHighlight = useRef<string | null>(null);
+  const lastForwardY = useRef(0);
+  const lastPosX = useRef(0);
+  const lastPosZ = useRef(0);
 
   useFrame((_, delta) => {
     const keys = getKeys();
@@ -515,24 +763,46 @@ function PlayerController({ targetStationId, setNearStation, setHighlightedStati
 
     t.current += delta * 7;
     const moving = Boolean(keys.forward || keys.backward || keys.left || keys.right);
-    camera.position.y = 1.68 + (moving ? Math.sin(t.current) * 0.02 : 0);
+    camera.position.y = 3.0 + (moving ? Math.sin(t.current) * 0.022 : 0);
 
-    setPlayerState({ pos: camera.position.clone(), forwardY });
+    // Only call setPlayerState when position/direction actually changed (> 0.05 units)
+    const dx = Math.abs(camera.position.x - lastPosX.current);
+    const dz = Math.abs(camera.position.z - lastPosZ.current);
+    const dfy = Math.abs(forwardY - lastForwardY.current);
+    if (dx > 0.05 || dz > 0.05 || dfy > 0.02) {
+      setPlayerState({ pos: camera.position.clone(), forwardY });
+      lastPosX.current = camera.position.x;
+      lastPosZ.current = camera.position.z;
+      lastForwardY.current = forwardY;
+    }
 
     const target = objects.find((o) => o.id === targetStationId);
-    setNearStation(Boolean(target && camera.position.distanceTo(target.pos) < 4.8));
+    const near = Boolean(target && camera.position.distanceTo(target.pos) < 4.8);
+    if (near !== lastNear.current) {
+      setNearStation(near);
+      lastNear.current = near;
+    }
 
-    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-    const meshes: THREE.Object3D[] = [];
-    scene.traverse((o) => {
-      if (o.userData?.stationId || o.userData?.grabbableId || o.userData?.apparatusPartId) meshes.push(o);
-    });
+    // Rebuild mesh cache every 120 frames (~2 sec) instead of every frame
+    meshCacheFrame.current++;
+    if (meshCacheFrame.current % 120 === 0) {
+      interactMeshes.current = [];
+      scene.traverse((o) => {
+        if (o.userData?.stationId || o.userData?.grabbableId || o.userData?.apparatusPartId)
+          interactMeshes.current.push(o);
+      });
+    }
 
-    const hit = raycaster.intersectObjects(meshes, false)[0]?.object;
+    raycaster.setFromCamera(screenCenter, camera); // reuse cached Vector2
+    const hit = raycaster.intersectObjects(interactMeshes.current, false)[0]?.object;
     const stationId = (hit?.userData?.stationId as string | undefined) ?? null;
     const grabbableId = (hit?.userData?.grabbableId as string | undefined) ?? null;
     const apparatusPartId = (hit?.userData?.apparatusPartId as string | undefined) ?? null;
-    setHighlightedStationId(stationId ?? grabbableId ?? apparatusPartId ?? null);
+    const newHighlight = stationId ?? grabbableId ?? apparatusPartId ?? null;
+    if (newHighlight !== lastHighlight.current) {
+      setHighlightedStationId(newHighlight);
+      lastHighlight.current = newHighlight;
+    }
 
     if (keys.interact && !interactLatch.current) {
       interactLatch.current = true;
@@ -567,8 +837,9 @@ function PlayerController({ targetStationId, setNearStation, setHighlightedStati
       if (rb && profile) {
         camera.getWorldDirection(direction);
         targetPos.copy(camera.position)
-          .add(direction.multiplyScalar(Math.abs(profile.gripOffset[2]) + 0.75))
-          .add(new THREE.Vector3(profile.gripOffset[0], profile.gripOffset[1], 0));
+          .add(direction.multiplyScalar(Math.abs(profile.gripOffset[2]) + 0.75));
+        gripVec.set(profile.gripOffset[0], profile.gripOffset[1], 0); // reuse, no allocation
+        targetPos.add(gripVec);
         const cur = rb.translation();
         tmp.set(targetPos.x - cur.x, targetPos.y - cur.y, targetPos.z - cur.z);
         rb.setLinvel({ x: tmp.x * profile.linearFollow, y: tmp.y * profile.linearFollow, z: tmp.z * profile.linearFollow }, true);
@@ -581,7 +852,14 @@ function PlayerController({ targetStationId, setNearStation, setHighlightedStati
 }
 
 function useLabAudio(playerPos: THREE.Vector3, reactionLevel: number) {
+  // Use refs so the audio loop always sees latest values WITHOUT re-creating the context
+  const playerPosRef = useRef(playerPos);
+  const reactionRef = useRef(reactionLevel);
+  useEffect(() => { playerPosRef.current = playerPos; });
+  useEffect(() => { reactionRef.current = reactionLevel; });
+
   useEffect(() => {
+    // Create AudioContext once on mount only
     let ctx: AudioContext | null = null;
     let raf = 0;
     let humGain: GainNode;
@@ -621,11 +899,12 @@ function useLabAudio(playerPos: THREE.Vector3, reactionLevel: number) {
       react.start();
 
       const loop = () => {
-        const distCenter = Math.min(1, playerPos.length() / 22);
+        // Read latest values from refs — no re-mount needed
+        const distCenter = Math.min(1, playerPosRef.current.length() / 22);
         humGain.gain.value = 0.025 + (1 - distCenter) * 0.02;
         ventGain.gain.value = 0.018 + Math.abs(Math.sin(performance.now() * 0.0012)) * 0.01;
-        reactGain.gain.value = 0.01 + reactionLevel * 0.06;
-        react.frequency.value = 196 + reactionLevel * 60;
+        reactGain.gain.value = 0.01 + reactionRef.current * 0.06;
+        react.frequency.value = 196 + reactionRef.current * 60;
         raf = requestAnimationFrame(loop);
       };
       raf = requestAnimationFrame(loop);
@@ -635,14 +914,10 @@ function useLabAudio(playerPos: THREE.Vector3, reactionLevel: number) {
 
     return () => {
       cancelAnimationFrame(raf);
-      try {
-        hum?.stop();
-        vent?.stop();
-        react?.stop();
-      } catch {}
+      try { hum?.stop(); vent?.stop(); react?.stop(); } catch {}
       ctx?.close();
     };
-  }, [playerPos, reactionLevel]);
+  }, []); // ← empty deps: create once, never re-create
 }
 
 export default function ImmersiveLabExperience({ subject, mode, experiment, onRunResult, runtime, setRuntime, eventFeed, lastOutcome, studentName }: {
@@ -662,7 +937,7 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
   const [grabbedLabel, setGrabbedLabel] = useState<string | null>(null);
   const [pulse, setPulse] = useState(0);
   const [reactionLevel, setReactionLevel] = useState(0);
-  const [playerPos, setPlayerPos] = useState(new THREE.Vector3(0, 1.7, 7));
+  const [playerPos, setPlayerPos] = useState(new THREE.Vector3(0, 3.0, 7));
   const [forwardY, setForwardY] = useState(0);
   const [sourceFill, setSourceFill] = useState(0.62);
   const [targetFill, setTargetFill] = useState(0.22);
@@ -713,10 +988,23 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
 
   const station = useMemo(() => stationForSubject(subject), [subject]);
   const transferActive = Boolean(grabbedId && (grabbedId === "beaker-a" || grabbedId === "flask-b") && forwardY < -0.22 && sourceFill > 0.03);
+
+  const distanceToStation = useMemo(() => {
+    const stationPos = new THREE.Vector3(station.x * 2.5, 1.2, station.z * 1.5);
+    return playerPos.distanceTo(stationPos);
+  }, [playerPos, station]);
+
+  const stationAngleDeg = useMemo(() => {
+    const dx = station.x * 2.5 - playerPos.x;
+    const dz = station.z * 1.5 - playerPos.z;
+    return (Math.atan2(dx, -dz) * 180) / Math.PI;
+  }, [playerPos, station]);
+
   const guideText = useMemo(() => {
-    if (mechanicalAlerts.length) return mechanicalAlerts[0];
-    return aiGuide(mode, subject, nearStation, eventFeed, grabbedLabel, transferActive);
-  }, [mode, subject, nearStation, eventFeed, grabbedLabel, transferActive, mechanicalAlerts]);
+    if (mechanicalAlerts.length)
+      return explainAlert(mechanicalAlerts[0], studentName);
+    return aiGuide(mode, subject, nearStation, distanceToStation, eventFeed, grabbedLabel, transferActive, studentName);
+  }, [mode, subject, nearStation, distanceToStation, eventFeed, grabbedLabel, transferActive, mechanicalAlerts, studentName]);
 
   useLabAudio(playerPos, reactionLevel);
 
@@ -737,9 +1025,13 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
     saveRecords(records);
   }, [records]);
 
+  // Frame counter for throttling heavy state updates
+  const loopFrame = useRef(0);
+
   useEffect(() => {
     let raf = 0;
     const loop = () => {
+      loopFrame.current++;
       setPulse((p) => p + 0.016);
       setReactionLevel((r) => Math.max(0, r - 0.008));
       setMechanics((m) => ({
@@ -754,50 +1046,54 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
         circuitSnapA: dampTo(m.circuitSnapA, m.circuitSnapATarget, APPARATUS_PROFILES.circuit.joints[0].damping),
         circuitSnapB: dampTo(m.circuitSnapB, m.circuitSnapBTarget, APPARATUS_PROFILES.circuit.joints[1].damping),
       }));
-      setApparatusHealth((h) => {
-        const next = { ...h };
-        if (mechanics.burnerKnobTarget > 0.86) {
-          next.thermalStress = Math.min(1, next.thermalStress + 0.006);
-          next.wear = Math.min(1, next.wear + 0.0012);
-        } else {
-          next.thermalStress = Math.max(0, next.thermalStress - 0.003);
-        }
-        if (mechanics.buretteValveTarget > 0.82 && mechanics.buretteClampTarget < 0.5) {
-          next.pressureIntegrity = Math.max(0, next.pressureIntegrity - 0.0065);
-        }
-        if (mechanics.circuitSnapATarget !== mechanics.circuitSnapBTarget) {
-          next.electricalStability = Math.max(0, next.electricalStability - 0.004);
-        }
-        if (spill > 0.15) next.contamination = Math.min(1, next.contamination + 0.004);
-        if (grabbedId && Math.abs(forwardY) > 0.88) next.structuralStability = Math.max(0, next.structuralStability - 0.003);
-        return next;
-      });
 
-      setRecords((prev) => {
-        let next = { ...prev };
-        next.microscope = applyStress(next.microscope, {
-          wear: 0.00035,
-          calibrationDrift: 0.00045 + Math.abs(mechanics.microscopeFocusTarget - mechanics.microscopeFocus) * 0.0006,
-          structural: grabbedId === "slide-tray" ? 0.0005 : 0,
+      // Throttle health/records updates to every 10 frames (~6×/sec) — reduces React render pressure
+      if (loopFrame.current % 10 === 0) {
+        setApparatusHealth((h) => {
+          const next = { ...h };
+          if (mechanics.burnerKnobTarget > 0.86) {
+            next.thermalStress = Math.min(1, next.thermalStress + 0.06);
+            next.wear = Math.min(1, next.wear + 0.012);
+          } else {
+            next.thermalStress = Math.max(0, next.thermalStress - 0.03);
+          }
+          if (mechanics.buretteValveTarget > 0.82 && mechanics.buretteClampTarget < 0.5) {
+            next.pressureIntegrity = Math.max(0, next.pressureIntegrity - 0.065);
+          }
+          if (mechanics.circuitSnapATarget !== mechanics.circuitSnapBTarget) {
+            next.electricalStability = Math.max(0, next.electricalStability - 0.04);
+          }
+          if (spill > 0.15) next.contamination = Math.min(1, next.contamination + 0.04);
+          if (grabbedId && Math.abs(forwardY) > 0.88) next.structuralStability = Math.max(0, next.structuralStability - 0.03);
+          return next;
         });
-        next.burette = applyStress(next.burette, {
-          wear: 0.0004,
-          pressure: mechanics.buretteValveTarget > 0.82 && mechanics.buretteClampTarget < 0.5 ? 0.004 : 0.0005,
-          sealLoss: mechanics.buretteValveTarget > 0.9 ? 0.0015 : 0,
-          contamination: spill > 0.12 ? 0.0022 : 0,
+
+        setRecords((prev) => {
+          let next = { ...prev };
+          next.microscope = applyStress(next.microscope, {
+            wear: 0.0035,
+            calibrationDrift: 0.0045 + Math.abs(mechanics.microscopeFocusTarget - mechanics.microscopeFocus) * 0.006,
+            structural: grabbedId === "slide-tray" ? 0.005 : 0,
+          });
+          next.burette = applyStress(next.burette, {
+            wear: 0.004,
+            pressure: mechanics.buretteValveTarget > 0.82 && mechanics.buretteClampTarget < 0.5 ? 0.04 : 0.005,
+            sealLoss: mechanics.buretteValveTarget > 0.9 ? 0.015 : 0,
+            contamination: spill > 0.12 ? 0.022 : 0,
+          });
+          next.burner = applyStress(next.burner, {
+            wear: mechanics.burnerKnobTarget > 0.65 ? 0.012 : 0.003,
+            thermal: mechanics.burnerKnobTarget > 0.86 ? 0.045 : 0.006,
+            structural: mechanics.burnerKnobTarget > 0.95 ? 0.015 : 0,
+          });
+          next.circuit = applyStress(next.circuit, {
+            wear: 0.0025,
+            electrical: mechanics.circuitSnapATarget !== mechanics.circuitSnapBTarget ? 0.042 : 0.004,
+            connectorLoss: mechanics.circuitSnapATarget !== mechanics.circuitSnapBTarget ? 0.018 : 0.002,
+          });
+          return next;
         });
-        next.burner = applyStress(next.burner, {
-          wear: mechanics.burnerKnobTarget > 0.65 ? 0.0012 : 0.0003,
-          thermal: mechanics.burnerKnobTarget > 0.86 ? 0.0045 : 0.0006,
-          structural: mechanics.burnerKnobTarget > 0.95 ? 0.0015 : 0,
-        });
-        next.circuit = applyStress(next.circuit, {
-          wear: 0.00025,
-          electrical: mechanics.circuitSnapATarget !== mechanics.circuitSnapBTarget ? 0.0042 : 0.0004,
-          connectorLoss: mechanics.circuitSnapATarget !== mechanics.circuitSnapBTarget ? 0.0018 : 0.0002,
-        });
-        return next;
-      });
+      }
 
       if (transferActive) {
         const transferRate = 0.0032 + Math.abs(forwardY) * 0.0025;
@@ -813,8 +1109,8 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
     return () => cancelAnimationFrame(raf);
   }, [transferActive, forwardY, mechanics, grabbedId, spill]);
 
-  const sourcePoint = useMemo(() => new THREE.Vector3(-6.9, 2.8, -3.2), []);
-  const targetPoint = useMemo(() => new THREE.Vector3(-5.9, 2.8, -3.2), []);
+  const sourcePoint = useMemo(() => new THREE.Vector3(-6.9, 2.1, -3.2), []);
+  const targetPoint = useMemo(() => new THREE.Vector3(-5.9, 2.1, -3.2), []);
 
   const performMaintenance = (action: "repair" | "recalibrate" | "clean" | "stabilize" | "replace") => {
     setRecords((prev) => ({
@@ -924,11 +1220,11 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
   }, [records]);
 
   // ── FOV auto-zoom: lerp FOV toward 52 when near station, 70 when roaming ──
-  const fovRef = useRef(70);
+  const fovRef = useRef(72);
   function FovController({ near, grabbed }: { near: boolean; grabbed: string | null }) {
     const { camera } = useThree();
     useFrame((_, delta) => {
-      const targetFov = near ? (grabbed ? 46 : 52) : 70;
+      const targetFov = near ? (grabbed ? 52 : 58) : 72;
       fovRef.current = THREE.MathUtils.lerp(fovRef.current, targetFov, delta * 3.5);
       (camera as THREE.PerspectiveCamera).fov = fovRef.current;
       (camera as THREE.PerspectiveCamera).updateProjectionMatrix();
@@ -941,7 +1237,7 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
       <KeyboardControls map={KEYMAP as unknown as { name: string; keys: string[] }[]}>
         <Canvas
           shadows={qc.shadows}
-          camera={{ position: [0, 1.7, 7], fov: 70 }}
+          camera={{ position: [0, 3.0, 7], fov: 70 }}
           gl={{
             antialias: qc.antialias,
             powerPreference: "high-performance",
@@ -987,7 +1283,7 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
           <pointLight position={[-8, 3.6, -10]} intensity={1.8 + reactionLevel * 0.9} color={subject === "chemistry" ? "#3ca8ff" : subject === "physics" ? "#8c5dff" : "#23d1af"} />
 
           {/* Reaction glow — intensifies during active experiment */}
-          <pointLight position={[-7.2, 2.8, -3.2]} intensity={0.4 + reactionLevel * 2.6} color="#ff9f54" />
+          <pointLight position={[-7.2, 2.2, -3.2]} intensity={0.4 + reactionLevel * 2.6} color="#ff9f54" />
 
           <FovController near={nearStation} grabbed={grabbedId} />
 
@@ -1054,88 +1350,276 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
       </KeyboardControls>
 
       <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+        {/* ── Crosshair ── */}
         <div style={{ position: "absolute", left: "50%", top: "50%", width: 14, height: 14, transform: `translate(-50%, -50%) translateY(${Math.sin(pulse * 2.6) * 0.6}px)`, border: `1px solid ${nearStation ? "#8ff8cc" : grabbedId ? "#ffd59f" : "#87b7df"}`, borderRadius: "50%", boxShadow: nearStation ? "0 0 18px rgba(143,248,204,0.6)" : grabbedId ? "0 0 18px rgba(255,213,159,0.6)" : "0 0 14px rgba(135,183,223,0.4)" }} />
-
-        <div style={{ position: "absolute", left: 12, top: 10, background: "rgba(5,13,24,0.78)", border: "1px solid rgba(120,170,214,0.35)", padding: "9px 10px", borderRadius: 10, color: "#daf0ff", maxWidth: 360, fontFamily: "'Orbitron', 'Segoe UI', system-ui, sans-serif" }}>
-          <div style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", opacity: 0.82 }}>
-            {studentName ? studentName : "Lab Guide"}
+        {/* Press E hint when near station and not yet interacting */}
+        {nearStation && !grabbedId && (
+          <div style={{ position: "absolute", left: "50%", top: "calc(50% + 22px)", transform: "translateX(-50%)", background: "rgba(0,0,0,0.55)", border: "1px solid rgba(143,248,204,0.5)", borderRadius: 6, padding: "3px 10px", color: "#8ff8cc", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
+            Press E to interact
           </div>
-          <div style={{ marginTop: 4, fontSize: 12, lineHeight: 1.4 }}>{guideText}</div>
-          {mechanicalAlerts.length > 0 && (
-            <div style={{ marginTop: 6, fontSize: 11, color: "#87d4ff", borderTop: "1px solid rgba(120,170,214,0.25)", paddingTop: 5 }}>
-              Alert: {mechanicalAlerts[0]}
+        )}
+
+        {/* ── GUIDE PANEL (top-left) ── */}
+        <div style={{
+          position: "absolute", left: 12, top: 10,
+          background: "linear-gradient(135deg, rgba(5,18,36,0.92), rgba(8,24,46,0.88))",
+          border: `1px solid ${mechanicalAlerts.length > 0 ? "rgba(255,180,80,0.55)" : nearStation ? "rgba(80,220,160,0.45)" : "rgba(80,150,220,0.38)"}`,
+          padding: "12px 14px", borderRadius: 14,
+          color: "#daf0ff", maxWidth: 330,
+          fontFamily: "'Segoe UI', system-ui, sans-serif",
+          backdropFilter: "blur(6px)",
+          boxShadow: mechanicalAlerts.length > 0
+            ? "0 0 18px rgba(255,160,50,0.18)"
+            : nearStation
+              ? "0 0 18px rgba(50,220,140,0.12)"
+              : "0 0 14px rgba(50,120,200,0.12)",
+        }}>
+          {/* Avatar + name row */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: "50%",
+              background: mechanicalAlerts.length > 0
+                ? "linear-gradient(135deg,#ff9940,#ff5500)"
+                : nearStation
+                  ? "linear-gradient(135deg,#20d48a,#0099dd)"
+                  : "linear-gradient(135deg,#3a8fe8,#6e40e0)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 16, flexShrink: 0,
+              boxShadow: "0 0 8px rgba(100,200,255,0.3)",
+            }}>
+              {mechanicalAlerts.length > 0 ? "⚠" : nearStation ? "🔬" : "🧭"}
             </div>
-          )}
-        </div>
-
-        <div style={{ position: "absolute", right: 12, top: 10, background: "rgba(5,13,24,0.78)", border: "1px solid rgba(120,170,214,0.35)", padding: "9px 10px", borderRadius: 10, color: "#daf0ff", fontSize: 11 }}>
-          <div>Mode: {mode}</div>
-          <div>Station: {station.name}</div>
-          <div>Status: {nearStation ? "Interactive" : "Navigate closer"}</div>
-          <div>Reaction intensity: {Math.round(reactionLevel * 100)}%</div>
-          <div>Source: {Math.round(sourceFill * 100)}% | Target: {Math.round(targetFill * 100)}%</div>
-          <div>Spill loss: {Math.round(spill * 100)}%</div>
-          <div>Microscope: {apparatusState.microscope}</div>
-          <div>Burette: {apparatusState.burette}</div>
-          <div>Burner: {apparatusState.burner}</div>
-          <div>Circuit: {apparatusState.circuit}</div>
-          <div style={{ marginTop: 4, opacity: 0.85 }}>Wear {Math.round(apparatusHealth.wear * 100)}% | Pressure {Math.round(apparatusHealth.pressureIntegrity * 100)}% | Thermal {Math.round(apparatusHealth.thermalStress * 100)}%</div>
-          <div style={{ opacity: 0.85 }}>Electrical {Math.round(apparatusHealth.electricalStability * 100)}% | Structural {Math.round(apparatusHealth.structuralStability * 100)}% | Contamination {Math.round(apparatusHealth.contamination * 100)}%</div>
-        </div>
-
-        <div style={{ position: "absolute", right: 12, top: 188, background: "rgba(5,13,24,0.82)", border: "1px solid rgba(120,170,214,0.35)", padding: "9px 10px", borderRadius: 10, color: "#daf0ff", fontSize: 11, width: 280, pointerEvents: "auto" }}>
-          <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", opacity: 0.82, marginBottom: 6 }}>Maintenance Bay</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 8 }}>
-            {(["microscope", "burette", "burner", "circuit"] as ApparatusId[]).map((id) => (
-              <button
-                key={id}
-                onClick={() => setSelectedMaintenance(id)}
-                style={{
-                  padding: "6px 7px",
-                  borderRadius: 8,
-                  border: "1px solid rgba(120,170,214,0.38)",
-                  background: selectedMaintenance === id ? "rgba(69,146,230,0.35)" : "rgba(10,24,38,0.68)",
-                  color: "#def2ff",
-                  fontSize: 11,
-                  cursor: "pointer",
-                  textTransform: "capitalize",
-                }}
-              >
-                {id}
-              </button>
-            ))}
+            <div>
+              <div style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", opacity: 0.7, lineHeight: 1 }}>
+                Lab Assistant
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: nearStation ? "#7eeac0" : "#88caff", lineHeight: 1.2, marginTop: 2 }}>
+                {studentName
+                  ? `Guiding ${studentName.split(" ")[0]}`
+                  : "Guiding You"}
+              </div>
+            </div>
           </div>
-          <div style={{ marginBottom: 6, opacity: 0.86 }}>Stage: {records[selectedMaintenance].stage} | Risk {Math.round(riskScore(records[selectedMaintenance]) * 100)}%</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-            {(["repair", "recalibrate", "clean", "stabilize", "replace"] as const).map((action) => (
-              <button
-                key={action}
-                onClick={() => performMaintenance(action)}
-                style={{
-                  padding: "6px 7px",
-                  borderRadius: 8,
-                  border: "1px solid rgba(120,170,214,0.38)",
-                  background: "rgba(10,24,38,0.75)",
-                  color: "#def2ff",
-                  fontSize: 10,
-                  cursor: "pointer",
-                  textTransform: "capitalize",
-                }}
-              >
-                {action}
-              </button>
+
+          {/* Guide message */}
+          <div style={{
+            fontSize: 12.5, lineHeight: 1.55,
+            color: mechanicalAlerts.length > 0 ? "#ffe0b0" : "#daf0ff",
+            background: "rgba(255,255,255,0.04)",
+            borderRadius: 8, padding: "8px 10px",
+            border: "1px solid rgba(255,255,255,0.07)",
+          }}>
+            {guideText}
+          </div>
+
+          {/* Quick tips strip */}
+          <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {[
+              { key: "W/A/S/D", label: "Move" },
+              { key: "Mouse", label: "Look" },
+              { key: "E", label: "Interact" },
+              { key: "Shift", label: "Sprint" },
+            ].map(({ key, label }) => (
+              <div key={key} style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10, opacity: 0.65 }}>
+                <span style={{ background: "rgba(120,170,214,0.22)", border: "1px solid rgba(120,170,214,0.4)", borderRadius: 4, padding: "1px 5px", fontWeight: 700, color: "#b0d4f0" }}>{key}</span>
+                <span style={{ color: "#90b8d8" }}>{label}</span>
+              </div>
             ))}
           </div>
         </div>
 
-        <div style={{ position: "absolute", left: "50%", bottom: 16, transform: "translateX(-50%)", display: "flex", gap: 8, pointerEvents: "auto" }}>
-          <button onClick={onRunResult} disabled={!nearStation} style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid rgba(120,170,214,0.4)", background: nearStation ? "linear-gradient(90deg, rgba(41,149,255,0.85), rgba(33,201,167,0.85))" : "rgba(92,108,126,0.5)", color: "#fff", fontWeight: 700, cursor: nearStation ? "pointer" : "not-allowed" }}>Execute Experiment</button>
-          <button onClick={() => { setRuntime(getDefaultRuntime()); setSourceFill(0.62); setTargetFill(0.22); setSpill(0); }} style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid rgba(120,170,214,0.4)", background: "rgba(17,36,58,0.8)", color: "#d8efff", fontWeight: 600, cursor: "pointer" }}>Reset Rig</button>
+        {/* ── DIRECTION COMPASS / WAYPOINT ARROW (top-center) ── */}
+        {!nearStation && (
+          <div style={{
+            position: "absolute", left: "50%", top: 12,
+            transform: "translateX(-50%)",
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+            pointerEvents: "none",
+          }}>
+            {/* Arrow SVG rotated toward station */}
+            <div style={{
+              transform: `rotate(${stationAngleDeg}deg)`,
+              transition: "transform 0.3s ease",
+              filter: "drop-shadow(0 0 8px rgba(100,200,255,0.7))",
+            }}>
+              <svg width="28" height="36" viewBox="0 0 28 36">
+                <polygon points="14,2 26,28 14,22 2,28" fill="#4ec9ff" fillOpacity="0.92" />
+                <polygon points="14,2 26,28 14,22 2,28" fill="none" stroke="#ffffff" strokeWidth="1.5" strokeOpacity="0.5" />
+              </svg>
+            </div>
+            {/* Distance label */}
+            <div style={{
+              background: "rgba(5,18,36,0.82)", border: "1px solid rgba(80,180,255,0.4)",
+              borderRadius: 8, padding: "3px 10px",
+              color: "#89d4ff", fontSize: 11, fontWeight: 600, letterSpacing: "0.06em",
+              backdropFilter: "blur(4px)",
+              whiteSpace: "nowrap",
+            }}>
+              {station.name} · {Math.round(distanceToStation)}m away
+            </div>
+          </div>
+        )}
+        {nearStation && (
+          <div style={{
+            position: "absolute", left: "50%", top: 12,
+            transform: "translateX(-50%)",
+            background: "rgba(5,26,18,0.88)",
+            border: "1px solid rgba(80,220,150,0.55)",
+            borderRadius: 10, padding: "5px 14px",
+            color: "#5aedb8", fontSize: 12, fontWeight: 700,
+            letterSpacing: "0.08em",
+            backdropFilter: "blur(4px)",
+            boxShadow: "0 0 14px rgba(60,210,130,0.2)",
+          }}>
+            ✓ At {station.name}
+          </div>
+        )}
+
+        {/* ── STATUS PANEL (top-right) ── */}
+        <div style={{
+          position: "absolute", right: 12, top: 10,
+          background: "linear-gradient(135deg, rgba(5,14,28,0.9), rgba(8,20,40,0.85))",
+          border: "1px solid rgba(80,140,200,0.32)",
+          padding: "10px 12px", borderRadius: 12, color: "#c8e8ff", fontSize: 11,
+          backdropFilter: "blur(6px)",
+          minWidth: 190,
+        }}>
+          <div style={{ fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", opacity: 0.6, marginBottom: 6 }}>Experiment Status</div>
+          <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "3px 8px", alignItems: "center" }}>
+            <span style={{ opacity: 0.6 }}>Mode</span>
+            <span style={{ fontWeight: 600, color: mode === "exam" ? "#ffca60" : mode === "research" ? "#c080ff" : "#60c8ff", textTransform: "capitalize" }}>{mode}</span>
+            <span style={{ opacity: 0.6 }}>Station</span>
+            <span style={{ fontWeight: 600 }}>{station.name}</span>
+            <span style={{ opacity: 0.6 }}>Status</span>
+            <span style={{ color: nearStation ? "#5aedb8" : "#88aacc" }}>{nearStation ? "● Interactive" : "○ Walk closer"}</span>
+            <span style={{ opacity: 0.6 }}>Reaction</span>
+            <span>
+              <span style={{ display: "inline-block", width: 60, height: 5, borderRadius: 4, background: "rgba(255,255,255,0.1)", overflow: "hidden", verticalAlign: "middle", marginRight: 4 }}>
+                <span style={{ display: "block", height: "100%", width: `${reactionLevel * 100}%`, background: reactionLevel > 0.7 ? "#ff6060" : reactionLevel > 0.35 ? "#ffb040" : "#40d4a0", borderRadius: 4, transition: "width 0.4s" }} />
+              </span>
+              {Math.round(reactionLevel * 100)}%
+            </span>
+          </div>
+          {/* Health bar row */}
+          <div style={{ marginTop: 7, borderTop: "1px solid rgba(120,170,214,0.18)", paddingTop: 7, display: "flex", flexDirection: "column", gap: 3 }}>
+            {([
+              { label: "Wear", value: apparatusHealth.wear, warn: 0.3 },
+              { label: "Pressure", value: apparatusHealth.pressureIntegrity, warn: 0.35 },
+              { label: "Thermal", value: 1 - apparatusHealth.thermalStress, warn: 0.3 },
+              { label: "Electrical", value: apparatusHealth.electricalStability, warn: 0.4 },
+            ] as { label: string; value: number; warn: number }[]).map(({ label, value, warn }) => (
+              <div key={label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ opacity: 0.58, width: 58, flexShrink: 0 }}>{label}</span>
+                <span style={{ flex: 1, height: 4, background: "rgba(255,255,255,0.08)", borderRadius: 3, overflow: "hidden" }}>
+                  <span style={{ display: "block", height: "100%", width: `${value * 100}%`, background: value < warn ? "#ff5555" : value < 0.6 ? "#ffaa40" : "#3ac890", borderRadius: 3, transition: "width 0.5s" }} />
+                </span>
+                <span style={{ width: 28, textAlign: "right", opacity: 0.7, fontSize: 10 }}>{Math.round(value * 100)}%</span>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* ── Graphics quality switcher ─────────────────────────────────── */}
+        {/* ── MAINTENANCE BAY (right, below status) ── */}
+        <div style={{
+          position: "absolute", right: 12, top: 246,
+          background: "linear-gradient(135deg, rgba(5,14,28,0.9), rgba(8,20,40,0.85))",
+          border: "1px solid rgba(80,140,200,0.32)",
+          padding: "10px 12px", borderRadius: 12, color: "#c8e8ff", fontSize: 11,
+          width: 230, pointerEvents: "auto",
+          backdropFilter: "blur(6px)",
+        }}>
+          <div style={{ fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", opacity: 0.6, marginBottom: 8 }}>🔧 Maintenance Bay</div>
+          <div style={{ fontSize: 11, color: "#a0cce8", marginBottom: 8, lineHeight: 1.4 }}>
+            Select a tool to inspect and fix it:
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5, marginBottom: 8 }}>
+            {(["microscope", "burette", "burner", "circuit"] as ApparatusId[]).map((id) => {
+              const risk = riskScore(records[id]);
+              const riskColor = risk > 0.6 ? "#ff6060" : risk > 0.35 ? "#ffaa40" : "#4ec0a0";
+              return (
+                <button
+                  key={id}
+                  onClick={() => setSelectedMaintenance(id)}
+                  style={{
+                    padding: "7px 8px", borderRadius: 8,
+                    border: `1px solid ${selectedMaintenance === id ? "rgba(80,200,255,0.6)" : "rgba(80,140,200,0.32)"}`,
+                    background: selectedMaintenance === id ? "rgba(30,90,170,0.45)" : "rgba(8,20,40,0.7)",
+                    color: selectedMaintenance === id ? "#cce8ff" : "#88aac8",
+                    fontSize: 11, cursor: "pointer", textTransform: "capitalize",
+                    display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2,
+                  }}
+                >
+                  <span style={{ fontWeight: selectedMaintenance === id ? 700 : 400 }}>{id}</span>
+                  <span style={{ fontSize: 9, color: riskColor }}>Risk: {Math.round(risk * 100)}%</span>
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: 10.5, color: "#88b8d8", marginBottom: 6, opacity: 0.85 }}>
+            {(records[selectedMaintenance].stage as string) === "optimal" ? "✓ Good condition" :
+  (records[selectedMaintenance].stage as string) === "worn" ? "⚠ Needs attention soon" :
+  (records[selectedMaintenance].stage as string) === "degraded" ? "⚠ Repair recommended" :
+  "🔴 Critical — fix before use"}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5 }}>
+            {(["repair", "recalibrate", "clean", "stabilize", "replace"] as const).map((action) => {
+              const actionInfo: Record<string, string> = {
+                repair: "Fix damage",
+                recalibrate: "Fine-tune",
+                clean: "Remove spills",
+                stabilize: "Stop shaking",
+                replace: "Brand new",
+              };
+              return (
+                <button
+                  key={action}
+                  onClick={() => performMaintenance(action)}
+                  title={actionInfo[action]}
+                  style={{
+                    padding: "6px 8px", borderRadius: 7,
+                    border: "1px solid rgba(80,140,200,0.3)",
+                    background: "rgba(10,25,50,0.8)",
+                    color: "#aaccee", fontSize: 10.5, cursor: "pointer",
+                    textTransform: "capitalize", textAlign: "left",
+                    display: "flex", flexDirection: "column", gap: 1,
+                  }}
+                >
+                  <span style={{ fontWeight: 600 }}>{action}</span>
+                  <span style={{ fontSize: 9, opacity: 0.65 }}>{actionInfo[action]}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── BOTTOM ACTION BAR ── */}
+        <div style={{ position: "absolute", left: "50%", bottom: 50, transform: "translateX(-50%)", display: "flex", gap: 8, pointerEvents: "auto" }}>
+          <button
+            onClick={onRunResult}
+            disabled={!nearStation}
+            style={{
+              padding: "10px 18px", borderRadius: 12,
+              border: nearStation ? "1px solid rgba(80,220,160,0.5)" : "1px solid rgba(80,120,160,0.3)",
+              background: nearStation ? "linear-gradient(90deg, rgba(41,149,255,0.88), rgba(33,201,167,0.88))" : "rgba(60,80,100,0.4)",
+              color: "#fff", fontWeight: 700, cursor: nearStation ? "pointer" : "not-allowed",
+              fontSize: 13, letterSpacing: "0.04em",
+              boxShadow: nearStation ? "0 0 20px rgba(40,200,140,0.25)" : "none",
+              transition: "all 0.2s",
+            }}
+          >
+            {nearStation ? "▶ Execute Experiment" : "Walk to station first"}
+          </button>
+          <button
+            onClick={() => { setRuntime(getDefaultRuntime()); setSourceFill(0.62); setTargetFill(0.22); setSpill(0); }}
+            style={{ padding: "10px 14px", borderRadius: 12, border: "1px solid rgba(80,140,200,0.35)", background: "rgba(10,24,48,0.8)", color: "#c0dcf0", fontWeight: 600, cursor: "pointer", fontSize: 12 }}
+          >
+            ↺ Reset Rig
+          </button>
+        </div>
+
+        {/* ── GRAPHICS QUALITY ── */}
         <div style={{ position: "absolute", left: 12, bottom: 12, display: "flex", gap: 5, pointerEvents: "auto", alignItems: "center" }}>
-          <span style={{ fontSize: 10, color: "rgba(180,210,240,0.6)", letterSpacing: "0.08em", textTransform: "uppercase", marginRight: 2 }}>Graphics</span>
+          <span style={{ fontSize: 10, color: "rgba(140,180,220,0.55)", letterSpacing: "0.08em", textTransform: "uppercase", marginRight: 2 }}>Quality</span>
           {(["low", "medium", "high"] as GraphicsQuality[]).map((q) => {
             const cfg = QUALITY_CONFIG[q];
             const active = quality === q;
@@ -1143,20 +1627,13 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
               <button
                 key={q}
                 onClick={() => setQuality(q)}
-                title={`${cfg.label} quality — ${q === "low" ? "best for slow devices" : q === "medium" ? "balanced" : "full visual fidelity"}`}
                 style={{
-                  padding: "5px 9px",
-                  borderRadius: 8,
-                  border: `1px solid ${active ? "rgba(120,200,255,0.7)" : "rgba(120,170,214,0.3)"}`,
-                  background: active ? "rgba(41,120,220,0.45)" : "rgba(5,13,24,0.72)",
-                  color: active ? "#e8f6ff" : "rgba(180,210,240,0.55)",
-                  fontSize: 11,
-                  fontWeight: active ? 700 : 400,
-                  cursor: "pointer",
-                  transition: "all 0.18s",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 4,
+                  padding: "5px 9px", borderRadius: 8,
+                  border: `1px solid ${active ? "rgba(100,190,255,0.7)" : "rgba(80,130,180,0.3)"}`,
+                  background: active ? "rgba(30,100,200,0.45)" : "rgba(5,14,28,0.72)",
+                  color: active ? "#e0f0ff" : "rgba(140,180,220,0.55)",
+                  fontSize: 11, fontWeight: active ? 700 : 400, cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: 4,
                 }}
               >
                 <span>{cfg.icon}</span>
@@ -1164,11 +1641,6 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
               </button>
             );
           })}
-        </div>
-
-        <div style={{ position: "absolute", right: 12, bottom: 12, background: "rgba(5,13,24,0.76)", border: "1px solid rgba(120,170,214,0.35)", padding: "8px 10px", borderRadius: 10, color: "#daf0ff", fontSize: 11 }}>
-          WASD move | mouse look | Shift sprint | E grab/release | tilt down to pour
-          {nearStation && <span style={{ color: "#8ff8cc", marginLeft: 8 }}>● Near station — view zoomed in</span>}
         </div>
       </div>
     </div>

@@ -1,12 +1,12 @@
 /**
  * app/api/admin/knowledge/route.ts
- * Supports: .txt .md .csv — direct text read
- *           .pdf .png .jpg .jpeg .webp .bmp — Gemini Vision extraction
- *           .docx .pptx .xlsx — Gemini Vision extraction (converted to base64)
+ * Supports: .txt .md .csv - direct text read
+ *           .pdf .png .jpg .jpeg .webp .bmp - Gemini Vision extraction
+ *           .docx .pptx .xlsx - Gemini Vision extraction (converted to base64)
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { inferKBMetadata, type KBEntry } from "@/app/lib/knowledgeBase.server";
+import { inferKBMetadata, type KBEntry } from "@/app/lib/knowledgeBase";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -17,7 +17,6 @@ const supabase = createClient(
 const GEMINI_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 
-// -- MIME type map -------------------------------------------------------------
 function getMime(fileName: string): string {
   const ext = fileName.split(".").pop()?.toLowerCase() || "";
   const map: Record<string, string> = {
@@ -48,10 +47,9 @@ function isGeminiSupported(fileName: string): boolean {
   return ["pdf","png","jpg","jpeg","webp","bmp","gif","docx","pptx","xlsx","doc","ppt","xls"].includes(ext);
 }
 
-// -- Extract text using Gemini Vision / document understanding -----------------
 async function extractWithGemini(fileBuffer: Buffer, fileName: string): Promise<string> {
   if (!GEMINI_KEY) {
-    return "[Gemini API key not configured — cannot extract content from this file type]";
+    return "[Gemini API key not configured - cannot extract content from this file type]";
   }
 
   const mime    = getMime(fileName);
@@ -63,7 +61,7 @@ async function extractWithGemini(fileBuffer: Buffer, fileName: string): Promise<
     ? `You are extracting educational content from this image for a CBSE/NCERT knowledge base.
 Extract ALL text, diagrams descriptions, formulas, tables, and any educational content visible.
 Format it clearly so it can be used as study material.
-If this is a textbook page, notes, or worksheet — extract everything completely.
+If this is a textbook page, notes, or worksheet - extract everything completely.
 Output ONLY the extracted content, no preamble.`
     : `You are extracting educational content from this ${ext.toUpperCase()} document for a CBSE/NCERT knowledge base.
 Extract ALL text content completely: headings, paragraphs, tables, lists, formulas, and any educational material.
@@ -72,7 +70,6 @@ If it is a presentation, extract all slide content with slide numbers.
 If it is a spreadsheet, extract all data with headers.
 Output ONLY the extracted content, no preamble.`;
 
-  // Use gemini-1.5-flash for documents, gemini-2.0-flash for images
   const model = isImage ? "gemini-2.0-flash" : "gemini-1.5-flash";
 
   try {
@@ -109,7 +106,6 @@ Output ONLY the extracted content, no preamble.`;
   }
 }
 
-// -- GET: list all entries -----------------------------------------------------
 export async function GET() {
   const { data, error } = await supabase
     .from("knowledge_base")
@@ -119,7 +115,6 @@ export async function GET() {
   return NextResponse.json({ knowledge: data || [] });
 }
 
-// -- POST: create new entry ----------------------------------------------------
 export async function POST(req: NextRequest) {
   try {
     const contentType = req.headers.get("content-type") || "";
@@ -136,10 +131,7 @@ export async function POST(req: NextRequest) {
 
       if (file && file.size > 0) {
         if (file.size > MAX_UPLOAD_BYTES) {
-          return NextResponse.json(
-            { error: "File too large. Max supported size is 20MB." },
-            { status: 413 }
-          );
+          return NextResponse.json({ error: "File too large. Max supported size is 20MB." }, { status: 413 });
         }
         fileName = file.name;
         fileType = file.name.split(".").pop()?.toLowerCase() || "text";
@@ -147,16 +139,13 @@ export async function POST(req: NextRequest) {
         const buf   = Buffer.from(bytes);
 
         if (isTextFile(file.name)) {
-          // Direct text read
           content = buf.toString("utf-8");
         } else if (isGeminiSupported(file.name)) {
-          // Extract via Gemini
           content = await extractWithGemini(buf, file.name);
         } else {
           content = `[File type .${fileType} is not yet supported for automatic extraction. Please paste the content manually.]`;
         }
 
-        // Truncate very large content
         if (content.length > 60000) {
           content = content.slice(0, 60000) + "\n\n[Content truncated at 60,000 characters]";
         }
@@ -189,9 +178,8 @@ export async function POST(req: NextRequest) {
       created_at: new Date().toISOString(),
     } as KBEntry);
 
-    // Auto-enrich and normalize user metadata while preserving manual input intent.
-    const finalSubject = subject === "General" ? inferred.subject : subject;
-    const finalClassLevel = classLevel === "All" ? inferred.classLevel : classLevel;
+    const finalSubject    = subject === "General" ? inferred.subject : subject;
+    const finalClassLevel = classLevel === "All"  ? inferred.classLevel : classLevel;
     const autoTags = [
       inferred.documentType,
       inferred.chapter,
@@ -204,7 +192,6 @@ export async function POST(req: NextRequest) {
     ];
     const mergedTags = Array.from(new Set([...(tags || []), ...autoTags])).slice(0, 24);
 
-    // Soft duplicate guard (same title + subject + class + highly similar prefix).
     const signature = content.slice(0, 400).replace(/\s+/g, " ").trim().toLowerCase();
     const { data: dupRows } = await supabase
       .from("knowledge_base")
@@ -214,10 +201,12 @@ export async function POST(req: NextRequest) {
       .eq("subject", finalSubject)
       .eq("class_level", finalClassLevel)
       .limit(8);
+
     const duplicate = (dupRows || []).some((r: any) => {
       const existing = String(r?.content || "").slice(0, 400).replace(/\s+/g, " ").trim().toLowerCase();
       return existing && existing === signature;
     });
+
     if (duplicate) {
       return NextResponse.json({
         ok: true,
@@ -258,7 +247,6 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// -- DELETE: soft-delete entry -------------------------------------------------
 export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
