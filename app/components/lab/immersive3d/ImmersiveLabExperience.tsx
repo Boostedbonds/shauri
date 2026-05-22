@@ -159,7 +159,21 @@ function explainAlert(alert: string, studentName?: string): string {
   return `${hey}${alert}`;
 }
 
-// ── Distance-aware, personalised guide messages ────────────────────────────────
+// ── Which apparatus are relevant per subject ──────────────────────────────────
+const SUBJECT_APPARATUS: Record<string, string[]> = {
+  chemistry: ["burette", "burner"],
+  physics:   ["circuit", "coil"],
+  biology:   ["microscope", "slide"],
+};
+
+function isApparatusRelevant(subject: Subject, alertText: string): boolean {
+  const relevant = SUBJECT_APPARATUS[subject] ?? [];
+  // If the alert doesn't mention any apparatus name, allow it through
+  const allApparatus = ["microscope", "burette", "burner", "circuit", "coil", "slide"];
+  const mentionsAny = allApparatus.some((a) => alertText.toLowerCase().includes(a));
+  if (!mentionsAny) return true;
+  return relevant.some((a) => alertText.toLowerCase().includes(a));
+}
 function aiGuide(
   mode: LabModeType,
   subject: Subject,
@@ -936,6 +950,7 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
   const [grabbedId, setGrabbedId] = useState<string | null>(null);
   const [grabbedLabel, setGrabbedLabel] = useState<string | null>(null);
   const [pulse, setPulse] = useState(0);
+  const [pointerLocked, setPointerLocked] = useState(false);
   const [reactionLevel, setReactionLevel] = useState(0);
   const [playerPos, setPlayerPos] = useState(new THREE.Vector3(0, 3.0, 7));
   const [forwardY, setForwardY] = useState(0);
@@ -1001,7 +1016,9 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
   }, [playerPos, station]);
 
   const guideText = useMemo(() => {
-    if (mechanicalAlerts.length)
+    // Only surface equipment alerts once the student is already at the station.
+    // While they're still navigating, always show movement/navigation guidance.
+    if (nearStation && mechanicalAlerts.length)
       return explainAlert(mechanicalAlerts[0], studentName);
     return aiGuide(mode, subject, nearStation, distanceToStation, eventFeed, grabbedLabel, transferActive, studentName);
   }, [mode, subject, nearStation, distanceToStation, eventFeed, grabbedLabel, transferActive, mechanicalAlerts, studentName]);
@@ -1010,6 +1027,7 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
 
   useEffect(() => {
     setRuntime(getDefaultRuntime());
+    setMechanicalAlerts([]);
   }, [subject, experiment.id, setRuntime]);
 
   useEffect(() => {
@@ -1019,6 +1037,12 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
 
   useEffect(() => {
     setRecords(loadRecords());
+  }, []);
+
+  useEffect(() => {
+    const handler = () => setPointerLocked(!!document.pointerLockElement);
+    document.addEventListener("pointerlockchange", handler);
+    return () => document.removeEventListener("pointerlockchange", handler);
   }, []);
 
   useEffect(() => {
@@ -1166,14 +1190,14 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
         const next = m.circuitSnapATarget > 0.5 ? 0 : 1;
         const state: ApparatusState = next && m.circuitSnapBTarget > 0.5 ? "active" : "aligned";
         setApparatusState((s) => ({ ...s, circuit: state }));
-        if (next !== m.circuitSnapBTarget) setMechanicalAlerts((a) => ["Circuit polarity/continuity mismatch. Connector fault risk.", ...a].slice(0, 4));
+        if (next !== m.circuitSnapBTarget) setMechanicalAlerts((a) => isApparatusRelevant(subject, "circuit") ? ["Circuit polarity/continuity mismatch. Connector fault risk.", ...a].slice(0, 4) : a);
         return { ...m, circuitSnapATarget: next };
       }
       if (partId === "circuit-socket-b") {
         const next = m.circuitSnapBTarget > 0.5 ? 0 : 1;
         const state: ApparatusState = next && m.circuitSnapATarget > 0.5 ? "active" : "aligned";
         setApparatusState((s) => ({ ...s, circuit: state }));
-        if (next !== m.circuitSnapATarget) setMechanicalAlerts((a) => ["Circuit polarity/continuity mismatch. Connector fault risk.", ...a].slice(0, 4));
+        if (next !== m.circuitSnapATarget) setMechanicalAlerts((a) => isApparatusRelevant(subject, "circuit") ? ["Circuit polarity/continuity mismatch. Connector fault risk.", ...a].slice(0, 4) : a);
         return { ...m, circuitSnapBTarget: next };
       }
       return m;
@@ -1181,17 +1205,17 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
   };
 
   useEffect(() => {
-    if (apparatusHealth.pressureIntegrity < 0.35) {
+    if (apparatusHealth.pressureIntegrity < 0.35 && isApparatusRelevant(subject, "burette")) {
       setApparatusState((s) => ({ ...s, burette: "malfunctioning" }));
       setMechanicalAlerts((a) => ["Burette pressure integrity critical. Clamp and valve recalibration required.", ...a].slice(0, 4));
       setReactionLevel((r) => Math.max(r, 0.8));
     }
-    if (apparatusHealth.thermalStress > 0.8) {
+    if (apparatusHealth.thermalStress > 0.8 && isApparatusRelevant(subject, "burner")) {
       setApparatusState((s) => ({ ...s, burner: "unstable" }));
       setMechanicalAlerts((a) => ["Thermal instability detected. Reduce flame to avoid apparatus damage.", ...a].slice(0, 4));
       setReactionLevel((r) => Math.max(r, 0.75));
     }
-    if (apparatusHealth.electricalStability < 0.4) {
+    if (apparatusHealth.electricalStability < 0.4 && isApparatusRelevant(subject, "circuit")) {
       setApparatusState((s) => ({ ...s, circuit: "malfunctioning" }));
       setMechanicalAlerts((a) => ["Electrical stability degraded. Re-seat connectors and verify polarity.", ...a].slice(0, 4));
     }
@@ -1210,7 +1234,7 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
       structuralStability: avg((r) => 1 - r.structuralStress),
     });
     const alert = summaryAlert(records);
-    if (alert) {
+    if (alert && isApparatusRelevant(subject, alert)) {
       setMechanicalAlerts((a) => [alert, ...a].slice(0, 4));
     }
     const emergency = Math.max(...all.map((r) => severity(r.stage)));
@@ -1350,6 +1374,43 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
       </KeyboardControls>
 
       <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+        {/* ── Click-to-start overlay — shown until pointer lock is acquired ── */}
+        {!pointerLocked && (
+          <div style={{
+            position: "absolute", inset: 0,
+            background: "rgba(3,7,18,0.78)",
+            display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center",
+            cursor: "pointer", pointerEvents: "auto",
+            backdropFilter: "blur(4px)",
+            zIndex: 10,
+          }}>
+            <div style={{ fontSize: 44, marginBottom: 14 }}>🔬</div>
+            <div style={{
+              color: "#cce8ff", fontWeight: 700, fontSize: 20,
+              marginBottom: 8, letterSpacing: "0.02em",
+            }}>
+              Click to enter the lab
+            </div>
+            <div style={{
+              color: "rgba(160,200,240,0.72)", fontSize: 13,
+              display: "flex", gap: 16, alignItems: "center",
+            }}>
+              <span>🖱 Mouse to look</span>
+              <span>WASD to walk</span>
+              <span>
+                <kbd style={{
+                  background: "rgba(255,255,255,0.12)",
+                  border: "1px solid rgba(255,255,255,0.25)",
+                  padding: "2px 8px", borderRadius: 5,
+                  fontFamily: "inherit", fontSize: 13,
+                }}>E</kbd>
+                {" "}to interact
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* ── Crosshair ── */}
         <div style={{ position: "absolute", left: "50%", top: "50%", width: 14, height: 14, transform: `translate(-50%, -50%) translateY(${Math.sin(pulse * 2.6) * 0.6}px)`, border: `1px solid ${nearStation ? "#8ff8cc" : grabbedId ? "#ffd59f" : "#87b7df"}`, borderRadius: "50%", boxShadow: nearStation ? "0 0 18px rgba(143,248,204,0.6)" : grabbedId ? "0 0 18px rgba(255,213,159,0.6)" : "0 0 14px rgba(135,183,223,0.4)" }} />
         {/* Press E hint when near station and not yet interacting */}
