@@ -791,7 +791,10 @@ function PlayerController({ targetStationId, setNearStation, setHighlightedStati
     }
 
     const target = objects.find((o) => o.id === targetStationId);
-    const near = Boolean(target && camera.position.distanceTo(target.pos) < 4.8);
+    const near = Boolean(target && Math.sqrt(
+      Math.pow(camera.position.x - target.pos.x, 2) +
+      Math.pow(camera.position.z - target.pos.z, 2)
+    ) < 5.5);
     if (near !== lastNear.current) {
       setNearStation(near);
       lastNear.current = near;
@@ -799,7 +802,7 @@ function PlayerController({ targetStationId, setNearStation, setHighlightedStati
 
     // Rebuild mesh cache every 120 frames (~2 sec) instead of every frame
     meshCacheFrame.current++;
-    if (meshCacheFrame.current % 120 === 0) {
+    if (meshCacheFrame.current === 1 || meshCacheFrame.current % 120 === 0) {
       interactMeshes.current = [];
       scene.traverse((o) => {
         if (o.userData?.stationId || o.userData?.grabbableId || o.userData?.apparatusPartId)
@@ -945,6 +948,7 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
   lastOutcome: ExperimentOutcome | null;
   studentName?: string;
 }) {
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
   const [nearStation, setNearStation] = useState(false);
   const [highlightedStationId, setHighlightedStationId] = useState<string | null>(null);
   const [grabbedId, setGrabbedId] = useState<string | null>(null);
@@ -1257,7 +1261,7 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
   }
 
   return (
-    <div style={{ position: "relative", height: 560, borderRadius: 16, overflow: "hidden", border: "1px solid rgba(118,172,212,0.3)", background: "#040812" }}>
+    <div ref={canvasContainerRef} style={{ position: "relative", height: 560, borderRadius: 16, overflow: "hidden", border: "1px solid rgba(118,172,212,0.3)", background: "#040812" }}>
       <KeyboardControls map={KEYMAP as unknown as { name: string; keys: string[] }[]}>
         <Canvas
           shadows={qc.shadows}
@@ -1376,7 +1380,12 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
       <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
         {/* ── Click-to-start overlay — shown until pointer lock is acquired ── */}
         {!pointerLocked && (
-          <div style={{
+          <div
+            onClick={() => {
+              const canvas = canvasContainerRef.current?.querySelector("canvas");
+              canvas?.requestPointerLock();
+            }}
+            style={{
             position: "absolute", inset: 0,
             background: "rgba(3,7,18,0.78)",
             display: "flex", flexDirection: "column",

@@ -1,489 +1,254 @@
-﻿"use client";
+"use client";
+import { useEffect, useMemo, useState } from "react";
 import AdminGate from "../components/AdminGate";
-import { useState, useEffect, useRef } from "react";
-import { supabaseClient as supabase } from "@/app/lib/supabase-client";
-import { inferKBMetadata, type KBDocumentType } from "@/app/lib/knowledgeBase";
 
-const SUBJECTS = ["General","Mathematics","Science","Physics","Chemistry","Biology","English","Hindi","SST","History","Geography","Civics","Economics"];
-const CLASSES  = ["All","6","7","8","9","10","11","12"];
-
-const ACCEPTED = ".txt,.md,.csv,.pdf,.png,.jpg,.jpeg,.webp,.bmp,.gif,.docx,.pptx,.xlsx,.doc,.ppt,.xls";
-
-const FILE_ICONS: Record<string,string> = {
-  pdf:"📄", png:"🖼️", jpg:"🖼️", jpeg:"🖼️", webp:"🖼️", bmp:"🖼️", gif:"🖼️",
-  docx:"📝", doc:"📝", pptx:"📊", ppt:"📊", xlsx:"📈", xls:"📈",
-  txt:"📃", md:"📃", csv:"📋",
-};
-function fileIcon(name: string) { return FILE_ICONS[name.split(".").pop()?.toLowerCase()||""] || "📎"; }
-
-type Student = { student_name:string; class:string; board:string; attempts:number; avg_score:number; last_active:string; subjects:string[]; };
-type Attempt = { id:string; created_at:string; student_name:string; class:string; subject:string; marks_obtained:number; total_marks:number; percentage:number; mode:string; };
-type KBEntry = { id:string; title:string; subject:string; class_level:string; tags:string[]; file_name?:string; file_type?:string; created_at:string; active:boolean; };
-type KBInferredPreview = {
-  documentType: KBDocumentType;
-  classLevel: string;
-  subject: string;
-  chapter: string;
-  priorityLabel: "critical" | "high" | "medium" | "low";
-  priorityScore: number;
-  syllabusRelevance: number;
-};
-
-const S = {
-  bg:"#fdf6e3", bgCard:"#ffffff", bgMuted:"#fdf9f0",
-  border:"#e8d5a3", borderLight:"#f0e6c8",
-  text:"#1a3a4a", textMuted:"#8a7a5a", textLight:"#b0a080",
-  gold:"#c9a227", purple:"#5b6fa5", green:"#2d6a4f",
-  red:"#c0392b", amber:"#b5830a", font:"'Courier New', monospace",
-};
-
-function scoreColor(p:number){ return p>=70?S.green:p>=45?S.amber:S.red; }
+type Attempt = { id: string; created_at: string; student_name: string; class: string; subject: string; marks_obtained: number | null; total_marks: number | null; percentage: number | null; mode: string | null };
+type Student = { student_name: string; class: string; board: string; attempts: number; avg_score: number; subjects: string[]; last_active: string };
+type AuthStats = { totalRegisteredUsers: number; usersLoggedInAtLeastOnce: number; activeUsers: number; recentSignups: Array<{ id: string; email: string; role: string | null; created_at: string; last_sign_in_at: string | null }> };
+type KB = { id: string; title: string; subject: string; class_level: string; tags: string[]; file_name?: string; file_type?: string; created_at: string; active: boolean };
 
 export default function AdminPage() {
-  const [tab,setTab]           = useState("overview");
-  const [students,setStudents] = useState<Student[]>([]);
-  const [attempts,setAttempts] = useState<Attempt[]>([]);
-  const [kb,setKb]             = useState<KBEntry[]>([]);
-  const [loading,setLoading]   = useState(false);
-  const [search,setSearch]     = useState("");
-  const [stats,setStats]       = useState({total:0,avgScore:0,todayActive:0,totalAttempts:0});
-  const [kbTitle,setKbTitle]   = useState("");
-  const [kbSubject,setKbSubject] = useState("General");
-  const [kbClass,setKbClass]   = useState("All");
-  const [kbContent,setKbContent] = useState("");
-  const [kbTags,setKbTags]     = useState("");
-  const [kbFile,setKbFile]     = useState<File|null>(null);
-  const [kbSaving,setKbSaving] = useState(false);
-  const [kbMsg,setKbMsg]       = useState("");
-  const [kbMsgOk,setKbMsgOk]  = useState(false);
-  const [extracting,setExtracting] = useState(false);
-  const [kbSearch, setKbSearch] = useState("");
-  const [kbInferred, setKbInferred] = useState<KBInferredPreview | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [tab, setTab] = useState<"overview" | "students" | "activity" | "knowledge">("overview");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [students, setStudents] = useState<Student[]>([]);
+  const [attempts, setAttempts] = useState<Attempt[]>([]);
+  const [authStats, setAuthStats] = useState<AuthStats | null>(null);
+  const [search, setSearch] = useState("");
+  const [schemaMap, setSchemaMap] = useState<any[] | null>(null);
+  const [infraAudit, setInfraAudit] = useState<any | null>(null);
+  const [infraLoading, setInfraLoading] = useState(false);
+  const [kb, setKb] = useState<KB[]>([]);
+  const [kbLoading, setKbLoading] = useState(false);
+  const [kbForm, setKbForm] = useState({ title: "", subject: "General", class_level: "All", content: "", tags: "" });
 
-  useEffect(()=>{ fetchAll(); },[]);
-  useEffect(()=>{ if(tab==="knowledge") fetchKB(); },[tab]);
+  useEffect(() => {
+    const saved = localStorage.getItem("shauri_admin_tab");
+    if (saved === "overview" || saved === "students" || saved === "activity" || saved === "knowledge") setTab(saved);
+    refreshAll();
+  }, []);
+  useEffect(() => { localStorage.setItem("shauri_admin_tab", tab); }, [tab]);
+  useEffect(() => { if (tab === "knowledge") void loadKnowledge(); }, [tab]);
 
-  async function fetchAll() {
-    if (!supabase) return;
+  async function refreshAll() {
     setLoading(true);
-    const {data} = await supabase
-      .from("exam_attempts")
-      .select("student_name,class,board,subject,marks_obtained,total_marks,percentage,created_at,mode,id")
-      .order("created_at",{ascending:false}).limit(1000);
-    const rows = data||[];
-    setAttempts(rows as Attempt[]);
-    const map:Record<string,Student>={};
-    const today=new Date().toDateString();
-    const todaySet=new Set<string>();
-    rows.forEach((r:any)=>{
-      const k=`${r.student_name}__${r.class}`;
-      if(!map[k]) map[k]={student_name:r.student_name,class:r.class,board:r.board||"CBSE",attempts:0,avg_score:0,last_active:r.created_at,subjects:[]};
-      map[k].attempts++;
-      if(r.percentage) map[k].avg_score+=r.percentage;
-      if(r.subject&&!map[k].subjects.includes(r.subject)) map[k].subjects.push(r.subject);
-      if(new Date(r.created_at).toDateString()===today) todaySet.add(k);
-    });
-    const list=Object.values(map).map(s=>({...s,avg_score:s.attempts>0?Math.round(s.avg_score/s.attempts):0}));
-    setStudents(list);
-    setStats({total:list.length,avgScore:list.length>0?Math.round(list.reduce((a,s)=>a+s.avg_score,0)/list.length):0,todayActive:todaySet.size,totalAttempts:rows.length});
-    setLoading(false);
-  }
-
-  async function fetchKB() {
-    const res=await fetch("/api/admin/knowledge");
-    const d=await res.json();
-    setKb(d.knowledge||[]);
-  }
-
-  function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0] || null;
-    setKbFile(f);
-    if (f) {
-      setKbContent("");
-      if (!kbTitle) setKbTitle(f.name.replace(/\.[^.]+$/, "").replace(/[-_]/g," "));
+    setError("");
+    try {
+      const [usersRes, activityRes, schemaRes] = await Promise.all([
+        fetch("/api/admin/users", { cache: "no-store" }),
+        fetch("/api/admin/activity", { cache: "no-store" }),
+        fetch("/api/admin/schema", { cache: "no-store" }),
+      ]);
+      const usersBody = await usersRes.json();
+      const activityBody = await activityRes.json();
+      const schemaBody = await schemaRes.json();
+      if (!usersRes.ok) throw new Error(usersBody?.error || "Failed to load users");
+      if (!activityRes.ok) throw new Error(activityBody?.error || "Failed to load activity");
+      setStudents(usersBody.users || []);
+      setAuthStats(usersBody.auth || null);
+      setAttempts(activityBody.activity || []);
+      setSchemaMap(schemaBody.map || []);
+    } catch (e: any) {
+      setError(e?.message || "Failed to load admin data");
+    } finally {
+      setLoading(false);
     }
   }
-
-  async function saveKB() {
-    if (!kbTitle.trim()) { setKbMsg("Title is required"); setKbMsgOk(false); return; }
-    if (!kbContent.trim() && !kbFile) { setKbMsg("Content or file is required"); setKbMsgOk(false); return; }
-    setKbSaving(true);
-    if (kbFile) setExtracting(true);
-    setKbMsg(kbFile ? "Extracting content from file..." : "Saving...");
-    setKbMsgOk(false);
+  async function runInfraAudit() {
+    setInfraLoading(true);
     try {
-      const form = new FormData();
-      form.append("title",       kbTitle);
-      form.append("subject",     kbSubject);
-      form.append("class_level", kbClass);
-      form.append("tags",        kbTags);
-      if (kbFile)    form.append("file",    kbFile);
-      else           form.append("content", kbContent);
-      const res = await fetch("/api/admin/knowledge",{method:"POST",body:form});
-      const d   = await res.json();
-      if (d.ok) {
-        const suffix = d.duplicate ? " (duplicate skipped)" : "";
-        setKbMsg(`Saved! ${d.contentLength ? `(${d.contentLength.toLocaleString()} chars extracted)` : ""}${suffix} AI will now use this knowledge.`);
-        setKbMsgOk(true);
-        if (d?.inferred) setKbInferred(d.inferred as KBInferredPreview);
-        setKbTitle(""); setKbContent(""); setKbTags(""); setKbFile(null);
-        if(fileRef.current) fileRef.current.value="";
-        fetchKB();
-      } else {
-        setKbMsg("Error: "+(d.error||"unknown"));
-        setKbMsgOk(false);
-      }
-    } catch(e:any){ setKbMsg("Error: "+e.message); setKbMsgOk(false); }
-    setKbSaving(false); setExtracting(false);
+      const res = await fetch("/api/admin/infra-audit", { cache: "no-store" });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body?.error || "Infra audit failed");
+      setInfraAudit(body);
+    } catch (e: any) {
+      setError(e?.message || "Infra audit failed");
+    } finally {
+      setInfraLoading(false);
+    }
   }
-
-  async function deleteKB(id:string) {
-    if(!confirm("Remove this entry?")) return;
-    await fetch(`/api/admin/knowledge?id=${id}`,{method:"DELETE"});
-    fetchKB();
+  async function loadKnowledge() {
+    setKbLoading(true);
+    try {
+      const res = await fetch("/api/admin/knowledge", { cache: "no-store" });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body?.error || "Failed to load knowledge base");
+      setKb((body.knowledge || []).filter((x: KB) => x.active));
+    } catch (e: any) {
+      setError(e?.message || "Failed to load knowledge base");
+    } finally {
+      setKbLoading(false);
+    }
   }
-
-  const filtered=students.filter(s=>
-    (s.student_name||"").toLowerCase().includes(search.toLowerCase())||
-    (s.class||"").toLowerCase().includes(search.toLowerCase())
-  );
-
-  const card={background:S.bgCard,border:`1px solid ${S.border}`,borderRadius:16,padding:24,boxShadow:"0 2px 12px rgba(0,0,0,0.04)"};
-  const th={textAlign:"left" as const,padding:"10px 14px",fontSize:10,letterSpacing:2,color:S.textMuted,fontWeight:600};
-  const tdS=(extra={})=>({padding:"11px 14px",...extra});
-  const inp={width:"100%",background:S.bgMuted,border:`1px solid ${S.border}`,borderRadius:10,padding:"10px 14px",fontSize:13,fontFamily:S.font,color:S.text,outline:"none",boxSizing:"border-box" as const};
-  const lbl={fontSize:10,letterSpacing:2,color:S.textMuted,display:"block" as const,marginBottom:6};
-
-  const tabs=[
-    {id:"overview",label:"Overview"},
-    {id:"students",label:"Students"},
-    {id:"activity",label:"Activity"},
-    {id:"knowledge",label:"Knowledge Base"},
-  ];
-  const filteredKB = kb
-    .filter(k => k.active)
-    .filter(k => {
-      const q = kbSearch.trim().toLowerCase();
-      if (!q) return true;
-      return [k.title, k.subject, k.class_level, k.file_name || "", ...(k.tags || [])]
-        .join(" ")
-        .toLowerCase()
-        .includes(q);
+  async function addKnowledge(e: React.FormEvent) {
+    e.preventDefault();
+    const res = await fetch("/api/admin/knowledge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...kbForm, tags: kbForm.tags.split(",").map((x) => x.trim()).filter(Boolean) }),
     });
-
-  function kbBadgeColor(label: KBInferredPreview["priorityLabel"]) {
-    if (label === "critical") return { bg: "#fee2e2", fg: "#b91c1c", bd: "#fecaca" };
-    if (label === "high") return { bg: "#ffedd5", fg: "#c2410c", bd: "#fdba74" };
-    if (label === "medium") return { bg: "#fef9c3", fg: "#a16207", bd: "#fde68a" };
-    return { bg: "#dcfce7", fg: "#166534", bd: "#86efac" };
+    const body = await res.json();
+    if (!res.ok || !body?.ok) throw new Error(body?.error || "Failed to add knowledge");
+    setKbForm({ title: "", subject: "General", class_level: "All", content: "", tags: "" });
+    await loadKnowledge();
   }
+  async function removeKnowledge(id: string) {
+    const res = await fetch(`/api/admin/knowledge?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    const body = await res.json();
+    if (!res.ok || !body?.ok) throw new Error(body?.error || "Failed to remove knowledge");
+    setKb((prev) => prev.filter((k) => k.id !== id));
+  }
+
+  async function logout() {
+    await fetch("/api/admin/auth/logout", { method: "POST" });
+    window.location.reload();
+  }
+
+  const stats = useMemo(() => {
+    const avg = students.length ? Math.round(students.reduce((acc, s) => acc + s.avg_score, 0) / students.length) : 0;
+    const today = new Date().toDateString();
+    const activeToday = attempts.filter((a) => new Date(a.created_at).toDateString() === today).length;
+    return { totalStudents: students.length, totalAttempts: attempts.length, avgScore: avg, activeToday };
+  }, [students, attempts]);
+
+  const filteredStudents = useMemo(
+    () =>
+      students.filter((s) =>
+        `${s.student_name} ${s.class}`.toLowerCase().includes(search.toLowerCase())
+      ),
+    [students, search]
+  );
 
   return (
     <AdminGate>
-      <div style={{minHeight:"100vh",background:`linear-gradient(135deg,${S.bg} 0%,#fef9f0 50%,${S.bg} 100%)`,fontFamily:S.font}}>
-
-        {/* Header */}
-        <div style={{background:"rgba(255,255,255,0.75)",backdropFilter:"blur(12px)",borderBottom:`1px solid ${S.border}`,padding:"18px 40px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+      <div className="min-h-screen bg-[#070d19] text-[#e6ebff]">
+        <header className="border-b border-white/10 bg-[#0b1324]/95 backdrop-blur-xl p-6 md:px-10 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 style={{fontSize:34,fontWeight:900,letterSpacing:8,color:S.text,margin:0}}>SHAURI</h1>
-            <p style={{fontSize:11,letterSpacing:4,color:S.textMuted,margin:"2px 0 0"}}>ADMIN CONTROL PANEL</p>
+            <h1 className="text-3xl font-black tracking-[0.14em]">SHAURI</h1>
+            <p className="text-xs tracking-[0.22em] text-[#9fb0e9]">ADMIN CONTROL CENTER</p>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:20}}>
-            <span style={{fontSize:11,letterSpacing:2,color:S.textMuted}}>{new Date().toLocaleDateString("en-IN",{weekday:"short",day:"numeric",month:"short",year:"numeric"}).toUpperCase()}</span>
-            <button onClick={()=>{sessionStorage.clear();window.location.reload();}}
-              style={{background:"transparent",border:`1px solid ${S.red}`,color:S.red,fontSize:11,letterSpacing:2,padding:"6px 16px",borderRadius:20,cursor:"pointer"}}>
-              LOGOUT
-            </button>
+          <div className="flex items-center gap-3">
+            <button className="rounded-lg border border-[#4a5ea8] px-4 py-2 text-sm" onClick={refreshAll}>Refresh</button>
+            <button className="rounded-lg border border-red-400/50 px-4 py-2 text-sm text-red-200" onClick={logout}>Logout</button>
           </div>
-        </div>
+        </header>
 
-        {/* Tabs */}
-        <div style={{background:"rgba(255,255,255,0.5)",borderBottom:`1px solid ${S.border}`,padding:"0 40px",display:"flex"}}>
-          {tabs.map(t=>(
-            <button key={t.id} onClick={()=>setTab(t.id)}
-              style={{padding:"13px 24px",fontSize:11,letterSpacing:3,fontFamily:S.font,background:"transparent",border:"none",
-                borderBottom:tab===t.id?`3px solid ${S.gold}`:"3px solid transparent",
-                color:tab===t.id?S.text:S.textMuted,fontWeight:tab===t.id?700:400,cursor:"pointer"}}>
-              {t.label.toUpperCase()}
-            </button>
+        <nav className="border-b border-white/10 px-4 md:px-10 flex gap-2">
+          {(["overview", "students", "activity", "knowledge"] as const).map((item) => (
+            <button key={item} onClick={() => setTab(item)} className={`px-4 py-3 text-sm tracking-[0.14em] uppercase border-b-2 ${tab === item ? "border-[#58d4ff] text-white" : "border-transparent text-[#9aabd9]"}`}>{item}</button>
           ))}
-        </div>
+        </nav>
 
-        <div style={{padding:"28px 40px"}}>
-          {loading&&<div style={{display:"flex",justifyContent:"center",padding:80}}><p style={{color:S.textMuted,letterSpacing:4,fontSize:12}}>LOADING DATA...</p></div>}
+        <main className="p-4 md:p-10">
+          {loading ? <p className="text-[#93a4d3] animate-pulse">Loading live data...</p> : null}
+          {error ? <div className="mb-6 rounded-xl border border-red-500/30 bg-red-950/40 p-4"><p>{error}</p><button onClick={refreshAll} className="mt-3 rounded border border-red-300/50 px-3 py-1 text-sm">Retry</button></div> : null}
 
-          {/* OVERVIEW */}
-          {!loading&&tab==="overview"&&(
-            <div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:18,marginBottom:28}}>
-                {[{l:"Total Students",v:stats.total,c:S.gold},{l:"Total Attempts",v:stats.totalAttempts,c:S.purple},{l:"Active Today",v:stats.todayActive,c:S.green},{l:"Avg Score",v:stats.avgScore+"%",c:"#8a4fa5"}].map((s,i)=>(
-                  <div key={i} style={{...card,padding:22}}>
-                    <p style={{fontSize:10,letterSpacing:3,color:S.textMuted,margin:"0 0 8px"}}>{s.l.toUpperCase()}</p>
-                    <p style={{fontSize:38,fontWeight:900,color:s.c,margin:0}}>{s.v}</p>
-                  </div>
-                ))}
+          {!loading && !error && tab === "overview" ? (
+            <section>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <Metric label="Total Students" value={String(stats.totalStudents)} />
+                <Metric label="Total Attempts" value={String(stats.totalAttempts)} />
+                <Metric label="Active Today" value={String(stats.activeToday)} />
+                <Metric label="Average Score" value={`${stats.avgScore}%`} />
               </div>
-              <div style={card}>
-                <p style={{fontSize:11,letterSpacing:3,color:S.textMuted,margin:"0 0 18px"}}>RECENT ACTIVITY</p>
-                <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-                  <thead><tr style={{borderBottom:`1px solid ${S.borderLight}`}}>
-                    {["Student","Class","Subject","Score","Date"].map(h=><th key={h} style={th}>{h.toUpperCase()}</th>)}
-                  </tr></thead>
-                  <tbody>
-                    {attempts.slice(0,15).map((a,i)=>(
-                      <tr key={i} style={{borderBottom:`1px solid ${S.bgMuted}`}}>
-                        <td style={tdS({color:S.text,fontWeight:600})}>{a.student_name}</td>
-                        <td style={tdS({color:S.purple})}>Class {a.class}</td>
-                        <td style={tdS({color:S.textMuted})}>{a.subject}</td>
-                        <td style={tdS()}>{a.percentage!=null?<span style={{color:scoreColor(a.percentage),fontWeight:700}}>{a.percentage}%</span>:<span style={{color:S.borderLight}}>—</span>}</td>
-                        <td style={tdS({color:S.textMuted,fontSize:11})}>{new Date(a.created_at).toLocaleDateString("en-IN",{day:"numeric",month:"short"})}</td>
-                      </tr>
-                    ))}
-                    {!attempts.length&&<tr><td colSpan={5} style={tdS({color:S.textMuted})}>No activity yet.</td></tr>}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* STUDENTS */}
-          {!loading&&tab==="students"&&(
-            <div>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
-                <p style={{fontSize:11,letterSpacing:3,color:S.textMuted,margin:0}}>{filtered.length} STUDENTS ENROLLED</p>
-                <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search name or class..."
-                  style={{background:"white",border:`1px solid ${S.border}`,color:S.text,borderRadius:24,padding:"9px 18px",fontSize:13,width:250,outline:"none",fontFamily:S.font}}/>
-              </div>
-              <div style={{...card,padding:0,overflow:"hidden"}}>
-                <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-                  <thead><tr style={{borderBottom:`1px solid ${S.borderLight}`,background:S.bgMuted}}>
-                    {["Student","Class","Board","Attempts","Avg Score","Subjects","Last Active"].map(h=><th key={h} style={th}>{h.toUpperCase()}</th>)}
-                  </tr></thead>
-                  <tbody>
-                    {!filtered.length&&<tr><td colSpan={7} style={tdS({color:S.textMuted})}>No students found.</td></tr>}
-                    {filtered.map((s,i)=>(
-                      <tr key={i} style={{borderBottom:`1px solid ${S.bgMuted}`}}>
-                        <td style={tdS({color:S.text,fontWeight:700})}>{s.student_name}</td>
-                        <td style={tdS({color:S.purple,fontWeight:600})}>Class {s.class}</td>
-                        <td style={tdS({color:S.textMuted})}>{s.board}</td>
-                        <td style={tdS({color:S.gold,fontWeight:700})}>{s.attempts}</td>
-                        <td style={tdS()}><span style={{color:scoreColor(s.avg_score),fontWeight:700,fontSize:14}}>{s.avg_score}%</span></td>
-                        <td style={tdS({color:S.textMuted,fontSize:11})}>{s.subjects.slice(0,2).join(", ")}{s.subjects.length>2?` +${s.subjects.length-2}`:""}</td>
-                        <td style={tdS({color:S.textMuted,fontSize:11})}>{new Date(s.last_active).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"})}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* ACTIVITY */}
-          {!loading&&tab==="activity"&&(
-            <div style={{...card,padding:0,overflow:"hidden"}}>
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-                <thead><tr style={{borderBottom:`1px solid ${S.borderLight}`,background:S.bgMuted}}>
-                  {["Student","Class","Subject","Marks","Score %","Mode","Date"].map(h=><th key={h} style={th}>{h.toUpperCase()}</th>)}
-                </tr></thead>
-                <tbody>
-                  {!attempts.length&&<tr><td colSpan={7} style={tdS({color:S.textMuted})}>No attempts yet.</td></tr>}
-                  {attempts.map((a,i)=>(
-                    <tr key={i} style={{borderBottom:`1px solid ${S.bgMuted}`}}>
-                      <td style={tdS({color:S.text,fontWeight:600})}>{a.student_name}</td>
-                      <td style={tdS({color:S.purple})}>Class {a.class}</td>
-                      <td style={tdS({color:S.textMuted})}>{a.subject}</td>
-                      <td style={tdS({color:S.text})}>{a.marks_obtained!=null?`${a.marks_obtained}/${a.total_marks}`:"—"}</td>
-                      <td style={tdS()}>{a.percentage!=null?<span style={{color:scoreColor(a.percentage),fontWeight:700}}>{a.percentage}%</span>:<span style={{color:S.borderLight}}>—</span>}</td>
-                      <td style={tdS()}>
-                        <span style={{background:S.bgMuted,border:`1px solid ${S.border}`,color:S.textMuted,fontSize:10,letterSpacing:1,padding:"2px 8px",borderRadius:20}}>
-                          {(a.mode||"examiner").toUpperCase()}
-                        </span>
-                      </td>
-                      <td style={tdS({color:S.textMuted,fontSize:11})}>{new Date(a.created_at).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"})}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* KNOWLEDGE BASE */}
-          {tab==="knowledge"&&(
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24}}>
-
-              {/* Upload form */}
-              <div style={card}>
-                <p style={{fontSize:11,letterSpacing:3,color:S.textMuted,margin:"0 0 6px"}}>ADD TO KNOWLEDGE BASE</p>
-                <p style={{fontSize:12,color:S.textMuted,margin:"0 0 20px",lineHeight:1.7}}>
-                  Upload any file or paste text. The AI automatically searches this knowledge base before every response and uses the most relevant content.
-                </p>
-
-                {/* Supported formats banner */}
-                <div style={{background:S.bgMuted,border:`1px solid ${S.borderLight}`,borderRadius:10,padding:"10px 14px",marginBottom:18,fontSize:11,color:S.textMuted,lineHeight:1.8}}>
-                  <strong style={{color:S.text}}>Supported formats:</strong><br/>
-                  📄 PDF &nbsp;|&nbsp; 🖼️ Images (PNG, JPG, WEBP) &nbsp;|&nbsp; 📝 Word (DOCX) &nbsp;|&nbsp; 📊 PowerPoint (PPTX) &nbsp;|&nbsp; 📈 Excel (XLSX) &nbsp;|&nbsp; 📃 Text / Markdown / CSV
-                  <br/><span style={{color:S.textLight}}>PDF, images and Office files are extracted automatically using Gemini AI.</span>
-                </div>
-
-                <div style={{marginBottom:14}}>
-                  <label style={lbl}>TITLE *</label>
-                  <input value={kbTitle} onChange={e=>setKbTitle(e.target.value)} placeholder="e.g. Chapter 1 — Real Numbers Notes" style={inp}/>
-                </div>
-
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
-                  <div>
-                    <label style={lbl}>SUBJECT</label>
-                    <select value={kbSubject} onChange={e=>setKbSubject(e.target.value)} style={{...inp,padding:"10px 14px"}}>
-                      {SUBJECTS.map(s=><option key={s}>{s}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={lbl}>CLASS</label>
-                    <select value={kbClass} onChange={e=>setKbClass(e.target.value)} style={{...inp,padding:"10px 14px"}}>
-                      {CLASSES.map(c=><option key={c}>{c}</option>)}
-                    </select>
-                  </div>
-                </div>
-
-                <div style={{marginBottom:14}}>
-                  <label style={lbl}>TAGS (comma separated)</label>
-                  <input value={kbTags} onChange={e=>setKbTags(e.target.value)} placeholder="e.g. hcf, lcm, real numbers, chapter 1" style={inp}/>
-                </div>
-
-                {/* File drop zone */}
-                <div style={{marginBottom:14}}>
-                  <label style={lbl}>UPLOAD FILE</label>
-                  <div style={{border:`2px dashed ${kbFile?S.green:S.border}`,borderRadius:12,padding:"20px 16px",textAlign:"center",background:kbFile?"#f0faf4":S.bgMuted,transition:"all 0.2s",cursor:"pointer"}}
-                    onClick={()=>fileRef.current?.click()}>
-                    {kbFile ? (
-                      <div>
-                        <p style={{fontSize:24,margin:"0 0 6px"}}>{fileIcon(kbFile.name)}</p>
-                        <p style={{color:S.green,fontWeight:700,fontSize:13,margin:"0 0 2px"}}>{kbFile.name}</p>
-                        <p style={{color:S.textMuted,fontSize:11,margin:0}}>{(kbFile.size/1024).toFixed(1)} KB — click to change</p>
-                      </div>
-                    ) : (
-                      <div>
-                        <p style={{fontSize:28,margin:"0 0 8px"}}>📁</p>
-                        <p style={{color:S.textMuted,fontSize:13,margin:"0 0 4px"}}>Click to choose file</p>
-                        <p style={{color:S.textLight,fontSize:11,margin:0}}>PDF, Word, PowerPoint, Excel, Images, Text</p>
-                      </div>
-                    )}
-                    <input ref={fileRef} type="file" accept={ACCEPTED} onChange={onFileChange} style={{display:"none"}}/>
-                  </div>
-                  {kbFile&&(
-                    <button onClick={()=>{setKbFile(null);if(fileRef.current)fileRef.current.value="";}}
-                      style={{background:"transparent",border:"none",color:S.red,fontSize:11,cursor:"pointer",marginTop:4,fontFamily:S.font}}>
-                      ✕ Remove file
-                    </button>
-                  )}
-                </div>
-
-                {/* Text area */}
-                <div style={{marginBottom:18}}>
-                  <label style={lbl}>OR PASTE CONTENT DIRECTLY</label>
-                  <textarea value={kbContent} onChange={e=>{setKbContent(e.target.value);if(e.target.value){setKbFile(null);if(fileRef.current)fileRef.current.value="";}}}
-                    placeholder="Paste notes, chapter summaries, explanations, NCERT content, custom rules..."
-                    rows={6}
-                    style={{...inp,resize:"vertical" as const}}/>
-                </div>
-
-                {kbMsg&&(
-                  <div style={{background:kbMsgOk?"#f0faf4":"#fef2f2",border:`1px solid ${kbMsgOk?S.green:S.red}`,borderRadius:10,padding:"10px 14px",marginBottom:14}}>
-                    <p style={{fontSize:12,color:kbMsgOk?S.green:S.red,margin:0,fontWeight:600}}>
-                      {extracting?"⏳":kbMsgOk?"✅":"❌"} {kbMsg}
-                    </p>
-                  </div>
-                )}
-                {kbInferred && (
-                  <div style={{ background: "#f8fafc", border: `1px solid ${S.borderLight}`, borderRadius: 10, padding: "10px 12px", marginBottom: 14 }}>
-                    <p style={{ margin: "0 0 6px", fontSize: 11, letterSpacing: 1.5, color: S.textMuted }}>AUTO CLASSIFICATION PREVIEW</p>
-                    <p style={{ margin: 0, fontSize: 12, color: S.text, lineHeight: 1.6 }}>
-                      {kbInferred.documentType} · Class {kbInferred.classLevel} · {kbInferred.subject} · {kbInferred.chapter}
-                      {" · "}Priority {kbInferred.priorityScore}/100 · Syllabus {kbInferred.syllabusRelevance}/100
-                    </p>
-                  </div>
-                )}
-
-                <button onClick={saveKB} disabled={kbSaving}
-                  style={{width:"100%",background:kbSaving?S.textLight:S.text,color:"white",border:"none",borderRadius:24,padding:"13px 0",fontSize:11,letterSpacing:3,fontFamily:S.font,cursor:kbSaving?"not-allowed":"pointer",fontWeight:700}}>
-                  {kbSaving?(extracting?"EXTRACTING CONTENT...":"SAVING..."):"ADD TO KNOWLEDGE BASE"}
-                </button>
-              </div>
-
-              {/* KB entries list */}
-              <div style={card}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
-                  <p style={{fontSize:11,letterSpacing:3,color:S.textMuted,margin:0}}>
-                    KNOWLEDGE BASE &nbsp;
-                    <span style={{background:S.gold,color:"white",borderRadius:10,padding:"2px 10px",fontSize:10}}>{kb.filter(k=>k.active).length}</span>
-                  </p>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <input value={kbSearch} onChange={e=>setKbSearch(e.target.value)} placeholder="Search KB..."
-                      style={{...inp, width: 180, padding:"6px 10px", fontSize:11}} />
-                    <button onClick={fetchKB}
-                      style={{background:"transparent",border:`1px solid ${S.border}`,color:S.textMuted,fontSize:10,letterSpacing:2,padding:"4px 12px",borderRadius:12,cursor:"pointer",fontFamily:S.font}}>
-                      REFRESH
-                    </button>
-                  </div>
-                </div>
-
-                {kb.length===0&&(
-                  <div style={{textAlign:"center",padding:"50px 20px"}}>
-                    <p style={{fontSize:40,marginBottom:8}}>📚</p>
-                    <p style={{color:S.textMuted,fontSize:14,fontWeight:600}}>Knowledge base is empty</p>
-                    <p style={{color:S.textLight,fontSize:12,lineHeight:1.6}}>Add your first entry on the left.<br/>The AI will start using it immediately in all chat sessions.</p>
-                  </div>
-                )}
-
-                <div style={{display:"flex",flexDirection:"column",gap:10,maxHeight:600,overflowY:"auto"}}>
-                  {filteredKB.map(k=>{
-                    const inferred = inferKBMetadata({
-                      id: k.id,
-                      title: k.title,
-                      subject: k.subject,
-                      class_level: k.class_level,
-                      content: (k.tags || []).join(" "),
-                      tags: k.tags || [],
-                      file_name: k.file_name,
-                      created_at: k.created_at,
-                    });
-                    const pr = kbBadgeColor(inferred.priorityLabel);
-                    const relevance = Math.round((inferred.syllabusRelevance * 0.55) + (inferred.priorityScore * 0.45));
-                    return (
-                    <div key={k.id} style={{background:S.bgMuted,border:`1px solid ${S.borderLight}`,borderRadius:12,padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-                          <span style={{fontSize:16}}>{k.file_name?fileIcon(k.file_name):"📝"}</span>
-                          <p style={{color:S.text,fontWeight:700,fontSize:13,margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{k.title}</p>
-                          <span style={{background:"#eff6ff",border:"1px solid #bfdbfe",color:"#1d4ed8",fontSize:10,padding:"2px 8px",borderRadius:10}}>{inferred.documentType}</span>
-                          {inferred.documentType === "Syllabus" && <span style={{background:"#dcfce7",border:"1px solid #86efac",color:"#166534",fontSize:10,padding:"2px 8px",borderRadius:10}}>SYLLABUS PRIORITY</span>}
-                        </div>
-                        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:4}}>
-                          <span style={{background:S.bgCard,border:`1px solid ${S.border}`,color:S.purple,fontSize:10,padding:"2px 8px",borderRadius:10}}>{k.subject}</span>
-                          <span style={{background:S.bgCard,border:`1px solid ${S.border}`,color:S.textMuted,fontSize:10,padding:"2px 8px",borderRadius:10}}>Class {k.class_level}</span>
-                          <span style={{background:pr.bg,border:`1px solid ${pr.bd}`,color:pr.fg,fontSize:10,padding:"2px 8px",borderRadius:10}}>Priority {inferred.priorityScore}</span>
-                          <span style={{background:"#faf5ff",border:"1px solid #ddd6fe",color:"#6d28d9",fontSize:10,padding:"2px 8px",borderRadius:10}}>Retrieval {relevance}</span>
-                          <span style={{background:"#fffbeb",border:"1px solid #fde68a",color:"#92400e",fontSize:10,padding:"2px 8px",borderRadius:10}}>Indexed</span>
-                          {k.file_name&&<span style={{background:S.bgCard,border:`1px solid ${S.border}`,color:S.green,fontSize:10,padding:"2px 8px",borderRadius:10}}>{k.file_name}</span>}
-                          {k.file_type&&k.file_type!=="text"&&<span style={{background:"#fef3cd",border:`1px solid ${S.gold}`,color:S.amber,fontSize:10,padding:"2px 8px",borderRadius:10}}>{k.file_type.toUpperCase()}</span>}
-                        </div>
-                        {k.tags?.length>0&&<p style={{color:S.textLight,fontSize:10,margin:"0 0 2px"}}>#{k.tags.join(" #")}</p>}
-                        <p style={{color:S.textLight,fontSize:10,margin:0}}>{new Date(k.created_at).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"})}</p>
-                      </div>
-                      <button onClick={()=>deleteKB(k.id)}
-                        style={{background:"transparent",border:`1px solid ${S.red}`,color:S.red,fontSize:10,padding:"4px 10px",borderRadius:10,cursor:"pointer",fontFamily:S.font,flexShrink:0}}>
-                        REMOVE
-                      </button>
+              <div className="grid lg:grid-cols-2 gap-4">
+                <Card title="Auth Users">
+                  <p>Total registered: {authStats?.totalRegisteredUsers ?? 0}</p>
+                  <p>Logged in at least once: {authStats?.usersLoggedInAtLeastOnce ?? 0}</p>
+                  <p>Active in last 24h: {authStats?.activeUsers ?? 0}</p>
+                </Card>
+                <Card title="Recent Signups">
+                  {!authStats?.recentSignups?.length ? <p className="text-[#9aabd9]">No recent signups.</p> : authStats.recentSignups.slice(0, 8).map((u) => <p key={u.id} className="text-sm">{u.email || "No email"} - {new Date(u.created_at).toLocaleDateString("en-IN")}</p>)}
+                </Card>
+                <Card title="Schema Compatibility">
+                  {!schemaMap?.length ? <p className="text-[#9aabd9]">Schema report unavailable.</p> : schemaMap.map((row) => <p key={row.table} className="text-sm">{row.table}: {row.status}</p>)}
+                </Card>
+                <Card title="Infrastructure Audit">
+                  <button className="rounded border border-[#4a5ea8] px-3 py-1 text-sm mb-3" onClick={runInfraAudit}>{infraLoading ? "Running..." : "Run Audit"}</button>
+                  {!infraAudit ? <p className="text-[#9aabd9]">Run audit to verify schema/RLS/index/storage/auth metadata.</p> : (
+                    <div className="text-sm space-y-1">
+                      <p>Generated: {new Date(infraAudit.generatedAt).toLocaleString("en-IN")}</p>
+                      <p>Schema check: {infraAudit.schemaCompatibility?.ok ? "pass" : "fail"}</p>
+                      <p>Anon exposure findings: {(infraAudit.rlsExposureCheck || []).filter((x:any)=>x.exposed).length}</p>
+                      <p>Auth users sampled: {infraAudit.auth?.totalUsers ?? 0}</p>
                     </div>
-                  )})}
-                </div>
+                  )}
+                </Card>
               </div>
+            </section>
+          ) : null}
 
-            </div>
-          )}
-        </div>
+          {!loading && !error && tab === "students" ? (
+            <section>
+              <div className="flex justify-between items-center mb-4">
+                <p className="text-sm tracking-[0.14em] text-[#9aabd9]">{filteredStudents.length} STUDENTS</p>
+                <input className="rounded-lg bg-[#101b34] border border-white/15 px-3 py-2" placeholder="Search name or class..." value={search} onChange={(e) => setSearch(e.target.value)} />
+              </div>
+              <Table headers={["Student", "Class", "Board", "Attempts", "Avg Score", "Last Active"]}>
+                {!filteredStudents.length ? <tr><td colSpan={6} className="p-4 text-[#9aabd9]">No students found.</td></tr> : filteredStudents.map((s) => (
+                  <tr key={`${s.student_name}-${s.class}`} className="border-t border-white/10">
+                    <td className="p-3">{s.student_name}</td><td className="p-3">{s.class}</td><td className="p-3">{s.board}</td><td className="p-3">{s.attempts}</td><td className="p-3">{s.avg_score}%</td><td className="p-3">{s.last_active ? new Date(s.last_active).toLocaleDateString("en-IN") : "-"}</td>
+                  </tr>
+                ))}
+              </Table>
+            </section>
+          ) : null}
+
+          {!loading && !error && tab === "activity" ? (
+            <section>
+              <Table headers={["Student", "Class", "Subject", "Marks", "Score", "Mode", "Date"]}>
+                {!attempts.length ? <tr><td colSpan={7} className="p-4 text-[#9aabd9]">No activity found.</td></tr> : attempts.map((a) => (
+                  <tr key={a.id} className="border-t border-white/10">
+                    <td className="p-3">{a.student_name}</td><td className="p-3">{a.class}</td><td className="p-3">{a.subject}</td><td className="p-3">{a.marks_obtained ?? "-"} / {a.total_marks ?? "-"}</td><td className="p-3">{a.percentage ?? "-"}{a.percentage !== null ? "%" : ""}</td><td className="p-3">{a.mode || "examiner"}</td><td className="p-3">{new Date(a.created_at).toLocaleDateString("en-IN")}</td>
+                  </tr>
+                ))}
+              </Table>
+            </section>
+          ) : null}
+
+          {!loading && !error && tab === "knowledge" ? (
+            <section className="grid lg:grid-cols-2 gap-4">
+              <Card title="Add Knowledge">
+                <form className="space-y-3" onSubmit={(e)=>{addKnowledge(e).catch((err)=>setError(err.message));}}>
+                  <input className="w-full rounded-lg bg-[#101b34] border border-white/15 px-3 py-2" placeholder="Title" value={kbForm.title} onChange={(e)=>setKbForm((p)=>({...p,title:e.target.value}))} required />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input className="w-full rounded-lg bg-[#101b34] border border-white/15 px-3 py-2" placeholder="Subject" value={kbForm.subject} onChange={(e)=>setKbForm((p)=>({...p,subject:e.target.value}))} />
+                    <input className="w-full rounded-lg bg-[#101b34] border border-white/15 px-3 py-2" placeholder="Class" value={kbForm.class_level} onChange={(e)=>setKbForm((p)=>({...p,class_level:e.target.value}))} />
+                  </div>
+                  <input className="w-full rounded-lg bg-[#101b34] border border-white/15 px-3 py-2" placeholder="Tags comma separated" value={kbForm.tags} onChange={(e)=>setKbForm((p)=>({...p,tags:e.target.value}))} />
+                  <textarea className="w-full rounded-lg bg-[#101b34] border border-white/15 px-3 py-2 min-h-40" placeholder="Content" value={kbForm.content} onChange={(e)=>setKbForm((p)=>({...p,content:e.target.value}))} required />
+                  <button className="rounded-lg border border-[#4a5ea8] px-4 py-2 text-sm">Save Knowledge</button>
+                </form>
+              </Card>
+              <Card title="Knowledge Entries">
+                {kbLoading ? <p className="text-[#9aabd9] animate-pulse">Loading knowledge...</p> : null}
+                {!kbLoading && !kb.length ? <p className="text-[#9aabd9]">No active knowledge entries.</p> : null}
+                <div className="space-y-2 max-h-[520px] overflow-auto">
+                  {kb.map((k) => (
+                    <div key={k.id} className="rounded-lg border border-white/10 p-3">
+                      <p className="font-semibold">{k.title}</p>
+                      <p className="text-xs text-[#9aabd9]">{k.subject} · Class {k.class_level} · {new Date(k.created_at).toLocaleDateString("en-IN")}</p>
+                      <button className="mt-2 text-xs rounded border border-red-500/50 px-2 py-1 text-red-200" onClick={()=>removeKnowledge(k.id).catch((err)=>setError(err.message))}>Remove</button>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </section>
+          ) : null}
+        </main>
       </div>
     </AdminGate>
   );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-2xl border border-white/10 bg-[#111c35] p-5"><p className="text-xs tracking-[0.16em] text-[#9db0ea] mb-2">{label.toUpperCase()}</p><p className="text-3xl font-bold">{value}</p></div>;
+}
+
+function Card({ title, children }: { title: string; children: React.ReactNode }) {
+  return <div className="rounded-2xl border border-white/10 bg-[#111c35] p-5"><p className="text-xs tracking-[0.16em] text-[#9db0ea] mb-3">{title.toUpperCase()}</p>{children}</div>;
+}
+
+function Table({ headers, children }: { headers: string[]; children: React.ReactNode }) {
+  return <div className="overflow-auto rounded-2xl border border-white/10 bg-[#111c35]"><table className="w-full text-left text-sm"><thead><tr>{headers.map((h) => <th key={h} className="p-3 text-xs tracking-[0.14em] text-[#9db0ea]">{h.toUpperCase()}</th>)}</tr></thead><tbody>{children}</tbody></table></div>;
 }

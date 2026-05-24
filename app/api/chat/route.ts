@@ -478,6 +478,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ reply: confirmReply });
     }
 
+    /* -- ORAL / FUN-SKILL MODES -------------------------------- */
+    if (mode === "oral" || mode === "funskill" || mode === "practice" || mode === "revision") {
+      const subjectHint = body?.subject || undefined;
+      const sysWithKB = await buildSystemWithKB(mode, subjectHint, student, message);
+      const reply = await callAI(sysWithKB, [
+        ...history,
+        { role: "user", content: message },
+      ]);
+      return NextResponse.json({ reply });
+    }
+
     return NextResponse.json({ reply: "Invalid mode." });
 
   } catch (err) {

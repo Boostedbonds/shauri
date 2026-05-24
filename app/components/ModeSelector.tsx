@@ -1216,7 +1216,7 @@ export default function ModeSelector() {
         .choose-sub { text-align: center; font-size: clamp(9px,2vw,14px); letter-spacing: clamp(0.05em,1vw,0.18em); color: #5c6f82; margin-bottom: clamp(20px,4vw,44px); }
         .cards-grid { display: grid; gap: clamp(12px,3vw,28px); grid-template-columns: 1fr; }
         @media (min-width:560px) { .cards-grid { grid-template-columns: repeat(2,1fr); } }
-        @media (min-width:1100px) { .cards-grid { grid-template-columns: repeat(6,1fr); } }
+        @media (min-width:1100px) { .cards-grid { grid-template-columns: repeat(7,1fr); } }
         .mode-card { background: rgba(255,255,255,0.55); backdrop-filter: blur(10px); border-radius: 18px; border: 1px solid rgba(212,175,55,0.35); text-decoration: none; display: flex; flex-direction: row; align-items: center; gap: 16px; padding: clamp(16px,3vw,22px) clamp(14px,3vw,20px); transition: transform 0.15s, box-shadow 0.15s; -webkit-tap-highlight-color: transparent; }
         .mode-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.1); }
         .mode-card:active { transform: scale(0.97); }
@@ -1269,6 +1269,7 @@ export default function ModeSelector() {
           <ModeCard icon="🧠" title="LEARN MODE"            desc="Learn concepts with clear CBSE-aligned explanations and examples."                          href="/teacher"  cta="BEGIN LEARNING" />
           <ModeCard icon="🧪" title="EXAMINER MODE"         desc="Practice full-length question papers in real exam conditions."                              href="/examiner" cta="BEGIN TEST" />
           <ModeCard icon="🗣️" title="ORAL MODE"             desc="Strengthen recall, fluency, and spoken confidence."                                         href="/oral"     cta="BEGIN SPEAKING" />
+          <ModeCard icon="⚡" title="FUN / SKILL MODE"       desc="Enter an elite challenge arena with puzzles, tricks, speed rounds, and adaptive training." href="/fun-skill" cta="ENTER ARENA" />
           <ModeCard icon="🎬" title="AUDIO-VISUAL MODE"     desc="Watch the best teacher videos with AI explanation, quiz & Q&A for any topic." href="/av"       cta="BEGIN WATCHING" highlight />
           <ModeCard icon="🔬" title="VIRTUAL LAB"           desc="Run interactive CBSE practical simulations with diagrams, observations, quiz and viva."     href="/lab"      cta="OPEN LAB" />
           <ModeCard icon="📊" title="PROGRESS DASHBOARD"    desc="Review strengths, identify gaps, and track your growth."                                    href="/progress" cta="VIEW PROGRESS" />

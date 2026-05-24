@@ -7,6 +7,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { inferKBMetadata, type KBEntry } from "@/app/lib/knowledgeBase";
+import { validateAdminSession } from "@/app/lib/admin-core";
+import { validateAdminSchemaCompatibility } from "@/app/lib/admin-schema";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -107,6 +109,11 @@ Output ONLY the extracted content, no preamble.`;
 }
 
 export async function GET() {
+  const session = await validateAdminSession();
+  if (!session.ok) return NextResponse.json({ error: session.reason }, { status: 401 });
+  const schema = await validateAdminSchemaCompatibility();
+  if (!schema.ok) return NextResponse.json({ error: "Admin schema compatibility check failed.", schema }, { status: 500 });
+
   const { data, error } = await supabase
     .from("knowledge_base")
     .select("id, title, subject, class_level, tags, file_name, file_type, created_at, active")
@@ -116,6 +123,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const session = await validateAdminSession();
+  if (!session.ok) return NextResponse.json({ error: session.reason }, { status: 401 });
+
   try {
     const contentType = req.headers.get("content-type") || "";
     let title = "", subject = "General", classLevel = "All";
@@ -248,6 +258,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const session = await validateAdminSession();
+  if (!session.ok) return NextResponse.json({ error: session.reason }, { status: 401 });
+
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
   const { error } = await supabase.from("knowledge_base").update({ active: false }).eq("id", id);

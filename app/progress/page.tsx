@@ -45,6 +45,12 @@ type SubjectStat = {
 type SyncState = "idle" | "loading" | "success" | "error";
 type OSMStatus = "idle" | "uploading" | "evaluating" | "done" | "error";
 type OSMResult = { studentName: string; subject: string; score: number; total: number; percentage: number; grade: string; breakdown: any[]; remarks: string };
+type AdaptiveInsights = {
+  mastery: Array<{ mode: string; level: number; mastery_score: number; confidence_score: number; speaking_rank: string; pronunciation_avg: number }>;
+  weakAreas: Array<{ mode: string; track: string; quality_ratio: number; event_count: number }>;
+  timeline: Array<{ snapshot_date: string; engagement_score: number; mastery_score: number; avg_confidence: number }>;
+  profileSummary?: { strongestSkills: string[]; weakPatterns: string[]; idealDifficulty: number; confidencePattern: number };
+};
 
 // ─── Helpers ──────────────────────────────────────────────────
 const GRADES = [
@@ -82,6 +88,18 @@ function fmtTime(secs: number): string {
   if (h > 0) return `${h}h ${m}m`;
   if (m > 0) return `${m}m`;
   return `${secs}s`;
+}
+function buildStudentKey() {
+  if (typeof window === "undefined") return "";
+  try {
+    const s = JSON.parse(localStorage.getItem("shauri_student") || "null");
+    const name = String(s?.name || "student").toLowerCase().replace(/\s+/g, "_");
+    const cls = String(s?.class || "x");
+    const board = String(s?.board || "cbse").toLowerCase();
+    return `${name}__${cls}__${board}`;
+  } catch {
+    return "";
+  }
 }
 
 function normaliseRecord(raw: any): ActivityRecord {
@@ -432,6 +450,8 @@ export default function ProgressPage() {
   const [aiLoading,  setAiLoading]  = useState(false);
   const [syncState,  setSyncState]  = useState<SyncState>("loading");
   const [errorMsg,   setErrorMsg]   = useState("");
+  const [adaptiveInsights, setAdaptiveInsights] = useState<AdaptiveInsights | null>(null);
+  const [adaptiveLoading, setAdaptiveLoading] = useState(false);
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
   const [showOSM,    setShowOSM]    = useState(false);
   const [showDebug,  setShowDebug]  = useState(false);
@@ -483,6 +503,23 @@ export default function ProgressPage() {
   }, []);
 
   useEffect(() => { fetchRecords(); }, [fetchRecords]);
+
+  useEffect(() => {
+    const key = buildStudentKey();
+    if (!key) return;
+    let cancelled = false;
+    (async () => {
+      setAdaptiveLoading(true);
+      try {
+        const res = await fetch(`/api/adaptive/insights?studentKey=${encodeURIComponent(key)}`, { cache: "no-store" });
+        if (!res.ok) throw new Error("Failed to load adaptive insights");
+        const data = await res.json();
+        if (!cancelled) setAdaptiveInsights(data);
+      } catch {}
+      if (!cancelled) setAdaptiveLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const filteredRecords = useMemo(() =>
     activeMode === "all" ? records : records.filter(r => r.mode === activeMode),
@@ -595,6 +632,36 @@ export default function ProgressPage() {
 
         {/* Tools */}
         <div style={{ marginBottom: 28 }}><ToolsSection onOpenOSM={() => setShowOSM(true)} /></div>
+
+        <div style={{ marginBottom: 28, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 18, padding: "18px 20px" }}>
+          <h2 style={{ margin: 0, fontSize: 16, color: "#0f172a", fontWeight: 700 }}>Adaptive Mastery Profile</h2>
+          {adaptiveLoading && <p style={{ fontSize: 13, color: "#64748b", marginTop: 10 }}>Loading mastery ladders and weak-area timelines...</p>}
+          {!adaptiveLoading && adaptiveInsights?.profileSummary && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 10, marginTop: 12 }}>
+              <div style={{ background: "#f8fafc", borderRadius: 10, padding: "10px 12px" }}>
+                <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Strongest Skills</div>
+                <div style={{ fontSize: 12, color: "#0f172a", marginTop: 6 }}>{adaptiveInsights.profileSummary.strongestSkills.slice(0,2).join(" • ") || "Building..."}</div>
+              </div>
+              <div style={{ background: "#f8fafc", borderRadius: 10, padding: "10px 12px" }}>
+                <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Weak Patterns</div>
+                <div style={{ fontSize: 12, color: "#0f172a", marginTop: 6 }}>{adaptiveInsights.profileSummary.weakPatterns.slice(0,2).join(" • ") || "Stable"}</div>
+              </div>
+              <div style={{ background: "#f8fafc", borderRadius: 10, padding: "10px 12px" }}>
+                <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Ideal Difficulty</div>
+                <div style={{ fontSize: 18, color: "#2563eb", marginTop: 4, fontWeight: 800 }}>{adaptiveInsights.profileSummary.idealDifficulty}/5</div>
+              </div>
+              <div style={{ background: "#f8fafc", borderRadius: 10, padding: "10px 12px" }}>
+                <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Confidence Trend</div>
+                <div style={{ fontSize: 18, color: "#7c3aed", marginTop: 4, fontWeight: 800 }}>{adaptiveInsights.profileSummary.confidencePattern}%</div>
+              </div>
+            </div>
+          )}
+          {!adaptiveLoading && (adaptiveInsights?.timeline?.length ?? 0) > 0 && (
+            <div style={{ marginTop: 12, fontSize: 12, color: "#334155", lineHeight: 1.6 }}>
+              Last {(adaptiveInsights?.timeline?.length ?? 0)} snapshots tracked • Latest engagement score: {adaptiveInsights?.timeline?.[(adaptiveInsights?.timeline?.length ?? 1) - 1]?.engagement_score ?? 0}
+            </div>
+          )}
+        </div>
 
         {isLoading && subjects.length === 0 && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, marginBottom: 28 }}>

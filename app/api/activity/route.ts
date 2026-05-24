@@ -9,7 +9,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { upsertUser } from "@/app/lib/hawkeyeStore";
 
 export const maxDuration = 60;
 
@@ -32,15 +31,6 @@ export async function POST(req: NextRequest) {
 
   try {
     const { student_name, subject, day, mode } = body;
-
-    // ---------- USER TRACK ----------
-    await upsertUser({
-      name: String(student_name || "Student"),
-      class: String(body?.class || "10"),
-      testsTaken: 1,
-      usageCount: 1,
-      activity: "Exam attempted",
-    });
 
     if (!student_name || !subject || !day) {
       return NextResponse.json(
