@@ -1040,7 +1040,15 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
   }, [lastOutcome]);
 
   useEffect(() => {
-    setRecords(loadRecords());
+    // Always start fresh — don't let persisted wear from old sessions
+    // fire scary alerts before the student has done anything.
+    const fresh: ApparatusRecords = {
+      microscope: { wear: 1, calibration: 1, sealIntegrity: 1, thermalFatigue: 0, electricalFatigue: 0, contamination: 0, structuralStress: 0, stage: "optimal", usageCycles: 0 },
+      burette:    { wear: 1, calibration: 1, sealIntegrity: 1, thermalFatigue: 0, electricalFatigue: 0, contamination: 0, structuralStress: 0, stage: "optimal", usageCycles: 0 },
+      burner:     { wear: 1, calibration: 1, sealIntegrity: 1, thermalFatigue: 0, electricalFatigue: 0, contamination: 0, structuralStress: 0, stage: "optimal", usageCycles: 0 },
+      circuit:    { wear: 1, calibration: 1, sealIntegrity: 1, thermalFatigue: 0, electricalFatigue: 0, contamination: 0, structuralStress: 0, stage: "optimal", usageCycles: 0 },
+    };
+    setRecords(fresh);
   }, []);
 
   useEffect(() => {
@@ -1386,37 +1394,74 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
               canvas?.requestPointerLock();
             }}
             style={{
-            position: "absolute", inset: 0,
-            background: "rgba(3,7,18,0.78)",
-            display: "flex", flexDirection: "column",
-            alignItems: "center", justifyContent: "center",
-            cursor: "pointer", pointerEvents: "auto",
-            backdropFilter: "blur(4px)",
-            zIndex: 10,
-          }}>
-            <div style={{ fontSize: 44, marginBottom: 14 }}>🔬</div>
-            <div style={{
-              color: "#cce8ff", fontWeight: 700, fontSize: 20,
-              marginBottom: 8, letterSpacing: "0.02em",
+              position: "absolute", inset: 0,
+              background: "rgba(3,7,18,0.82)",
+              display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "center",
+              cursor: "pointer", pointerEvents: "auto",
+              backdropFilter: "blur(5px)",
+              zIndex: 10,
+              fontFamily: "'Segoe UI', system-ui, sans-serif",
             }}>
-              Click to enter the lab
+            <div style={{ fontSize: 52, marginBottom: 10 }}>🔬</div>
+            <div style={{ color: "#cce8ff", fontWeight: 800, fontSize: 22, marginBottom: 6, letterSpacing: "0.02em" }}>
+              {experiment.title}
             </div>
+            <div style={{ color: "#88b8d8", fontSize: 13, marginBottom: 22 }}>
+              {experiment.description}
+            </div>
+
+            {/* Step-by-step card */}
             <div style={{
-              color: "rgba(160,200,240,0.72)", fontSize: 13,
-              display: "flex", gap: 16, alignItems: "center",
+              background: "rgba(8,22,46,0.75)", border: "1px solid rgba(80,160,255,0.25)",
+              borderRadius: 14, padding: "16px 24px", marginBottom: 22, maxWidth: 400,
+              display: "flex", flexDirection: "column", gap: 10,
             }}>
-              <span>🖱 Mouse to look</span>
-              <span>WASD to walk</span>
-              <span>
-                <kbd style={{
-                  background: "rgba(255,255,255,0.12)",
-                  border: "1px solid rgba(255,255,255,0.25)",
-                  padding: "2px 8px", borderRadius: 5,
-                  fontFamily: "inherit", fontSize: 13,
-                }}>E</kbd>
-                {" "}to interact
-              </span>
+              {[
+                { icon: "1️⃣", text: "Click anywhere to enter the lab" },
+                { icon: "2️⃣", text: "Use W A S D keys to walk toward the glowing station" },
+                { icon: "3️⃣", text: "Look around with your mouse" },
+                { icon: "4️⃣", text: "Stand in front of any instrument and press E to use it" },
+                { icon: "5️⃣", text: "The AI guide on the top-left will tell you what to do next" },
+              ].map(({ icon, text }) => (
+                <div key={icon} style={{ display: "flex", alignItems: "center", gap: 12, color: "#b8d8f8", fontSize: 13 }}>
+                  <span style={{ fontSize: 18, flexShrink: 0 }}>{icon}</span>
+                  <span>{text}</span>
+                </div>
+              ))}
             </div>
+
+            <div style={{
+              background: "linear-gradient(90deg, rgba(41,149,255,0.9), rgba(33,201,167,0.9))",
+              color: "#fff", fontWeight: 700, fontSize: 15,
+              padding: "12px 36px", borderRadius: 12,
+              boxShadow: "0 0 24px rgba(40,160,255,0.35)",
+              letterSpacing: "0.04em",
+            }}>
+              ▶ Click to Start
+            </div>
+            <div style={{ color: "rgba(120,170,220,0.5)", fontSize: 11, marginTop: 10 }}>
+              Press Esc at any time to exit the lab view
+            </div>
+          </div>
+        )}
+
+        {/* ── Re-lock banner — shown when pointer lock is lost mid-session ── */}
+        {!pointerLocked && (
+          <div
+            onClick={() => { const c = canvasContainerRef.current?.querySelector("canvas"); c?.requestPointerLock(); }}
+            style={{
+              position: "absolute", bottom: 60, left: "50%", transform: "translateX(-50%)",
+              background: "rgba(3,7,18,0.88)", border: "1px solid rgba(255,200,80,0.5)",
+              borderRadius: 10, padding: "7px 18px", color: "#ffe599", fontSize: 12,
+              fontWeight: 600, cursor: "pointer", pointerEvents: "auto",
+              letterSpacing: "0.04em", backdropFilter: "blur(4px)",
+              boxShadow: "0 0 16px rgba(255,180,50,0.2)",
+              display: "flex", alignItems: "center", gap: 8,
+              zIndex: 5,
+            }}
+          >
+            <span>🖱</span> Click here to re-enter the lab and use keys
           </div>
         )}
 
@@ -1545,122 +1590,89 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
           </div>
         )}
 
-        {/* ── STATUS PANEL (top-right) ── */}
+        {/* ── STATUS PANEL (top-right) — clean, student-friendly ── */}
         <div style={{
           position: "absolute", right: 12, top: 10,
           background: "linear-gradient(135deg, rgba(5,14,28,0.9), rgba(8,20,40,0.85))",
           border: "1px solid rgba(80,140,200,0.32)",
-          padding: "10px 12px", borderRadius: 12, color: "#c8e8ff", fontSize: 11,
-          backdropFilter: "blur(6px)",
-          minWidth: 190,
+          padding: "10px 13px", borderRadius: 12, color: "#c8e8ff", fontSize: 11,
+          backdropFilter: "blur(6px)", minWidth: 180,
         }}>
-          <div style={{ fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", opacity: 0.6, marginBottom: 6 }}>Experiment Status</div>
-          <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "3px 8px", alignItems: "center" }}>
+          <div style={{ fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", opacity: 0.55, marginBottom: 8 }}>Experiment Status</div>
+          <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "5px 10px", alignItems: "center" }}>
             <span style={{ opacity: 0.6 }}>Mode</span>
-            <span style={{ fontWeight: 600, color: mode === "exam" ? "#ffca60" : mode === "research" ? "#c080ff" : "#60c8ff", textTransform: "capitalize" }}>{mode}</span>
+            <span style={{ fontWeight: 700, color: mode === "exam" ? "#ffca60" : mode === "research" ? "#c080ff" : "#60c8ff", textTransform: "capitalize" }}>{mode}</span>
             <span style={{ opacity: 0.6 }}>Station</span>
             <span style={{ fontWeight: 600 }}>{station.name}</span>
             <span style={{ opacity: 0.6 }}>Status</span>
-            <span style={{ color: nearStation ? "#5aedb8" : "#88aacc" }}>{nearStation ? "● Interactive" : "○ Walk closer"}</span>
-            <span style={{ opacity: 0.6 }}>Reaction</span>
-            <span>
-              <span style={{ display: "inline-block", width: 60, height: 5, borderRadius: 4, background: "rgba(255,255,255,0.1)", overflow: "hidden", verticalAlign: "middle", marginRight: 4 }}>
-                <span style={{ display: "block", height: "100%", width: `${reactionLevel * 100}%`, background: reactionLevel > 0.7 ? "#ff6060" : reactionLevel > 0.35 ? "#ffb040" : "#40d4a0", borderRadius: 4, transition: "width 0.4s" }} />
-              </span>
-              {Math.round(reactionLevel * 100)}%
-            </span>
+            <span style={{ color: nearStation ? "#5aedb8" : "#88aacc", fontWeight: 600 }}>{nearStation ? "● Ready to use" : "○ Walk closer"}</span>
           </div>
-          {/* Health bar row */}
-          <div style={{ marginTop: 7, borderTop: "1px solid rgba(120,170,214,0.18)", paddingTop: 7, display: "flex", flexDirection: "column", gap: 3 }}>
-            {([
-              { label: "Wear", value: apparatusHealth.wear, warn: 0.3 },
-              { label: "Pressure", value: apparatusHealth.pressureIntegrity, warn: 0.35 },
-              { label: "Thermal", value: 1 - apparatusHealth.thermalStress, warn: 0.3 },
-              { label: "Electrical", value: apparatusHealth.electricalStability, warn: 0.4 },
-            ] as { label: string; value: number; warn: number }[]).map(({ label, value, warn }) => (
-              <div key={label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ opacity: 0.58, width: 58, flexShrink: 0 }}>{label}</span>
-                <span style={{ flex: 1, height: 4, background: "rgba(255,255,255,0.08)", borderRadius: 3, overflow: "hidden" }}>
-                  <span style={{ display: "block", height: "100%", width: `${value * 100}%`, background: value < warn ? "#ff5555" : value < 0.6 ? "#ffaa40" : "#3ac890", borderRadius: 3, transition: "width 0.5s" }} />
-                </span>
-                <span style={{ width: 28, textAlign: "right", opacity: 0.7, fontSize: 10 }}>{Math.round(value * 100)}%</span>
+          {/* Reaction progress — shown only when active */}
+          {reactionLevel > 0.05 && (
+            <div style={{ marginTop: 9, borderTop: "1px solid rgba(120,170,214,0.15)", paddingTop: 8 }}>
+              <div style={{ fontSize: 10, opacity: 0.6, marginBottom: 4 }}>Reaction progress</div>
+              <div style={{ height: 6, borderRadius: 4, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${reactionLevel * 100}%`, background: reactionLevel > 0.7 ? "#ff6060" : reactionLevel > 0.35 ? "#ffb040" : "#40d4a0", borderRadius: 4, transition: "width 0.4s" }} />
               </div>
-            ))}
-          </div>
+              <div style={{ fontSize: 10, opacity: 0.65, textAlign: "right", marginTop: 3 }}>{Math.round(reactionLevel * 100)}%</div>
+            </div>
+          )}
         </div>
 
-        {/* ── MAINTENANCE BAY (right, below status) ── */}
-        <div style={{
-          position: "absolute", right: 12, top: 246,
-          background: "linear-gradient(135deg, rgba(5,14,28,0.9), rgba(8,20,40,0.85))",
-          border: "1px solid rgba(80,140,200,0.32)",
-          padding: "10px 12px", borderRadius: 12, color: "#c8e8ff", fontSize: 11,
-          width: 230, pointerEvents: "auto",
-          backdropFilter: "blur(6px)",
-        }}>
-          <div style={{ fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", opacity: 0.6, marginBottom: 8 }}>🔧 Maintenance Bay</div>
-          <div style={{ fontSize: 11, color: "#a0cce8", marginBottom: 8, lineHeight: 1.4 }}>
-            Select a tool to inspect and fix it:
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5, marginBottom: 8 }}>
-            {(["microscope", "burette", "burner", "circuit"] as ApparatusId[]).map((id) => {
-              const risk = riskScore(records[id]);
-              const riskColor = risk > 0.6 ? "#ff6060" : risk > 0.35 ? "#ffaa40" : "#4ec0a0";
-              return (
-                <button
-                  key={id}
-                  onClick={() => setSelectedMaintenance(id)}
-                  style={{
-                    padding: "7px 8px", borderRadius: 8,
-                    border: `1px solid ${selectedMaintenance === id ? "rgba(80,200,255,0.6)" : "rgba(80,140,200,0.32)"}`,
-                    background: selectedMaintenance === id ? "rgba(30,90,170,0.45)" : "rgba(8,20,40,0.7)",
-                    color: selectedMaintenance === id ? "#cce8ff" : "#88aac8",
+        {/* ── EQUIPMENT HELP PANEL — only shown when there is an active alert ── */}
+        {mechanicalAlerts.length > 0 && (
+          <div style={{
+            position: "absolute", right: 12, top: 218,
+            background: "linear-gradient(135deg, rgba(28,12,4,0.94), rgba(40,18,6,0.9))",
+            border: "1px solid rgba(255,160,60,0.45)",
+            padding: "10px 13px", borderRadius: 12, color: "#ffe8c0", fontSize: 11,
+            width: 226, pointerEvents: "auto",
+            backdropFilter: "blur(6px)",
+            boxShadow: "0 0 16px rgba(255,140,40,0.15)",
+          }}>
+            <div style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", opacity: 0.65, marginBottom: 7 }}>🔧 Fix Equipment</div>
+            {/* Which instrument needs attention */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5, marginBottom: 8 }}>
+              {(["microscope", "burette", "burner", "circuit"] as ApparatusId[]).filter((id) => riskScore(records[id]) > 0.25).map((id) => {
+                const risk = riskScore(records[id]);
+                const riskColor = risk > 0.6 ? "#ff8060" : "#ffb840";
+                return (
+                  <button key={id} onClick={() => setSelectedMaintenance(id)} style={{
+                    padding: "6px 8px", borderRadius: 8,
+                    border: `1px solid ${selectedMaintenance === id ? "rgba(255,180,80,0.7)" : "rgba(255,140,50,0.3)"}`,
+                    background: selectedMaintenance === id ? "rgba(80,40,10,0.6)" : "rgba(30,12,4,0.7)",
+                    color: selectedMaintenance === id ? "#ffd090" : "#c89060",
                     fontSize: 11, cursor: "pointer", textTransform: "capitalize",
                     display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2,
-                  }}
-                >
-                  <span style={{ fontWeight: selectedMaintenance === id ? 700 : 400 }}>{id}</span>
-                  <span style={{ fontSize: 9, color: riskColor }}>Risk: {Math.round(risk * 100)}%</span>
+                  }}>
+                    <span style={{ fontWeight: 700 }}>{id}</span>
+                    <span style={{ fontSize: 9, color: riskColor }}>⚠ needs fix</span>
+                  </button>
+                );
+              })}
+            </div>
+            {/* One-tap fix actions — simple labels */}
+            <div style={{ fontSize: 10, color: "#c8a070", marginBottom: 5 }}>Tap to fix <strong style={{ color: "#ffd080" }}>{selectedMaintenance}</strong>:</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+              {([
+                { action: "repair" as const, label: "🔧 Repair", desc: "Fix damage" },
+                { action: "recalibrate" as const, label: "🎯 Recalibrate", desc: "Fine-tune" },
+                { action: "clean" as const, label: "🧹 Clean", desc: "Remove spills" },
+                { action: "stabilize" as const, label: "⚖ Stabilize", desc: "Stop shaking" },
+                { action: "replace" as const, label: "🆕 Replace", desc: "Brand new" },
+              ]).map(({ action, label, desc }) => (
+                <button key={action} onClick={() => performMaintenance(action)} title={desc} style={{
+                  padding: "5px 8px", borderRadius: 7,
+                  border: "1px solid rgba(255,160,60,0.35)",
+                  background: "rgba(40,16,4,0.85)",
+                  color: "#ffcc88", fontSize: 10.5, cursor: "pointer",
+                }}>
+                  {label}
                 </button>
-              );
-            })}
+              ))}
+            </div>
           </div>
-          <div style={{ fontSize: 10.5, color: "#88b8d8", marginBottom: 6, opacity: 0.85 }}>
-            {(records[selectedMaintenance].stage as string) === "optimal" ? "✓ Good condition" :
-  (records[selectedMaintenance].stage as string) === "worn" ? "⚠ Needs attention soon" :
-  (records[selectedMaintenance].stage as string) === "degraded" ? "⚠ Repair recommended" :
-  "🔴 Critical — fix before use"}
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5 }}>
-            {(["repair", "recalibrate", "clean", "stabilize", "replace"] as const).map((action) => {
-              const actionInfo: Record<string, string> = {
-                repair: "Fix damage",
-                recalibrate: "Fine-tune",
-                clean: "Remove spills",
-                stabilize: "Stop shaking",
-                replace: "Brand new",
-              };
-              return (
-                <button
-                  key={action}
-                  onClick={() => performMaintenance(action)}
-                  title={actionInfo[action]}
-                  style={{
-                    padding: "6px 8px", borderRadius: 7,
-                    border: "1px solid rgba(80,140,200,0.3)",
-                    background: "rgba(10,25,50,0.8)",
-                    color: "#aaccee", fontSize: 10.5, cursor: "pointer",
-                    textTransform: "capitalize", textAlign: "left",
-                    display: "flex", flexDirection: "column", gap: 1,
-                  }}
-                >
-                  <span style={{ fontWeight: 600 }}>{action}</span>
-                  <span style={{ fontSize: 9, opacity: 0.65 }}>{actionInfo[action]}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        )}
 
         {/* ── BOTTOM ACTION BAR ── */}
         <div style={{ position: "absolute", left: "50%", bottom: 50, transform: "translateX(-50%)", display: "flex", gap: 8, pointerEvents: "auto" }}>
