@@ -77,8 +77,14 @@ export default function OralPage() {
   const eventsRef = useRef<any[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const speechRef = useRef<ReturnType<typeof createSpeechArena> | null>(null);
+  const voiceLangRef = useRef<"en-IN" | "hi-IN">("en-IN");
+  const voiceGenderRef = useRef<"female" | "male">("female");
 
   const studentKey = useMemo(() => studentKeyFromProfile(student), [student]);
+
+  // Keep refs in sync so speakReply always reads the latest lang/gender
+  useEffect(() => { voiceLangRef.current = voiceLang; }, [voiceLang]);
+  useEffect(() => { voiceGenderRef.current = voiceGender; }, [voiceGender]);
 
   useEffect(() => {
     const raw = localStorage.getItem("shauri_student");
@@ -120,7 +126,7 @@ export default function OralPage() {
 
   useEffect(() => {
     speechRef.current = createSpeechArena({
-      lang: "en-IN",
+      lang: voiceLang,
       silenceMs: 2600,
       onInterim: (text) => setInterimText(text),
       onFinal: async (text, durationMs, pauses, audioBlob) => {
@@ -176,7 +182,8 @@ export default function OralPage() {
           },
         });
 
-        await savePronunciationSample({
+        // Fire-and-forget — never block send() on a DB write
+        savePronunciationSample({
           studentKey,
           topic: track,
           transcript: text,
@@ -188,7 +195,7 @@ export default function OralPage() {
           pacingWpm: analysis.pacingWpm,
           hesitationCount: analysis.hesitationCount,
           feedback: Array.isArray((analysis as any).feedback) ? (analysis as any).feedback.join(" ") : String((analysis as any).feedback || ""),
-        });
+        }).catch(() => {});
 
         await send(text);
       },
@@ -197,7 +204,7 @@ export default function OralPage() {
         setSpeechError(msg);
       },
     });
-  }, [difficulty, progress.confidence, studentKey, track]);
+  }, [difficulty, progress.confidence, studentKey, track, voiceLang]);
 
   // Preload browser voices (Chrome lazy-loads them)
   useEffect(() => {
@@ -249,23 +256,27 @@ export default function OralPage() {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
 
+    const lang = voiceLangRef.current;
+    const gender = voiceGenderRef.current;
+
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = voiceLang;
-    utterance.rate = voiceLang === "hi-IN" ? 0.88 : 0.92;
+    utterance.lang = lang;
+    utterance.rate = lang === "hi-IN" ? 0.88 : 0.92;
     utterance.pitch = 1.05;
 
     // Pick best matching voice for selected lang + gender
-    const voices = availableVoices.length ? availableVoices : window.speechSynthesis.getVoices();
-    const langVoices = voices.filter((v) => v.lang === voiceLang || v.lang.startsWith(voiceLang.split("-")[0]));
+    const voices = window.speechSynthesis.getVoices();
+    const langVoices = voices.filter((v) => v.lang === lang || v.lang.startsWith(lang.split("-")[0]));
     const femaleKeywords = ["female", "woman", "girl", "zira", "heera", "kanya", "veena", "lekha", "priya"];
     const maleKeywords = ["male", "man", "boy", "ravi", "hemant", "david", "james"];
-    const genderKeywords = voiceGender === "female" ? femaleKeywords : maleKeywords;
-    const oppositeKeywords = voiceGender === "female" ? maleKeywords : femaleKeywords;
+    const genderKeywords = gender === "female" ? femaleKeywords : maleKeywords;
+    const oppositeKeywords = gender === "female" ? maleKeywords : femaleKeywords;
 
     let picked: SpeechSynthesisVoice | undefined =
       langVoices.find((v) => genderKeywords.some((k) => v.name.toLowerCase().includes(k))) ||
       langVoices.find((v) => !oppositeKeywords.some((k) => v.name.toLowerCase().includes(k))) ||
       langVoices[0] ||
+      voices.find((v) => v.default) ||
       voices[0];
 
     if (picked) utterance.voice = picked;
