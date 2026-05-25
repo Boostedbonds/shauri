@@ -33,6 +33,7 @@ import { APPARATUS_PROFILES, clampJoint, dampTo, stepJoint, type ApparatusState 
 import {
   applyStress,
   loadRecords,
+  defaultRecords,
   maintain,
   riskScore,
   saveRecords,
@@ -1042,13 +1043,7 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
   useEffect(() => {
     // Always start fresh — don't let persisted wear from old sessions
     // fire scary alerts before the student has done anything.
-    const fresh: ApparatusRecords = {
-      microscope: { wear: 1, calibration: 1, sealIntegrity: 1, thermalFatigue: 0, electricalFatigue: 0, contamination: 0, structuralStress: 0, stage: "optimal", usageCycles: 0 },
-      burette:    { wear: 1, calibration: 1, sealIntegrity: 1, thermalFatigue: 0, electricalFatigue: 0, contamination: 0, structuralStress: 0, stage: "optimal", usageCycles: 0 },
-      burner:     { wear: 1, calibration: 1, sealIntegrity: 1, thermalFatigue: 0, electricalFatigue: 0, contamination: 0, structuralStress: 0, stage: "optimal", usageCycles: 0 },
-      circuit:    { wear: 1, calibration: 1, sealIntegrity: 1, thermalFatigue: 0, electricalFatigue: 0, contamination: 0, structuralStress: 0, stage: "optimal", usageCycles: 0 },
-    };
-    setRecords(fresh);
+    setRecords(defaultRecords());
   }, []);
 
   useEffect(() => {
