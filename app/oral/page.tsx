@@ -65,6 +65,9 @@ export default function OralPage() {
   const [speechFeedback, setSpeechFeedback] = useState("Feedback appears after your first speaking sample.");
   const [sessionStart] = useState(Date.now());
   const [lastPromptAt, setLastPromptAt] = useState(Date.now());
+  const [voiceLang, setVoiceLang] = useState<"en-IN" | "hi-IN">("en-IN");
+  const [voiceGender, setVoiceGender] = useState<"female" | "male">("female");
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
 
   const eventsRef = useRef<any[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -202,6 +205,17 @@ export default function OralPage() {
     });
   }, [difficulty, progress.confidence, studentKey, track]);
 
+  // Preload browser voices (Chrome lazy-loads them)
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    const load = () => {
+      const all = window.speechSynthesis.getVoices();
+      setAvailableVoices(all);
+    };
+    load();
+    window.speechSynthesis.onvoiceschanged = load;
+  }, []);
+
   useEffect(() => {
     const id = setInterval(async () => {
       if (!eventsRef.current.length) return;
@@ -235,6 +249,37 @@ export default function OralPage() {
       strengths: [],
       preferences: { preferredTrack: track },
     });
+  }
+
+  function speakReply(text: string) {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = voiceLang;
+    utterance.rate = voiceLang === "hi-IN" ? 0.88 : 0.92;
+    utterance.pitch = 1.05;
+
+    // Pick best matching voice for selected lang + gender
+    const voices = availableVoices.length ? availableVoices : window.speechSynthesis.getVoices();
+    const langVoices = voices.filter((v) => v.lang === voiceLang || v.lang.startsWith(voiceLang.split("-")[0]));
+    const femaleKeywords = ["female", "woman", "girl", "zira", "heera", "kanya", "veena", "lekha", "priya"];
+    const maleKeywords = ["male", "man", "boy", "ravi", "hemant", "david", "james"];
+    const genderKeywords = voiceGender === "female" ? femaleKeywords : maleKeywords;
+    const oppositeKeywords = voiceGender === "female" ? maleKeywords : femaleKeywords;
+
+    let picked: SpeechSynthesisVoice | undefined =
+      langVoices.find((v) => genderKeywords.some((k) => v.name.toLowerCase().includes(k))) ||
+      langVoices.find((v) => !oppositeKeywords.some((k) => v.name.toLowerCase().includes(k))) ||
+      langVoices[0] ||
+      voices[0];
+
+    if (picked) utterance.voice = picked;
+
+    // Stop mic while AI is speaking to avoid feedback loop
+    utterance.onstart = () => speechRef.current?.stop();
+
+    window.speechSynthesis.speak(utterance);
   }
 
   async function send(textRaw: string) {
@@ -303,7 +348,9 @@ export default function OralPage() {
         }),
       });
       const data = await res.json();
-      setMessages((prev) => [...prev, { role: "assistant", content: data?.reply || "Let's continue with your next challenge." }]);
+      const reply = data?.reply || "Let's continue with your next challenge.";
+      setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
+      speakReply(reply);
       setLastPromptAt(Date.now());
     } catch {
       setMessages((prev) => [...prev, { role: "assistant", content: "Network interruption. Continue with your next answer and I will adapt." }]);
@@ -407,6 +454,47 @@ export default function OralPage() {
             <button className="btn" onClick={() => void send("Start viva cross-questioning on my weak area.")}>Viva Drill</button>
             <button className="btn" onClick={() => void send("Give memory chain challenge with analogy.")}>Memory Chain</button>
             <button className="btn" onClick={() => void send("Give explain-in-own-words mission in 25 seconds.")}>Mission</button>
+          </div>
+
+          {/* Voice Settings */}
+          <div style={{ marginTop: 14, borderTop: "1px solid rgba(148,163,184,.18)", paddingTop: 12 }}>
+            <div style={{ fontSize: 11, color: "#7dd3fc", letterSpacing: "0.14em", marginBottom: 8 }}>VOICE SETTINGS</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+              <button
+                className="btn"
+                onClick={() => setVoiceLang("en-IN")}
+                style={{ fontSize: 12, padding: "7px 6px", opacity: voiceLang === "en-IN" ? 1 : 0.45, border: voiceLang === "en-IN" ? "1px solid #22d3ee" : "1px solid rgba(34,211,238,.3)" }}
+              >
+                🇬🇧 English
+              </button>
+              <button
+                className="btn"
+                onClick={() => setVoiceLang("hi-IN")}
+                style={{ fontSize: 12, padding: "7px 6px", opacity: voiceLang === "hi-IN" ? 1 : 0.45, border: voiceLang === "hi-IN" ? "1px solid #22d3ee" : "1px solid rgba(34,211,238,.3)" }}
+              >
+                🇮🇳 Hindi
+              </button>
+              <button
+                className="btn"
+                onClick={() => setVoiceGender("female")}
+                style={{ fontSize: 12, padding: "7px 6px", opacity: voiceGender === "female" ? 1 : 0.45, border: voiceGender === "female" ? "1px solid #f0abfc" : "1px solid rgba(240,171,252,.3)" }}
+              >
+                ♀ Female
+              </button>
+              <button
+                className="btn"
+                onClick={() => setVoiceGender("male")}
+                style={{ fontSize: 12, padding: "7px 6px", opacity: voiceGender === "male" ? 1 : 0.45, border: voiceGender === "male" ? "1px solid #7dd3fc" : "1px solid rgba(125,211,252,.3)" }}
+              >
+                ♂ Male
+              </button>
+            </div>
+            <div style={{ fontSize: 10, color: "#64748b", marginTop: 6 }}>
+              Active: {voiceLang === "en-IN" ? "English" : "Hindi"} • {voiceGender === "female" ? "Female" : "Male"}
+              {availableVoices.filter(v => v.lang === voiceLang).length === 0 && (
+                <span style={{ color: "#fbbf24" }}> — install {voiceLang} voice in OS settings for best results</span>
+              )}
+            </div>
           </div>
 
           <div style={{ marginTop: 12, fontSize: 12, color: speechState === "error" ? "#fca5a5" : "#93c5fd" }}>
