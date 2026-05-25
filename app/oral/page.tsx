@@ -334,7 +334,9 @@ export default function OralPage() {
             `Difficulty: ${difficulty}/5`,
             `Confidence meter: ${merged.confidence}/100`,
             `Combo streak: ${nextCombo}`,
-            `Instruction: Teach interactively, ask one follow-up recall or why/how challenge, then adapt difficulty.` ,
+            `Language preference: ${voiceLang === "hi-IN" ? "Respond in Hindi (Devanagari script)" : "Respond in English"}`,
+            `STRICT RULES: Keep reply under 3 sentences max. This is a spoken oral session — no bullet points, no long paragraphs. If student sent a greeting or casual message, respond with ONE short sentence then ask ONE question. Never summarise a whole topic unprompted.`,
+            `Instruction: Teach interactively, ask one follow-up recall or why/how challenge, then adapt difficulty.`,
             `Student response: ${text}`,
           ].join("\n"),
           history: updatedMessages.slice(-14),
@@ -500,8 +502,42 @@ export default function OralPage() {
         </aside>
 
         <section className="panel" style={{ display: "flex", flexDirection: "column", minHeight: 590 }}>
-          <div style={{ padding: "12px 14px", borderBottom: "1px solid rgba(148,163,184,.2)", fontSize: 13, color: "#cbd5e1" }}>
-            Live Track: {TRACKS.find((t) => t.id === track)?.title} • Oral confidence and viva adaptation active
+          <div style={{ padding: "10px 14px", borderBottom: "1px solid rgba(148,163,184,.2)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 13, color: "#cbd5e1" }}>
+              Live Track: {TRACKS.find((t) => t.id === track)?.title} • Oral confidence and viva adaptation active
+            </div>
+            {/* Inline voice toggles */}
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <button
+                onClick={() => setVoiceLang("en-IN")}
+                style={{ fontSize: 11, padding: "4px 10px", borderRadius: 8, cursor: "pointer", fontFamily: "inherit",
+                  border: voiceLang === "en-IN" ? "1px solid #22d3ee" : "1px solid rgba(148,163,184,.3)",
+                  background: voiceLang === "en-IN" ? "rgba(34,211,238,.18)" : "rgba(15,23,42,.5)",
+                  color: voiceLang === "en-IN" ? "#22d3ee" : "#94a3b8" }}
+              >EN</button>
+              <button
+                onClick={() => setVoiceLang("hi-IN")}
+                style={{ fontSize: 11, padding: "4px 10px", borderRadius: 8, cursor: "pointer", fontFamily: "inherit",
+                  border: voiceLang === "hi-IN" ? "1px solid #22d3ee" : "1px solid rgba(148,163,184,.3)",
+                  background: voiceLang === "hi-IN" ? "rgba(34,211,238,.18)" : "rgba(15,23,42,.5)",
+                  color: voiceLang === "hi-IN" ? "#22d3ee" : "#94a3b8" }}
+              >HI</button>
+              <div style={{ width: 1, height: 16, background: "rgba(148,163,184,.25)" }} />
+              <button
+                onClick={() => setVoiceGender("female")}
+                style={{ fontSize: 11, padding: "4px 10px", borderRadius: 8, cursor: "pointer", fontFamily: "inherit",
+                  border: voiceGender === "female" ? "1px solid #f0abfc" : "1px solid rgba(148,163,184,.3)",
+                  background: voiceGender === "female" ? "rgba(240,171,252,.15)" : "rgba(15,23,42,.5)",
+                  color: voiceGender === "female" ? "#f0abfc" : "#94a3b8" }}
+              >♀</button>
+              <button
+                onClick={() => setVoiceGender("male")}
+                style={{ fontSize: 11, padding: "4px 10px", borderRadius: 8, cursor: "pointer", fontFamily: "inherit",
+                  border: voiceGender === "male" ? "1px solid #7dd3fc" : "1px solid rgba(148,163,184,.3)",
+                  background: voiceGender === "male" ? "rgba(125,211,252,.15)" : "rgba(15,23,42,.5)",
+                  color: voiceGender === "male" ? "#7dd3fc" : "#94a3b8" }}
+              >♂</button>
+            </div>
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
