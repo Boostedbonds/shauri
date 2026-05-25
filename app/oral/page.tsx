@@ -47,7 +47,12 @@ function expectedTermsForTrack(track: OralTrack, classLevel: string) {
 
 export default function OralPage() {
   const [student, setStudent] = useState<Student>({ name: "Student", class: "10", board: "CBSE" });
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      role: "assistant",
+      content: "Welcome to Oral Arena. Choose a track, then answer with voice or text. I will adapt challenge depth, confidence pressure, and viva follow-ups in real time.",
+    },
+  ]);
   const [track, setTrack] = useState<OralTrack>("conversational");
   const [difficulty, setDifficulty] = useState<ChallengeDifficulty>(2);
   const [input, setInput] = useState("");
@@ -108,17 +113,6 @@ export default function OralPage() {
       alive = false;
     };
   }, [studentKey]);
-
-  useEffect(() => {
-    if (messages.length === 0) {
-      setMessages([
-        {
-          role: "assistant",
-          content: "Welcome to Oral Arena. Choose a track, then answer with voice or text. I will adapt challenge depth, confidence pressure, and viva follow-ups in real time.",
-        },
-      ]);
-    }
-  }, [messages.length]);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -491,7 +485,7 @@ export default function OralPage() {
             </div>
             <div style={{ fontSize: 10, color: "#64748b", marginTop: 6 }}>
               Active: {voiceLang === "en-IN" ? "English" : "Hindi"} • {voiceGender === "female" ? "Female" : "Male"}
-              {availableVoices.filter(v => v.lang === voiceLang).length === 0 && (
+              {availableVoices.filter(v => v.lang === voiceLang || v.lang.startsWith(voiceLang === "hi-IN" ? "hi" : "en")).length === 0 && (
                 <span style={{ color: "#fbbf24" }}> — install {voiceLang} voice in OS settings for best results</span>
               )}
             </div>
