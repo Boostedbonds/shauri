@@ -196,6 +196,7 @@ export default function ImmersiveLabApp() {
               runtime={runtime}
               setRuntime={setRuntime}
               eventFeed={eventFeed}
+              setEventFeed={setEventFeed}
               lastOutcome={lastOutcome}
               studentName={studentName}
             />

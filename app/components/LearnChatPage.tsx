@@ -1,6 +1,7 @@
 "use client";
-import { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { logActivity } from "@/lib/logActivity";
+import ThemeToggle from "./ThemeToggle";
 
 // ─── Types ────────────────────────────────────────────────────
 type Message   = { role: "user" | "assistant"; content: string };
@@ -8,11 +9,11 @@ type QuizState = "none" | "pending" | "done";
 type ActivityMode = "teacher";
 
 export interface LearnChatPageProps {
-  mode:        "teacher";
+  mode:         "teacher";
   accentColor?: string;
-  greeting?:   string;
-  title?:      string;
-  icon?:       string;
+  greeting?:    string;
+  title?:       string;
+  icon?:        string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -48,26 +49,48 @@ function parseQuizScore(text: string): { score: number; total: number } | null {
 }
 
 // ─── Sub-components ───────────────────────────────────────────
+
+/** AI / User message bubble — SHAURI branded */
 function Bubble({ m, accent }: { m: Message; accent: string }) {
   const isUser = m.role === "user";
   return (
-    <div style={{ display: "flex", justifyContent: isUser ? "flex-end" : "flex-start", marginBottom: 12 }}>
+    <div style={{
+      display: "flex",
+      justifyContent: isUser ? "flex-end" : "flex-start",
+      marginBottom: 14,
+      alignItems: "flex-end",
+      gap: 10,
+    }}>
+      {/* AI avatar */}
       {!isUser && (
         <div style={{
-          width: 30, height: 30, borderRadius: "50%", flexShrink: 0,
-          background: `linear-gradient(135deg, ${accent}, #0d9488)`,
+          width: 32, height: 32, borderRadius: "50%",
+          background: "linear-gradient(135deg, #0a2540, #1a5080)",
+          border: "1.5px solid rgba(212,175,55,0.5)",
           display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 14, marginRight: 8, alignSelf: "flex-end",
+          fontSize: 13, flexShrink: 0,
         }}>🧠</div>
       )}
+
+        /* Bubble */
       <div style={{
-        maxWidth: "82%", padding: "11px 15px",
+        maxWidth: "78%",
+        padding: "13px 18px",
         borderRadius: isUser ? "18px 18px 4px 18px" : "4px 18px 18px 18px",
-        background: isUser ? accent : "#fff",
-        color: isUser ? "#fff" : "#0f172a",
-        fontSize: 15, lineHeight: 1.7, wordBreak: "break-word",
-        border: isUser ? "none" : "1px solid #e2e8f0",
-        boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+        background: isUser
+          ? `linear-gradient(135deg, ${accent}, #0a2540)`
+          : "var(--s-bubble-ai-bg)",
+        color: isUser ? "var(--s-bubble-user-text)" : "var(--s-bubble-ai-text)",
+        fontSize: 14,
+        lineHeight: 1.8,
+        wordBreak: "break-word",
+        border: isUser ? "none" : "1px solid var(--s-bubble-ai-border)",
+        boxShadow: isUser
+          ? "0 4px 16px rgba(10,37,64,0.18)"
+          : "0 2px 10px rgba(10,37,64,0.05)",
+        backdropFilter: isUser ? "none" : "blur(8px)",
+        letterSpacing: "0.02em",
+        transition: "background 0.35s ease, color 0.35s ease, border-color 0.35s ease",
       }}>
         {renderText(m.content)}
       </div>
@@ -75,6 +98,7 @@ function Bubble({ m, accent }: { m: Message; accent: string }) {
   );
 }
 
+/** Live session status bar */
 function SessionBar({ elapsed, subject, topic, quizState, quizScore, accent, onEndSession }: {
   elapsed: number; subject: string; topic: string; accent: string;
   quizState: QuizState; quizScore: { score: number; total: number } | null;
@@ -87,96 +111,156 @@ function SessionBar({ elapsed, subject, topic, quizState, quizScore, accent, onE
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
-      padding: "8px 14px", background: "#f0fdf4", borderBottom: "1px solid #bbf7d0",
-      fontSize: 12, flexShrink: 0,
+      padding: "8px 18px",
+      background: "var(--s-session-bg)",
+      borderBottom: "1px solid var(--s-session-border)",
+      fontSize: 11, flexShrink: 0,
+      fontFamily: "'Orbitron', sans-serif",
+      letterSpacing: "0.08em",
+      transition: "background 0.35s ease, border-color 0.35s ease",
     }}>
-      <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#15803d", background: "#dcfce7", padding: "3px 10px", borderRadius: 6 }}>
+      <span style={{
+        fontWeight: 700, color: "#1a7a4a",
+        background: "rgba(26,122,74,0.10)",
+        padding: "3px 10px", borderRadius: 6, fontFamily: "monospace",
+      }}>
         ⏱ {display}
       </span>
-      {subject && <span style={{ color: "#166534", fontWeight: 600 }}>📚 {subject}</span>}
-      {topic   && <span style={{ color: "#64748b" }}>· {topic.slice(0, 40)}</span>}
+      {subject && (
+        <span style={{ color: "#0a2540", fontWeight: 600 }}>
+          📚 {subject}
+        </span>
+      )}
+      {topic && (
+        <span style={{ color: "var(--shauri-text-secondary, #5c6f82)" }}>
+          · {topic.slice(0, 36)}
+        </span>
+      )}
       {quizState === "done" && quizScore && (
-        <span style={{ color: "#0d9488", fontWeight: 700, marginLeft: 4 }}>
-          🎯 Quiz: {quizScore.score}/{quizScore.total} ({Math.round(quizScore.score / quizScore.total * 100)}%)
+        <span style={{ color: "#c6a85a", fontWeight: 700, marginLeft: 4 }}>
+          🎯 QUIZ: {quizScore.score}/{quizScore.total} ({Math.round(quizScore.score / quizScore.total * 100)}%)
         </span>
       )}
       <button onClick={onEndSession} style={{
-        marginLeft: "auto", padding: "4px 12px", background: accent, color: "#fff",
-        border: "none", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer",
+        marginLeft: "auto",
+        padding: "5px 14px",
+        background: "#1a7a4a",
+        color: "#fff",
+        border: "none",
+        borderRadius: 6,
+        fontSize: 10,
+        fontWeight: 700,
+        cursor: "pointer",
+        letterSpacing: "0.14em",
+        textTransform: "uppercase",
+        fontFamily: "'Orbitron', sans-serif",
       }}>
-        ✓ End & Save Session
+        ✓ End & Save
       </button>
     </div>
   );
 }
 
+/** Quiz nudge banner — SHAURI-styled */
 function QuizBanner({ onRequestQuiz, onSkip }: { onRequestQuiz: () => void; onSkip: () => void }) {
   return (
     <div style={{
-      margin: "0 14px 12px", background: "#eff6ff", border: "1.5px solid #bfdbfe",
-      borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center",
-      gap: 12, flexWrap: "wrap", flexShrink: 0,
+      margin: "0 16px 12px",
+      background: "rgba(212,175,55,0.08)",
+      border: "1px solid rgba(212,175,55,0.35)",
+      borderRadius: 12,
+      padding: "13px 18px",
+      display: "flex", alignItems: "center",
+      gap: 14, flexWrap: "wrap",
+      flexShrink: 0,
     }}>
-      <span style={{ fontSize: 13, color: "#1d4ed8", fontWeight: 600 }}>
-        🎯 You've been learning for a while! Want a quick comprehension quiz to test yourself?
+      <span style={{
+        fontSize: 12,
+        color: "#0a2540",
+        fontWeight: 600,
+        fontFamily: "'Orbitron', sans-serif",
+        letterSpacing: "0.04em",
+      }}>
+        🎯 You've been deep in a session. Quick comprehension quiz to lock it in?
       </span>
       <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
         <button onClick={onRequestQuiz} style={{
-          padding: "6px 14px", background: "#2563eb", color: "#fff",
-          border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer",
-        }}>Yes, quiz me!</button>
+          padding: "7px 16px",
+          background: "#d4af37", color: "#0a2540",
+          border: "none", borderRadius: 8,
+          fontSize: 11, fontWeight: 700,
+          cursor: "pointer",
+          fontFamily: "'Orbitron', sans-serif",
+          letterSpacing: "0.10em",
+          textTransform: "uppercase",
+        }}>Quiz Me</button>
         <button onClick={onSkip} style={{
-          padding: "6px 12px", background: "transparent", color: "#64748b",
-          border: "1px solid #cbd5e1", borderRadius: 8, fontSize: 12, cursor: "pointer",
+          padding: "7px 12px",
+          background: "transparent", color: "#5c6f82",
+          border: "1px solid rgba(10,37,64,0.15)",
+          borderRadius: 8, fontSize: 11,
+          cursor: "pointer",
+          fontFamily: "'Orbitron', sans-serif",
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
         }}>Skip</button>
       </div>
     </div>
   );
 }
 
+/** Session saved confirmation */
 function SavedBanner({ subject, elapsed, quizScore }: {
   subject: string; elapsed: string; quizScore: { score: number; total: number } | null;
 }) {
   return (
     <div style={{
-      margin: "12px 14px", background: "#f0fdf4", border: "1.5px solid #86efac",
-      borderRadius: 12, padding: "14px 16px",
+      margin: "10px 16px",
+      background: "rgba(26,122,74,0.07)",
+      border: "1px solid rgba(26,122,74,0.30)",
+      borderRadius: 12,
+      padding: "14px 18px",
     }}>
-      <p style={{ fontSize: 14, fontWeight: 700, color: "#15803d", marginBottom: 4 }}>
-        ✅ Session saved to your Progress Dashboard!
+      <p style={{
+        fontSize: 12, fontWeight: 700, color: "#1a7a4a",
+        marginBottom: 4,
+        fontFamily: "'Orbitron', sans-serif",
+        letterSpacing: "0.10em",
+        textTransform: "uppercase",
+      }}>
+        ✅ Session Saved to Progress Dashboard
       </p>
-      <p style={{ fontSize: 13, color: "#166534" }}>
+      <p style={{ fontSize: 12, color: "#166534", letterSpacing: "0.03em" }}>
         📚 {subject} · ⏱ {elapsed}
-        {quizScore ? ` · 🎯 Quiz score: ${quizScore.score}/${quizScore.total} (${Math.round(quizScore.score / quizScore.total * 100)}%)` : ""}
-      </p>
-      <p style={{ fontSize: 12, color: "#64748b", marginTop: 6 }}>
-        Your teacher and dashboard can now see this session. Keep going!
+        {quizScore
+          ? ` · 🎯 Quiz: ${quizScore.score}/${quizScore.total} (${Math.round(quizScore.score / quizScore.total * 100)}%)`
+          : ""}
       </p>
     </div>
   );
 }
 
-// ─── Main Shared Component ────────────────────────────────────
+// ─── Main Component ───────────────────────────────────────────
 export default function LearnChatPage({
   mode,
-  accentColor = "#16a34a",
-  greeting = "Hi! 👋 I'm SHAURI — What are we learning today?",
-  title = "🧠 Learn Mode",
+  accentColor = "#1a7a4a",
+  greeting = "Hi! 👋 I'm SHAURI — your adaptive learning mentor. What concept are we mastering today?",
+  title = "LEARN MODE",
   icon = "🧠",
 }: LearnChatPageProps) {
 
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [inputText,      setInputText]      = useState("");
-  const [loading,        setLoading]        = useState(false);
-  const [subject,        setSubject]        = useState("");
-  const [topic,          setTopic]          = useState("");
-  const [elapsed,        setElapsed]        = useState(0);
-  const [sessionOn,      setSessionOn]      = useState(false);
-  const [quizState,      setQuizState]      = useState<QuizState>("none");
-  const [quizScore,      setQuizScore]      = useState<{ score: number; total: number } | null>(null);
-  const [showQuizBanner, setShowQuizBanner] = useState(false);
-  const [sessionSaved,   setSessionSaved]   = useState(false);
-  const [savedElapsed,   setSavedElapsed]   = useState("");
+  const [messages,        setMessages]        = useState<Message[]>([]);
+  const [inputText,       setInputText]       = useState("");
+  const [loading,         setLoading]         = useState(false);
+  const [subject,         setSubject]         = useState("");
+  const [topic,           setTopic]           = useState("");
+  const [elapsed,         setElapsed]         = useState(0);
+  const [sessionOn,       setSessionOn]       = useState(false);
+  const [quizState,       setQuizState]       = useState<QuizState>("none");
+  const [quizScore,       setQuizScore]       = useState<{ score: number; total: number } | null>(null);
+  const [showQuizBanner,  setShowQuizBanner]  = useState(false);
+  const [sessionSaved,    setSessionSaved]    = useState(false);
+  const [savedElapsed,    setSavedElapsed]    = useState("");
 
   const timerRef         = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTsRef       = useRef<number>(0);
@@ -188,87 +272,76 @@ export default function LearnChatPage({
   const quizShownRef     = useRef(false);
   const autoTriggeredRef = useRef(false);
 
+  // ── Boot greeting ──────────────────────────────────────────
   useEffect(() => {
-  setMessages((prev) => {
-    if (prev.length > 0) return prev;
-    return [{ role: "assistant", content: greeting }];
-  });
-}, [greeting]);
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
-  useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
+    msgsRef.current = [{ role: "assistant", content: greeting }];
+    setMessages([{ role: "assistant", content: greeting }]);
+  }, [greeting]);
 
+  // ── Scroll to bottom ───────────────────────────────────────
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // ── Session timer ──────────────────────────────────────────
   function startSession() {
-    if (timerRef.current) return;
-    startTsRef.current = Date.now();
+    if (sessionOn) return;
     setSessionOn(true);
+    startTsRef.current = Date.now();
     timerRef.current = setInterval(() => {
       const s = Math.floor((Date.now() - startTsRef.current) / 1000);
       elapsedRef.current = s;
       setElapsed(s);
-      if (s >= 480 && !quizShownRef.current && quizState === "none") {
+      if (!quizShownRef.current && s >= 600 && msgsRef.current.length >= 4) {
         quizShownRef.current = true;
         setShowQuizBanner(true);
       }
     }, 1000);
   }
 
-  function fmtElapsed(s: number) {
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const sec = s % 60;
-    return [h && `${h}h`, m && `${m}m`, `${sec}s`].filter(Boolean).join(" ");
-  }
-
-  const saveSession = useCallback(async (finalScore?: { score: number; total: number }) => {
-    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-    const secs    = elapsedRef.current;
-    const elapsed = fmtElapsed(secs);
-    const qs      = finalScore || quizScore;
-    const pct     = qs ? Math.round((qs.score / qs.total) * 100) : undefined;
-
+  // ── Save session ───────────────────────────────────────────
+  const saveSession = useCallback(async (score?: { score: number; total: number }) => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    const secs = elapsedRef.current;
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    const elapsed = [h && `${h}h`, m && `${m}m`, `${s}s`].filter(Boolean).join(" ");
     setSavedElapsed(elapsed);
-    setSessionOn(false);
-    setSessionSaved(true);
+    let student: any = null;
+    try { student = JSON.parse(localStorage.getItem("shauri_student") || "null"); } catch {}
+    try {
+      await logActivity({
+        mode: "learn",
+        subject: subject || "General",
+        topics: topicsRef.current.length ? topicsRef.current : [topic || "Unknown"],
+        timeTakenSeconds: secs,
+        score_source: "none",
+        marks_obtained: (score || quizScore)?.score ?? undefined,
+        total_marks:    (score || quizScore)?.total  ?? undefined,
+      });
+      setSessionSaved(true);
+    } catch { /* best-effort */ }
+  }, [subject, topic, quizScore]);
 
-    await logActivity({
-      mode: mode as ActivityMode,
-      subject:          subject || "General",
-      chapters:         topicsRef.current.length ? [topicsRef.current[0]] : [],
-      topics:           topicsRef.current,
-      timeTakenSeconds: secs,
-      percentage:       pct,
-      marks_obtained:   qs?.score,
-      total_marks:      qs?.total,
-      score_source:     qs ? "ai" : "none",
-      evaluation_text:  `${mode} session: ${topicsRef.current.join(", ")}`,
-    });
-  }, [mode, subject, quizScore]);
-
-  // ── Auto-trigger from planner URL params ──────────────────
+  // ── Auto-start from planner deep-link ─────────────────────
   useEffect(() => {
-    if (autoTriggeredRef.current) return;
-    const params      = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(window.location.search);
     const autoSubject = (params.get("subject") || "").trim();
     const autoTopic   = (params.get("topic")   || "").trim();
-    const day         = (params.get("day")     || "").trim();
+    const day         = (params.get("day")      || "").trim();
     if (!autoSubject && !autoTopic && !day) return;
     autoTriggeredRef.current = true;
     const parts: string[] = [];
     if (autoSubject) parts.push(`Subject: ${autoSubject}`);
     if (autoTopic)   parts.push(`Topic: ${autoTopic}`);
     if (day)         parts.push(`(Planner Day ${day})`);
-    const prompt = [
-      `Start CBSE Learn Mode session.`,
-      parts.join(" | "),
-      `Explain clearly with examples.`,
-      `Then offer a quiz.`,
-    ].join("\n");
-    setTimeout(() => {
-      if (!sendingRef.current) sendMessage(prompt, true);
-    }, 50);
+    const prompt = [`Start CBSE Learn Mode session.`, parts.join(" | "), `Explain clearly with examples.`, `Then offer a quiz.`].join("\n");
+    setTimeout(() => { if (!sendingRef.current) sendMessage(prompt, true); }, 50);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── Quiz request ───────────────────────────────────────────
   async function requestQuiz() {
     setShowQuizBanner(false);
     setQuizState("pending");
@@ -276,6 +349,7 @@ export default function LearnChatPage({
     await sendMessage(quizPrompt, true);
   }
 
+  // ── Core send ──────────────────────────────────────────────
   async function sendMessage(text: string, isInternal = false) {
     const trimmed = text.trim();
     if (!trimmed || sendingRef.current) return;
@@ -283,6 +357,7 @@ export default function LearnChatPage({
 
     const userMsg: Message = { role: "user", content: trimmed };
     const updated = [...msgsRef.current, userMsg];
+    msgsRef.current = updated;
     setMessages(updated);
     setInputText("");
     setLoading(true);
@@ -331,9 +406,13 @@ export default function LearnChatPage({
         }
       }
 
-      setMessages([...updated, { role: "assistant", content: reply }]);
+      const final = [...updated, { role: "assistant" as const, content: reply }];
+      msgsRef.current = final;
+      setMessages(final);
     } catch {
-      setMessages([...updated, { role: "assistant", content: "⚠️ Network error. Please try again." }]);
+      const errFinal = [...updated, { role: "assistant" as const, content: "⚠️ Network error. Please try again." }];
+      msgsRef.current = errFinal;
+      setMessages(errFinal);
     } finally {
       setLoading(false);
       sendingRef.current = false;
@@ -345,55 +424,186 @@ export default function LearnChatPage({
     if (t) sendMessage(t);
   }
 
+  // ── Render ─────────────────────────────────────────────────
   return (
-    <div style={{ height: "100dvh", display: "flex", flexDirection: "column", background: "#f8fafc", fontFamily: "'Segoe UI', system-ui, sans-serif", overflow: "hidden" }}>
+    <div style={{
+      height: "100dvh",
+      display: "flex",
+      flexDirection: "column",
+      background: "var(--s-bg-base)",
+      backgroundAttachment: "fixed",
+      fontFamily: "'Orbitron', 'Segoe UI', system-ui, sans-serif",
+      overflow: "hidden",
+      transition: "background 0.35s ease",
+    }}>
       <style>{`
-        *{box-sizing:border-box;margin:0;padding:0}
-        @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
-        @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-        .lrn-msg{animation:fadeUp 0.22s ease both}
-        textarea:focus{outline:none;box-shadow:0 0 0 2px ${accentColor}55}
-        ::-webkit-scrollbar{width:4px}
-        ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:99px}
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        @keyframes bounce {
+          0%,100% { transform: translateY(0);    opacity: 0.5; }
+          50%      { transform: translateY(-5px); opacity: 1;   }
+        }
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(6px); }
+          to   { opacity: 1; transform: translateY(0);   }
+        }
+
+        .lrn-msg { animation: fadeUp 0.22s ease both; }
+
+        /* Textarea resets */
+        .shauri-textarea {
+          flex: 1;
+          resize: none;
+          border: 1.5px solid var(--s-border);
+          border-radius: 14px;
+          padding: 13px 16px;
+          font-size: 14px;
+          line-height: 1.6;
+          background: var(--s-bg-input);
+          color: var(--s-text-primary);
+          font-family: 'Orbitron', sans-serif;
+          letter-spacing: 0.02em;
+          min-height: 50px;
+          max-height: 110px;
+          overflow-y: auto;
+          outline: none;
+          transition: border-color 0.15s, box-shadow 0.15s,
+                      background 0.35s ease, color 0.35s ease;
+        }
+        .shauri-textarea:focus {
+          border-color: var(--s-gold);
+          box-shadow: 0 0 0 3px var(--s-input-focus-ring);
+          background: var(--s-bg-input-focus);
+        }
+        .shauri-textarea::placeholder {
+          color: var(--s-text-muted);
+          font-weight: 400;
+        }
+        .shauri-textarea:disabled {
+          opacity: 0.55;
+          cursor: not-allowed;
+        }
+
+        /* Send button */
+        .shauri-send-btn {
+          width: 46px; height: 46px;
+          border-radius: 12px;
+          border: none;
+          font-size: 18px;
+          cursor: pointer;
+          flex-shrink: 0;
+          transition: background 0.15s, transform 0.12s;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .shauri-send-btn:hover:not(:disabled) { transform: translateY(-1px); }
+        .shauri-send-btn:active:not(:disabled) { transform: scale(0.95); }
+
+        ::-webkit-scrollbar       { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(212,175,55,0.4); border-radius: 99px; }
       `}</style>
 
-      {/* ── TOP BAR ── */}
+      {/* ── MODE TOPBAR — thin strip, same language as AV Mode ── */}
       <div style={{
-        height: 52, display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 14px", background: "#fff", borderBottom: "1px solid #e2e8f0", flexShrink: 0,
+        height:       52,
+        display:      "flex",
+        alignItems:   "center",
+        justifyContent: "space-between",
+        padding:      "0 16px",
+        background:   "var(--s-topbar-bg)",
+        borderBottom: "1px solid var(--s-topbar-border)",
+        flexShrink:   0,
+        transition:   "background 0.35s ease, border-color 0.35s ease",
       }}>
-        <button onClick={() => { saveSession(); setTimeout(() => window.location.href = "/modes", 300); }}
-          style={{ padding: "7px 14px", background: "#f1f5f9", color: "#374151", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>
-          ← Back
+        {/* Back */}
+        <button
+          onClick={() => { saveSession(); setTimeout(() => window.location.href = "/modes", 300); }}
+          style={{
+            display:        "inline-flex",
+            alignItems:     "center",
+            gap:            6,
+            padding:        "6px 14px",
+            background:     "rgba(255,255,255,0.06)",
+            color:          "var(--s-topbar-text)",
+            border:         "1px solid var(--s-topbar-border)",
+            borderRadius:   8,
+            fontSize:       11,
+            fontWeight:     600,
+            letterSpacing:  "0.12em",
+            textTransform:  "uppercase",
+            cursor:         "pointer",
+            fontFamily:     "'Orbitron', sans-serif",
+            transition:     "background 0.15s",
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.12)")}
+          onMouseLeave={e => (e.currentTarget.style.background = "rgba(255,255,255,0.06)")}
+        >
+          ← BACK
         </button>
-        <span style={{ fontSize: 15, fontWeight: 700, color: "#0f172a" }}>{title}</span>
-        <div style={{ width: 70 }} />
+
+        {/* Mode title */}
+        <div style={{
+          display:       "flex",
+          alignItems:    "center",
+          gap:           8,
+          fontFamily:    "'Orbitron', sans-serif",
+          fontSize:      12,
+          fontWeight:    700,
+          letterSpacing: "0.28em",
+          textTransform: "uppercase",
+          color:         "var(--s-gold)",
+          transition:    "color 0.35s ease",
+        }}>
+          <span style={{ fontSize: 14 }}>{icon}</span>
+          {title}
+        </div>
+
+        {/* Right: theme toggle */}
+        <ThemeToggle variant="topbar" />
       </div>
 
       {/* ── SESSION BAR ── */}
       {sessionOn && (
         <SessionBar
-          elapsed={elapsed} subject={subject} topic={topic} accent={accentColor}
-          quizState={quizState} quizScore={quizScore}
+          elapsed={elapsed}
+          subject={subject}
+          topic={topic}
+          accent={accentColor}
+          quizState={quizState}
+          quizScore={quizScore}
           onEndSession={() => saveSession()}
         />
       )}
 
-      {/* ── MESSAGES ── */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "14px 14px 0", display: "flex", flexDirection: "column", gap: 2 }}>
+      {/* ── MESSAGES AREA ── */}
+      <div style={{
+        flex: 1,
+        overflowY: "auto",
+        padding: "20px 16px 0",
+        display: "flex",
+        flexDirection: "column",
+        gap: 2,
+      }}>
         {messages.map((m, i) => (
           <div key={i} className="lrn-msg">
             <Bubble m={m} accent={accentColor} />
           </div>
         ))}
+
+        {/* Loading indicator — gold dots */}
         {loading && (
-          <div style={{ display: "flex", gap: 5, paddingLeft: 46, paddingBottom: 6 }}>
-            {[0,1,2].map(i => (
-              <div key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: accentColor, animation: `bounce 0.9s ${i*0.15}s infinite ease-in-out` }} />
+          <div style={{ display: "flex", gap: 6, paddingLeft: 46, paddingBottom: 10, alignItems: "center" }}>
+            {[0, 1, 2].map(i => (
+              <div key={i} style={{
+                width: 8, height: 8,
+                borderRadius: "50%",
+                background: "#d4af37",
+                animation: `bounce 0.9s ${i * 0.15}s infinite ease-in-out`,
+              }} />
             ))}
           </div>
         )}
-        <div ref={bottomRef} style={{ height: 8 }} />
+
+        <div ref={bottomRef} style={{ height: 12 }} />
       </div>
 
       {/* ── QUIZ BANNER ── */}
@@ -401,41 +611,52 @@ export default function LearnChatPage({
         <QuizBanner onRequestQuiz={requestQuiz} onSkip={() => setShowQuizBanner(false)} />
       )}
 
-      {/* ── SESSION SAVED BANNER ── */}
+      {/* ── SESSION SAVED ── */}
       {sessionSaved && (
         <SavedBanner subject={subject} elapsed={savedElapsed} quizScore={quizScore} />
       )}
 
-      {/* ── INPUT BAR ── */}
+      {/* ── INPUT BAR — semantic tokens, responds to theme ── */}
       <div style={{
-        padding: "10px 14px", paddingBottom: "calc(10px + env(safe-area-inset-bottom))",
-        background: "#fff", borderTop: "1px solid #e2e8f0", flexShrink: 0,
-        display: "flex", gap: 10, alignItems: "flex-end",
+        padding: "12px 16px",
+        paddingBottom: "calc(12px + env(safe-area-inset-bottom))",
+        background:   "var(--s-input-bar-bg)",
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
+        borderTop:    "1px solid var(--s-input-bar-border)",
+        flexShrink:   0,
+        display:      "flex",
+        gap:          10,
+        alignItems:   "flex-end",
+        transition:   "background 0.35s ease, border-color 0.35s ease",
       }}>
         <textarea
+          className="shauri-textarea"
           value={inputText}
           onChange={e => setInputText(e.target.value)}
-          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+          onKeyDown={e => {
+            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+          }}
           placeholder="Ask anything — topic, concept, doubt, chapter…"
           rows={1}
           disabled={loading}
-          style={{
-            flex: 1, resize: "none", border: `2px solid ${accentColor}55`, borderRadius: 14,
-            padding: "13px 50px 13px 16px", fontSize: 15, lineHeight: 1.5,
-            background: loading ? "#f8fafc" : "#fff", color: "#0f172a",
-            fontFamily: "inherit", minHeight: 50, maxHeight: 110, overflowY: "auto",
-          }}
         />
+
         <button
+          className="shauri-send-btn"
           onClick={handleSend}
           disabled={loading || !inputText.trim()}
           style={{
-            width: 44, height: 44, borderRadius: 12, border: "none",
-            background: (loading || !inputText.trim()) ? "#e2e8f0" : accentColor,
-            color: (loading || !inputText.trim()) ? "#94a3b8" : "#fff",
-            fontSize: 18, cursor: "pointer", flexShrink: 0, transition: "background 0.15s",
+            background: (loading || !inputText.trim())
+              ? "rgba(148,163,184,0.35)"
+              : accentColor,
+            color: (loading || !inputText.trim())
+              ? "rgba(148,163,184,0.7)"
+              : "#fff",
           }}
-        >{loading ? "…" : "↑"}</button>
+        >
+          {loading ? "…" : "↑"}
+        </button>
       </div>
     </div>
   );

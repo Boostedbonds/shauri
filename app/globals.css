@@ -1,14 +1,658 @@
+/* ── FONT IMPORT — must be first, before all other rules ── */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* App-wide base styles */
-html,
-body {
+/* ═══════════════════════════════════════════════════════════════
+   SHAURI DESIGN SYSTEM — GLOBAL TOKEN LAYER
+   Master reference: Audio-Visual Mode visual DNA
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── 2. DESIGN TOKENS ───────────────────────────────────────── */
+:root {
+  /* Background system */
+  --shauri-bg-deep:       #0a1628;   /* AV mode navy header */
+  --shauri-bg-dark:       #0d1e35;   /* Oral mode dark panels */
+  --shauri-bg-cream:      #fff8ec;   /* Warm cream base */
+  --shauri-bg-gradient:   linear-gradient(160deg, #fff3d9 0%, #ffe4b3 45%, #e6f2ff 100%);
+  --shauri-bg-panel:      rgba(255,255,255,0.55);
+  --shauri-bg-panel-dark: rgba(13,30,53,0.85);
+
+  /* Gold accent system */
+  --shauri-gold:          #d4af37;   /* Primary gold */
+  --shauri-gold-warm:     #c6a85a;   /* IntroScreen gold — warmer */
+  --shauri-gold-bright:   #f0c040;   /* Hover/active gold */
+  --shauri-gold-muted:    rgba(212,175,55,0.35);
+  --shauri-gold-glow:     rgba(212,175,55,0.15);
+
+  /* Navy / text system */
+  --shauri-navy:          #0a2540;
+  --shauri-navy-mid:      #1a3a5c;
+  --shauri-text-primary:  #0a2540;
+  --shauri-text-secondary:#5c6f82;
+  --shauri-text-muted:    #94a3b8;
+  --shauri-text-cream:    #fff8ec;
+  --shauri-text-on-dark:  #e8edf5;
+
+  /* Border system */
+  --shauri-border:        rgba(212,175,55,0.35);
+  --shauri-border-strong: rgba(212,175,55,0.65);
+  --shauri-border-subtle: rgba(10,37,64,0.10);
+  --shauri-border-dark:   rgba(255,255,255,0.12);
+
+  /* Surface elevation */
+  --shauri-surface-1:     rgba(255,255,255,0.55);
+  --shauri-surface-2:     rgba(255,255,255,0.80);
+  --shauri-surface-glass: rgba(255,255,255,0.12);
+
+  /* Spacing rhythm (8pt base grid) */
+  --sp-1:  4px;
+  --sp-2:  8px;
+  --sp-3:  12px;
+  --sp-4:  16px;
+  --sp-5:  20px;
+  --sp-6:  24px;
+  --sp-8:  32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+
+  /* Border radii */
+  --r-sm:   8px;
+  --r-md:   12px;
+  --r-lg:   18px;
+  --r-xl:   24px;
+  --r-pill: 999px;
+
+  /* Shadows */
+  --shadow-card:  0 4px 20px rgba(10,37,64,0.08), 0 1px 4px rgba(10,37,64,0.06);
+  --shadow-float: 0 12px 40px rgba(10,37,64,0.14), 0 2px 8px rgba(10,37,64,0.08);
+  --shadow-glow:  0 0 24px rgba(212,175,55,0.18);
+
+  /* Typography scale */
+  --type-xs:   11px;
+  --type-sm:   13px;
+  --type-base: 15px;
+  --type-lg:   17px;
+  --type-xl:   20px;
+  --type-2xl:  24px;
+  --type-3xl:  30px;
+  --type-4xl:  38px;
+
+  /* Letter spacing (Orbitron needs generous tracking) */
+  --track-tight:  0.04em;
+  --track-normal: 0.10em;
+  --track-wide:   0.18em;
+  --track-wider:  0.26em;
+  --track-widest: 0.36em;
+
+  /* Transitions */
+  --ease-fast:   0.12s ease;
+  --ease-normal: 0.20s ease;
+  --ease-slow:   0.35s ease;
+}
+
+/* ── 3. SEMANTIC THEME TOKENS ───────────────────────────────── */
+/*
+   These are the tokens components should USE.
+   Raw tokens above are the palette — semantic tokens are the meaning.
+
+   DAWN  = :root (default)
+   NIGHT = [data-theme="night"]
+
+   Both themes share: Orbitron, spacing, radii, typography scale.
+   Only the semantic surface/text/border tokens differ.
+*/
+
+/* ── DAWN THEME (default) ── */
+:root {
+  /* Atmosphere */
+  --s-bg-base:        linear-gradient(160deg, #fff3d9 0%, #ffe4b3 45%, #e6f2ff 100%);
+  --s-bg-base-solid:  #fff8ec;
+  --s-bg-surface:     rgba(255,255,255,0.55);
+  --s-bg-surface-2:   rgba(255,255,255,0.80);
+  --s-bg-surface-elevated: rgba(255,252,242,0.92);
+  --s-bg-input:       rgba(255,255,255,0.90);
+  --s-bg-input-focus: #ffffff;
+
+  /* Mode topbar (thin strip at top of active modes) */
+  --s-topbar-bg:      #0a1628;
+  --s-topbar-border:  rgba(212,175,55,0.18);
+  --s-topbar-text:    rgba(255,255,255,0.75);
+  --s-topbar-meta:    rgba(255,255,255,0.28);
+
+  /* Page header (ModeSelector, non-mode pages) */
+  --s-header-bg:      rgba(255,248,236,0.80);
+  --s-header-border:  rgba(212,175,55,0.30);
+  --s-header-text:    #0a2540;
+
+  /* Text */
+  --s-text-primary:   #0a2540;
+  --s-text-secondary: #5c6f82;
+  --s-text-muted:     #94a3b8;
+  --s-text-inverse:   #fff8ec;
+
+  /* Borders */
+  --s-border:         rgba(212,175,55,0.35);
+  --s-border-strong:  rgba(212,175,55,0.65);
+  --s-border-subtle:  rgba(10,37,64,0.10);
+
+  /* Gold (same in both themes, slightly different warmth) */
+  --s-gold:           #d4af37;
+  --s-gold-warm:      #c6a85a;
+  --s-gold-muted:     rgba(212,175,55,0.35);
+  --s-gold-glow:      rgba(212,175,55,0.15);
+
+  /* Bubbles */
+  --s-bubble-ai-bg:   rgba(255,252,242,0.92);
+  --s-bubble-ai-border: rgba(212,175,55,0.18);
+  --s-bubble-ai-text: #0a2540;
+  --s-bubble-user-bg: linear-gradient(135deg, #1a7a4a, #0a2540);
+  --s-bubble-user-text: #ffffff;
+
+  /* Session/info bar */
+  --s-session-bg:     rgba(10,37,64,0.06);
+  --s-session-border: rgba(212,175,55,0.25);
+
+  /* Input bar */
+  --s-input-bar-bg:   rgba(255,248,236,0.92);
+  --s-input-bar-border: rgba(212,175,55,0.28);
+  --s-input-focus-ring: rgba(212,175,55,0.12);
+
+  /* Shadows */
+  --s-shadow-card:  0 4px 20px rgba(10,37,64,0.08), 0 1px 4px rgba(10,37,64,0.06);
+  --s-shadow-float: 0 12px 40px rgba(10,37,64,0.14), 0 2px 8px rgba(10,37,64,0.08);
+
+  /* Card CTA buttons */
+  --s-card-cta-bg:    transparent;
+  --s-card-cta-text:  #0a2540;
+  --s-card-cta-border: #d4af37;
+
+  /* Theme identity markers */
+  --s-theme-name:     "dawn";
+  --s-transition:     background 0.35s ease, color 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
+}
+
+/* ── NIGHT THEME ── */
+/*
+   "Elite focused night-study workspace."
+   Deep navy atmosphere, muted gold, cream text.
+   NOT cyberpunk. Academic. Premium. Immersive.
+*/
+[data-theme="night"] {
+  /* Atmosphere */
+  --s-bg-base:        linear-gradient(160deg, #08111e 0%, #0d1a2e 55%, #0a1525 100%);
+  --s-bg-base-solid:  #0d1a2e;
+  --s-bg-surface:     rgba(255,255,255,0.05);
+  --s-bg-surface-2:   rgba(255,255,255,0.08);
+  --s-bg-surface-elevated: rgba(20,35,55,0.95);
+  --s-bg-input:       rgba(255,255,255,0.07);
+  --s-bg-input-focus: rgba(255,255,255,0.10);
+
+  /* Mode topbar — slightly lighter than page bg for contrast */
+  --s-topbar-bg:      #060e1a;
+  --s-topbar-border:  rgba(212,175,55,0.14);
+  --s-topbar-text:    rgba(255,255,255,0.70);
+  --s-topbar-meta:    rgba(255,255,255,0.25);
+
+  /* Page header */
+  --s-header-bg:      rgba(8,17,30,0.90);
+  --s-header-border:  rgba(212,175,55,0.14);
+  --s-header-text:    #e8dfc8;
+
+  /* Text */
+  --s-text-primary:   #e8dfc8;   /* warm cream — NOT harsh white */
+  --s-text-secondary: #8a9ab5;
+  --s-text-muted:     #4e5e75;
+  --s-text-inverse:   #0a1628;
+
+  /* Borders */
+  --s-border:         rgba(212,175,55,0.18);
+  --s-border-strong:  rgba(212,175,55,0.38);
+  --s-border-subtle:  rgba(255,255,255,0.07);
+
+  /* Gold — slightly more muted at night, still warm */
+  --s-gold:           #c9a84c;
+  --s-gold-warm:      #b8944a;
+  --s-gold-muted:     rgba(201,168,76,0.25);
+  --s-gold-glow:      rgba(201,168,76,0.12);
+
+  /* Bubbles */
+  --s-bubble-ai-bg:   rgba(18,30,48,0.95);
+  --s-bubble-ai-border: rgba(212,175,55,0.14);
+  --s-bubble-ai-text: #e8dfc8;
+  --s-bubble-user-bg: linear-gradient(135deg, #0e4a2e, #0a1e35);
+  --s-bubble-user-text: #e8dfc8;
+
+  /* Session/info bar */
+  --s-session-bg:     rgba(6,14,26,0.60);
+  --s-session-border: rgba(212,175,55,0.14);
+
+  /* Input bar */
+  --s-input-bar-bg:   rgba(8,17,30,0.92);
+  --s-input-bar-border: rgba(212,175,55,0.18);
+  --s-input-focus-ring: rgba(201,168,76,0.10);
+
+  /* Shadows */
+  --s-shadow-card:  0 4px 20px rgba(0,0,0,0.30), 0 1px 4px rgba(0,0,0,0.20);
+  --s-shadow-float: 0 12px 40px rgba(0,0,0,0.40), 0 2px 8px rgba(0,0,0,0.25);
+
+  /* Card CTA */
+  --s-card-cta-bg:    transparent;
+  --s-card-cta-text:  #e8dfc8;
+  --s-card-cta-border: #c9a84c;
+}
+
+/* ── THEME TRANSITION — smooth palette interpolation ── */
+/*
+   Applied to html element so all children inherit.
+   Scoped to color properties only — layout/transform transitions unaffected.
+*/
+html {
+  transition: var(--s-transition, background 0.35s ease);
+}
+
+body,
+.shauri-topbar,
+.shauri-topbar-mode,
+.shauri-card,
+.shauri-input,
+.shauri-bubble-ai,
+.shauri-bubble-user,
+.shauri-back-btn,
+.shauri-back-btn-dark,
+.shauri-btn-gold,
+.shauri-btn-ghost,
+.shauri-session-bar {
+  transition: background 0.35s ease, color 0.35s ease,
+              border-color 0.35s ease, box-shadow 0.35s ease;
+}
+
+/* ── 3. BASE RESET ──────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
   height: 100%;
 }
 
 body {
-  background-color: #f8fafc; /* calm light background */
-  color: #0f172a;
+  font-family: 'Orbitron', 'Segoe UI', system-ui, sans-serif;
+  background: var(--s-bg-base);
+  background-attachment: fixed;
+  color: var(--s-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── 4. TYPOGRAPHY PRIMITIVES ───────────────────────────────── */
+
+/* Display — hero headings */
+.shauri-display {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  letter-spacing: var(--track-wider);
+  text-transform: uppercase;
+  color: var(--shauri-navy);
+  line-height: 1.1;
+}
+
+/* Section headings */
+.shauri-heading {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 600;
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+  color: var(--shauri-navy);
+}
+
+/* Label — gold uppercase tags */
+.shauri-label {
+  font-family: 'Orbitron', sans-serif;
+  font-size: var(--type-xs);
+  font-weight: 700;
+  letter-spacing: var(--track-widest);
+  text-transform: uppercase;
+  color: var(--shauri-gold);
+}
+
+/* Overline — subdued context text */
+.shauri-overline {
+  font-family: 'Orbitron', sans-serif;
+  font-size: var(--type-xs);
+  font-weight: 400;
+  letter-spacing: var(--track-wider);
+  text-transform: uppercase;
+  color: var(--shauri-text-secondary);
+}
+
+/* Body — readable, not all-caps */
+.shauri-body {
+  font-family: 'Orbitron', sans-serif;
+  font-size: var(--type-base);
+  font-weight: 400;
+  letter-spacing: var(--track-tight);
+  line-height: 1.7;
+  color: var(--shauri-text-primary);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   COMPONENT CLASSES
+   ──────────────────────────────────────────────────────────────
+   TWO topbar variants:
+   · .shauri-topbar       → light cream (site-wide header, ModeSelector)
+   · .shauri-topbar-mode  → navy strip (in-mode only: AV, Learn, Oral)
+   ───────────────────────────────────────────────────────────── */
+
+/* Light topbar — used by ModeSelector and any page-level header */
+.shauri-topbar {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--sp-6);
+  background: var(--s-header-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--s-header-border);
+  flex-shrink: 0;
+}
+
+.shauri-topbar__title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: var(--track-widest);
+  text-transform: uppercase;
+  color: var(--s-gold);
+  line-height: 1;
+}
+
+.shauri-topbar__subtitle {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 9px;
+  letter-spacing: var(--track-wider);
+  text-transform: uppercase;
+  color: var(--s-text-secondary);
+  margin-top: 3px;
+}
+
+.shauri-topbar__meta {
+  font-family: 'Orbitron', sans-serif;
+  font-size: var(--type-xs);
+  font-weight: 400;
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+  color: var(--s-text-secondary);
+}
+
+/* Mode topbar — navy strip inside active learning modes */
+.shauri-topbar-mode {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--sp-4);
+  background: var(--s-topbar-bg);
+  border-bottom: 1px solid var(--s-topbar-border);
+  flex-shrink: 0;
+}
+
+.shauri-topbar-mode__title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: var(--track-widest);
+  text-transform: uppercase;
+  color: var(--s-gold);
+}
+
+.shauri-topbar-mode__meta {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+  color: var(--s-topbar-meta);
+}
+
+/* Back button — light variant (on cream backgrounds) */
+.shauri-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 6px 14px;
+  background: rgba(255,255,255,0.65);
+  color: var(--shauri-navy);
+  border: 1px solid var(--shauri-border);
+  border-radius: var(--r-sm);
+  font-family: 'Orbitron', sans-serif;
+  font-size: var(--type-xs);
+  font-weight: 600;
+  letter-spacing: var(--track-normal);
+  text-transform: uppercase;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background var(--ease-fast), border-color var(--ease-fast);
+}
+
+.shauri-back-btn:hover {
+  background: rgba(255,255,255,0.90);
+  border-color: var(--shauri-gold);
+}
+
+/* Back button — dark variant (inside navy mode topbar) */
+.shauri-back-btn-dark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 6px 14px;
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.75);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: var(--r-sm);
+  font-family: 'Orbitron', sans-serif;
+  font-size: var(--type-xs);
+  font-weight: 600;
+  letter-spacing: var(--track-normal);
+  text-transform: uppercase;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background var(--ease-fast), border-color var(--ease-fast);
+}
+
+.shauri-back-btn-dark:hover {
+  background: rgba(255,255,255,0.12);
+  border-color: var(--shauri-gold-muted);
+}
+
+/* Primary CTA button (gold/green — AV mode START LESSON) */
+.shauri-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 12px 24px;
+  background: #1a7a4a;
+  color: #ffffff;
+  border: none;
+  border-radius: var(--r-sm);
+  font-family: 'Orbitron', sans-serif;
+  font-size: var(--type-sm);
+  font-weight: 700;
+  letter-spacing: var(--track-normal);
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background var(--ease-fast), transform var(--ease-fast);
+}
+
+.shauri-btn-primary:hover  { background: #1d8f56; transform: translateY(-1px); }
+.shauri-btn-primary:active { transform: scale(0.97); }
+
+/* Gold outlined button */
+.shauri-btn-gold {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 10px 20px;
+  background: transparent;
+  color: var(--shauri-navy);
+  border: 1px solid var(--shauri-gold);
+  border-radius: var(--r-pill);
+  font-family: 'Orbitron', sans-serif;
+  font-size: var(--type-xs);
+  font-weight: 700;
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background var(--ease-fast), color var(--ease-fast);
+}
+
+.shauri-btn-gold:hover {
+  background: var(--shauri-gold);
+  color: #fff;
+}
+
+/* Ghost dark button */
+.shauri-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 8px 16px;
+  background: transparent;
+  color: var(--shauri-text-secondary);
+  border: 1px solid var(--shauri-border-subtle);
+  border-radius: var(--r-sm);
+  font-family: 'Orbitron', sans-serif;
+  font-size: var(--type-xs);
+  font-weight: 600;
+  letter-spacing: var(--track-normal);
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all var(--ease-fast);
+}
+
+.shauri-btn-ghost:hover {
+  background: var(--shauri-gold-glow);
+  border-color: var(--shauri-border);
+  color: var(--shauri-navy);
+}
+
+/* Card surface */
+.shauri-card {
+  background: var(--s-bg-surface);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--s-border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--s-shadow-card);
+  transition: transform var(--ease-fast), box-shadow var(--ease-fast),
+              background 0.35s ease, border-color 0.35s ease;
+}
+
+.shauri-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--s-shadow-float);
+  border-color: var(--s-border-strong);
+}
+
+/* Input field */
+.shauri-input {
+  width: 100%;
+  padding: 14px 16px;
+  background: var(--s-bg-input);
+  color: var(--s-text-primary);
+  border: 1.5px solid var(--s-border-subtle);
+  border-radius: var(--r-md);
+  font-family: 'Orbitron', sans-serif;
+  font-size: var(--type-sm);
+  letter-spacing: var(--track-tight);
+  outline: none;
+  transition: border-color var(--ease-fast), box-shadow var(--ease-fast),
+              background 0.35s ease, color 0.35s ease;
+}
+
+.shauri-input:focus {
+  border-color: var(--s-gold);
+  box-shadow: 0 0 0 3px var(--s-gold-glow);
+  background: var(--s-bg-input-focus);
+}
+
+.shauri-input::placeholder {
+  color: var(--s-text-muted);
+  font-weight: 400;
+}
+
+/* Chat bubble — AI response */
+.shauri-bubble-ai {
+  background: var(--s-bubble-ai-bg);
+  border: 1px solid var(--s-bubble-ai-border);
+  border-radius: 4px 18px 18px 18px;
+  padding: 13px 18px;
+  color: var(--s-bubble-ai-text);
+  font-size: var(--type-base);
+  line-height: 1.8;
+  box-shadow: var(--s-shadow-card);
+  max-width: 82%;
+  letter-spacing: 0.02em;
+}
+
+/* Chat bubble — User message */
+.shauri-bubble-user {
+  border-radius: 18px 18px 4px 18px;
+  padding: 13px 18px;
+  background: var(--s-bubble-user-bg);
+  color: var(--s-bubble-user-text);
+  font-size: var(--type-base);
+  line-height: 1.8;
+  max-width: 82%;
+  letter-spacing: 0.02em;
+  box-shadow: var(--s-shadow-float);
+}
+
+/* Session info bar */
+.shauri-session-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  padding: 8px 16px;
+  background: var(--s-session-bg);
+  border-bottom: 1px solid var(--s-session-border);
+  font-size: var(--type-xs);
+  flex-shrink: 0;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar         { width: 4px; height: 4px; }
+::-webkit-scrollbar-track   { background: transparent; }
+::-webkit-scrollbar-thumb   { background: var(--shauri-gold-muted); border-radius: var(--r-pill); }
+::-webkit-scrollbar-thumb:hover { background: var(--shauri-gold); }
+
+/* ── 6. ANIMATION KEYFRAMES ─────────────────────────────────── */
+@keyframes shauri-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+@keyframes shauri-pulse-dot {
+  0%, 100% { transform: translateY(0);   opacity: 0.6; }
+  50%       { transform: translateY(-5px); opacity: 1;   }
+}
+
+@keyframes shauri-glow-pulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(212,175,55,0.15); }
+  50%       { box-shadow: 0 0 28px rgba(212,175,55,0.35); }
+}
+
+.shauri-fade-up {
+  animation: shauri-fade-up 0.22s ease both;
+}
+
+/* ── 7. UTILITY OVERRIDES ───────────────────────────────────── */
+
+/* Ensure Orbitron loads for all text rendered in these contexts */
+.shauri-font {
+  font-family: 'Orbitron', sans-serif !important;
 }

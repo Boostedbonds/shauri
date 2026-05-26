@@ -111,6 +111,29 @@ const KEYMAP = [
 
 type KeyName = (typeof KEYMAP)[number]["name"];
 
+// ── Debug telemetry type ─────────────────────────────────────────────────────
+type DebugInfo = {
+  fKeyDown: boolean;
+  focusedApparatus: string;
+  raycasterHit: string;
+  cacheSize: number;
+  cacheHasApparatus: boolean;
+  cooldownActive: boolean;
+  pointerLocked: boolean;
+  dispatchReady: boolean;
+};
+
+const defaultDebugInfo: DebugInfo = {
+  fKeyDown: false,
+  focusedApparatus: "none",
+  raycasterHit: "none",
+  cacheSize: 0,
+  cacheHasApparatus: false,
+  cooldownActive: false,
+  pointerLocked: false,
+  dispatchReady: false,
+};
+
 type ToolKind = "beaker" | "flask" | "pipette" | "coil" | "slide";
 
 type Grabbable = {
@@ -309,6 +332,11 @@ function LabRoom({ subject, pulse }: { subject: Subject; pulse: number }) {
             <mesh position={[0, 1.71, 0]}>
               <boxGeometry args={[4.2, 0.06, 2.3]} />
               <meshStandardMaterial color="#223346" metalness={0.8} roughness={0.12} />
+            </mesh>
+            {/* Invisible interaction hitbox covering entire bench top — ensures F/click always finds a target */}
+            <mesh userData={{ stationId: station.id }} position={[0, 1.85, 0]}>
+              <boxGeometry args={[4.2, 0.28, 2.3]} />
+              <meshStandardMaterial transparent opacity={0} depthWrite={false} />
             </mesh>
             {/* Bench front edge glow strip */}
             <mesh position={[0, 1.71, 1.18]}>
@@ -674,14 +702,14 @@ function MechanicalApparatusRigs({
       {/* Microscope rig */}
       <group position={[6.5, 1.9, -3.2]}>
         <mesh castShadow><boxGeometry args={[0.8, 0.12, 0.8]} /><meshStandardMaterial color="#31445e" metalness={0.55} roughness={0.3} /></mesh>
-        <group ref={focusRef} userData={{ apparatusPartId: "microscope-focus" }} position={[0.28, 0.24, 0.25]}>
-          <mesh><cylinderGeometry args={[0.08, 0.08, 0.06, 20]} /><meshStandardMaterial color="#a7b6c8" metalness={0.8} roughness={0.2} /></mesh>
+        <group ref={focusRef} position={[0.28, 0.24, 0.25]}>
+          <mesh userData={{ apparatusPartId: "microscope-focus" }}><cylinderGeometry args={[0.08, 0.08, 0.06, 20]} /><meshStandardMaterial color="#a7b6c8" metalness={0.8} roughness={0.2} /></mesh>
         </group>
-        <group ref={turretRef} userData={{ apparatusPartId: "microscope-turret" }} position={[0, 0.35, 0]}>
-          <mesh><cylinderGeometry args={[0.13, 0.13, 0.08, 18]} /><meshStandardMaterial color="#89a2bd" metalness={0.7} roughness={0.24} /></mesh>
+        <group ref={turretRef} position={[0, 0.35, 0]}>
+          <mesh userData={{ apparatusPartId: "microscope-turret" }}><cylinderGeometry args={[0.13, 0.13, 0.08, 18]} /><meshStandardMaterial color="#89a2bd" metalness={0.7} roughness={0.24} /></mesh>
         </group>
-        <group ref={stageRef} userData={{ apparatusPartId: "microscope-stage" }} position={[0, 0.26, 0]}>
-          <mesh><boxGeometry args={[0.46, 0.04, 0.34]} /><meshStandardMaterial color="#192634" metalness={0.5} roughness={0.35} /></mesh>
+        <group ref={stageRef} position={[0, 0.26, 0]}>
+          <mesh userData={{ apparatusPartId: "microscope-stage" }}><boxGeometry args={[0.46, 0.04, 0.34]} /><meshStandardMaterial color="#192634" metalness={0.5} roughness={0.35} /></mesh>
         </group>
       </group>
 
@@ -690,11 +718,13 @@ function MechanicalApparatusRigs({
         <mesh castShadow><boxGeometry args={[0.1, 1.8, 0.1]} /><meshStandardMaterial color="#6e7e92" metalness={0.75} roughness={0.3} /></mesh>
         <mesh userData={{ apparatusPartId: "burette-pivot" }} position={[0.2, 0.7, 0]}><boxGeometry args={[0.4, 0.08, 0.08]} /><meshStandardMaterial color="#91a6c0" metalness={0.78} roughness={0.24} /></mesh>
         <mesh position={[0.2, 0.2, 0]}><cylinderGeometry args={[0.04, 0.04, 1.2, 16]} /><meshPhysicalMaterial color="#d9f6ff" transmission={0.9} transparent opacity={0.45} roughness={0.05} /></mesh>
-        <group ref={clampRef} userData={{ apparatusPartId: "burette-clamp" }} position={[0.2, 0.72, 0]}>
-          <mesh><boxGeometry args={[0.08, 0.14, 0.12]} /><meshStandardMaterial color="#7f8ea3" metalness={0.8} roughness={0.2} /></mesh>
+        <group ref={clampRef} position={[0.2, 0.72, 0]}>
+          <mesh userData={{ apparatusPartId: "burette-clamp" }}><boxGeometry args={[0.08, 0.14, 0.12]} /><meshStandardMaterial color="#7f8ea3" metalness={0.8} roughness={0.2} /></mesh>
         </group>
-        <group ref={valveRef} userData={{ apparatusPartId: "burette-valve" }} position={[0.2, -0.34, 0]}>
-          <mesh><cylinderGeometry args={[0.05, 0.05, 0.14, 14]} /><meshStandardMaterial color="#d8c498" metalness={0.35} roughness={0.25} /></mesh>
+        <group ref={valveRef} position={[0.2, -0.34, 0]}>
+          <mesh userData={{ apparatusPartId: "burette-valve" }}><cylinderGeometry args={[0.05, 0.05, 0.14, 14]} /><meshStandardMaterial color="#d8c498" metalness={0.35} roughness={0.25} /></mesh>
+          {/* Invisible hitbox — makes tiny valve much easier to click/F */}
+          <mesh userData={{ apparatusPartId: "burette-valve" }}><cylinderGeometry args={[0.18, 0.18, 0.35, 10]} /><meshStandardMaterial transparent opacity={0} depthWrite={false} /></mesh>
         </group>
       </group>
 
@@ -703,6 +733,10 @@ function MechanicalApparatusRigs({
         <mesh castShadow><cylinderGeometry args={[0.22, 0.28, 0.14, 20]} /><meshStandardMaterial color="#3b4758" metalness={0.7} roughness={0.25} /></mesh>
         <mesh position={[0, 0.28, 0]}><cylinderGeometry args={[0.06, 0.07, 0.4, 16]} /><meshStandardMaterial color="#69788c" metalness={0.82} roughness={0.18} /></mesh>
         <mesh userData={{ apparatusPartId: "burner-knob" }} position={[0.22, -0.02, 0]}><cylinderGeometry args={[0.04, 0.04, 0.06, 14]} /><meshStandardMaterial color="#c9b48f" metalness={0.4} roughness={0.3} /></mesh>
+        {/* Invisible hitbox for burner knob */}
+        <mesh userData={{ apparatusPartId: "burner-knob" }} position={[0.22, -0.02, 0]}><boxGeometry args={[0.22, 0.22, 0.22]} /><meshStandardMaterial transparent opacity={0} depthWrite={false} /></mesh>
+        {/* Burner base hitbox */}
+        <mesh userData={{ apparatusPartId: "burner-knob" }} position={[0, 0.07, 0]}><cylinderGeometry args={[0.3, 0.3, 0.16, 14]} /><meshStandardMaterial transparent opacity={0} depthWrite={false} /></mesh>
         <mesh ref={flameRef} position={[0, 0.55, 0]}>
           <coneGeometry args={[0.06, 0.2, 14]} />
           <meshStandardMaterial emissive="#ffad3b" emissiveIntensity={1.4} color="#ffc96a" transparent opacity={0.82} />
@@ -752,10 +786,49 @@ function CameraAutoSpawn({ targetStationId, onSpawned }: { targetStationId: stri
   return null;
 }
 
-function PlayerController({ targetStationId, setNearStation, setHighlightedStationId, grabbedId, setGrabbedId, rigidBodies, setGrabbedLabel, setPlayerState, onApparatusInteract }: {
+// ─────────────────────────────────────────────────────────────────────────────
+// InteractionManager — centralised, deterministic interaction system
+//
+// Root causes fixed:
+//   1. userData lives on <group> but raycaster hits child <mesh> with no userData.
+//      Fix: recursive raycast + walk the ancestor chain to find apparatusPartId.
+//   2. interactLatch could deadlock if keyup was lost under pointer-lock.
+//      Fix: native keydown/keyup listeners on document + 300ms safety timeout.
+//   3. useKeyboardControls polling mismatch under pointer-lock on some browsers.
+//      Fix: bypass Drei's getKeys() for interact entirely; use native events.
+//   4. Canvas onClick used stale React state from closure.
+//      Fix: dispatch is driven by a stable ref (currentFocusRef), not React state.
+//   5. meshCache cold start: scene not loaded at frame 1 → empty cache locked 2s.
+//      Fix: rebuild cache every frame until at least one apparatus mesh is found.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Walk up the THREE.js object hierarchy to find the first ancestor (or self)
+// that carries an interactable userData key.
+function resolveInteractable(obj: THREE.Object3D | null): {
+  stationId: string | null;
+  grabbableId: string | null;
+  apparatusPartId: string | null;
+} {
+  let cur: THREE.Object3D | null = obj;
+  while (cur) {
+    const u = cur.userData ?? {};
+    if (u.stationId || u.grabbableId || u.apparatusPartId) {
+      return {
+        stationId: (u.stationId as string) ?? null,
+        grabbableId: (u.grabbableId as string) ?? null,
+        apparatusPartId: (u.apparatusPartId as string) ?? null,
+      };
+    }
+    cur = cur.parent;
+  }
+  return { stationId: null, grabbableId: null, apparatusPartId: null };
+}
+
+function PlayerController({ targetStationId, setNearStation, setHighlightedStationId, setDebugInfo, grabbedId, setGrabbedId, rigidBodies, setGrabbedLabel, setPlayerState, onApparatusInteract }: {
   targetStationId: string;
   setNearStation: (v: boolean) => void;
   setHighlightedStationId: (id: string | null) => void;
+  setDebugInfo: (info: DebugInfo) => void;
   grabbedId: string | null;
   setGrabbedId: (id: string | null) => void;
   rigidBodies: React.MutableRefObject<Record<string, RapierRigidBody | null>>;
@@ -763,29 +836,135 @@ function PlayerController({ targetStationId, setNearStation, setHighlightedStati
   setPlayerState: (p: { pos: THREE.Vector3; forwardY: number }) => void;
   onApparatusInteract: (partId: string) => void;
 }) {
-  const { camera, scene } = useThree();
+  const { camera, scene, gl } = useThree();
   const [, getKeys] = useKeyboardControls<KeyName>();
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
   const direction = useMemo(() => new THREE.Vector3(), []);
   const side = useMemo(() => new THREE.Vector3(), []);
   const targetPos = useMemo(() => new THREE.Vector3(), []);
   const tmp = useMemo(() => new THREE.Vector3(), []);
-  const gripVec = useMemo(() => new THREE.Vector3(), []); // reuse instead of new every frame
-  const screenCenter = useMemo(() => new THREE.Vector2(0, 0), []); // reuse Vector2
+  const gripVec = useMemo(() => new THREE.Vector3(), []);
+  const screenCenter = useMemo(() => new THREE.Vector2(0, 0), []);
   const t = useRef(0);
-  const interactLatch = useRef(false);
-  const objects = useMemo(() => LAB_STATIONS.map((s) => ({ id: s.id, pos: new THREE.Vector3(s.x * 2.5, 3.0, s.z * 1.5) })), []);
 
-  // Cache interactable mesh list — rebuild only when scene graph changes, not every frame
-  const interactMeshes = useRef<THREE.Object3D[]>([]);
-  const meshCacheFrame = useRef(0);
+  // ── Stable ref-based focus — never stale in callbacks ──
+  const currentFocusRef = useRef<{
+    stationId: string | null;
+    grabbableId: string | null;
+    apparatusPartId: string | null;
+  }>({ stationId: null, grabbableId: null, apparatusPartId: null });
 
-  // Throttle refs to avoid calling setPlayerState / setNearStation every single frame
-  const lastNear = useRef(false);
+  // ── Native F-key state: reliable under pointer lock ──
+  const fKeyDown = useRef(false);
+  const interactCooldown = useRef(false);
   const lastHighlight = useRef<string | null>(null);
   const lastForwardY = useRef(0);
   const lastPosX = useRef(0);
   const lastPosZ = useRef(0);
+  const lastNear = useRef(false);
+
+  // ── Mesh cache — rebuilt until apparatus meshes are present ──
+  const interactMeshes = useRef<THREE.Object3D[]>([]);
+  const cacheHasApparatus = useRef(false);
+  const cacheRebuildFrame = useRef(0);
+
+  // ── Central dispatch — called by BOTH F key and mouse click ──
+  const dispatchInteract = useRef((source: "keyboard" | "mouse") => {
+    if (interactCooldown.current) return;
+    const focus = currentFocusRef.current;
+    const grabbedIdSnap = grabbedId; // captured at mount — use ref below instead
+
+    if (focus.apparatusPartId) {
+      onApparatusInteract(focus.apparatusPartId);
+      interactCooldown.current = true;
+      setTimeout(() => { interactCooldown.current = false; }, 280);
+      return;
+    }
+    if (focus.grabbableId) {
+      const rb = rigidBodies.current[focus.grabbableId];
+      const profile = GRABBABLES.find((g) => g.id === focus.grabbableId);
+      if (rb && profile) {
+        rb.setGravityScale(0, true);
+        rb.setLinearDamping(2.7);
+        rb.setAngularDamping(profile.angularDamping);
+        rb.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        rb.setAngvel({ x: 0, y: 0, z: 0 }, true);
+        setGrabbedId(focus.grabbableId);
+        setGrabbedLabel(profile.label);
+      }
+      interactCooldown.current = true;
+      setTimeout(() => { interactCooldown.current = false; }, 280);
+      return;
+    }
+  });
+
+  // Keep dispatchInteract.current up to date with latest closures
+  // We update it every render so onApparatusInteract always points to fresh handler
+  dispatchInteract.current = (source: "keyboard" | "mouse") => {
+    if (interactCooldown.current) return;
+    const focus = currentFocusRef.current;
+
+    if (focus.apparatusPartId) {
+      onApparatusInteract(focus.apparatusPartId);
+      interactCooldown.current = true;
+      setTimeout(() => { interactCooldown.current = false; }, 280);
+      return;
+    }
+    if (grabbedId) {
+      const rb = rigidBodies.current[grabbedId];
+      rb?.setGravityScale(1, true);
+      rb?.setLinearDamping(0.7);
+      rb?.setAngularDamping(0.7);
+      setGrabbedId(null);
+      setGrabbedLabel(null);
+      interactCooldown.current = true;
+      setTimeout(() => { interactCooldown.current = false; }, 280);
+      return;
+    }
+    if (focus.grabbableId) {
+      const rb = rigidBodies.current[focus.grabbableId];
+      const profile = GRABBABLES.find((g) => g.id === focus.grabbableId);
+      if (rb && profile) {
+        rb.setGravityScale(0, true);
+        rb.setLinearDamping(2.7);
+        rb.setAngularDamping(profile.angularDamping);
+        rb.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        rb.setAngvel({ x: 0, y: 0, z: 0 }, true);
+        setGrabbedId(focus.grabbableId);
+        setGrabbedLabel(profile.label);
+      }
+      interactCooldown.current = true;
+      setTimeout(() => { interactCooldown.current = false; }, 280);
+      return;
+    }
+  };
+
+  // ── Native keyboard listeners — bypass Drei under pointer-lock ──
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === "KeyF" && !e.repeat && !fKeyDown.current) {
+        fKeyDown.current = true;
+        dispatchInteract.current("keyboard");
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "KeyF") fKeyDown.current = false;
+    };
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("keyup", onKeyUp);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("keyup", onKeyUp);
+    };
+  }, []);
+
+  // ── Canvas left-click for mouse interaction fallback ──
+  useEffect(() => {
+    const canvas = gl.domElement;
+    const onClick = () => dispatchInteract.current("mouse");
+    canvas.addEventListener("click", onClick);
+    return () => canvas.removeEventListener("click", onClick);
+  }, [gl]);
 
   useFrame((_, delta) => {
     const keys = getKeys();
@@ -801,15 +980,13 @@ function PlayerController({ targetStationId, setNearStation, setHighlightedStati
     if (keys.backward) camera.position.addScaledVector(direction, -speed);
     if (keys.left) camera.position.addScaledVector(side, -speed);
     if (keys.right) camera.position.addScaledVector(side, speed);
-
     camera.position.x = THREE.MathUtils.clamp(camera.position.x, -19, 19);
     camera.position.z = THREE.MathUtils.clamp(camera.position.z, -19, 19);
 
     t.current += delta * 7;
     const moving = Boolean(keys.forward || keys.backward || keys.left || keys.right);
-    camera.position.y = 3.0 + (moving ? Math.sin(t.current) * 0.022 : 0);
+    camera.position.y = 2.6 + (moving ? Math.sin(t.current) * 0.018 : 0);
 
-    // Only call setPlayerState when position/direction actually changed (> 0.05 units)
     const dx = Math.abs(camera.position.x - lastPosX.current);
     const dz = Math.abs(camera.position.z - lastPosZ.current);
     const dfy = Math.abs(forwardY - lastForwardY.current);
@@ -820,60 +997,52 @@ function PlayerController({ targetStationId, setNearStation, setHighlightedStati
       lastForwardY.current = forwardY;
     }
 
-    // Auto-spawn places student directly at station — nearStation is always true
     if (!lastNear.current) {
       setNearStation(true);
       lastNear.current = true;
     }
 
-    // Rebuild mesh cache every 120 frames (~2 sec) instead of every frame
-    meshCacheFrame.current++;
-    if (meshCacheFrame.current === 1 || meshCacheFrame.current % 120 === 0) {
+    // ── Rebuild mesh cache until apparatus meshes are actually present ──
+    cacheRebuildFrame.current++;
+    const shouldRebuild = !cacheHasApparatus.current || cacheRebuildFrame.current % 90 === 0;
+    if (shouldRebuild) {
       interactMeshes.current = [];
       scene.traverse((o) => {
         if (o.userData?.stationId || o.userData?.grabbableId || o.userData?.apparatusPartId)
           interactMeshes.current.push(o);
+        // Also include meshes whose PARENT group has apparatus userData
+        if (o.type === "Mesh" && o.parent) {
+          const pu = o.parent.userData ?? {};
+          if (pu.apparatusPartId || pu.stationId || pu.grabbableId) {
+            // Assign userData to mesh so raycast can find it directly
+            if (!o.userData.apparatusPartId && !o.userData.stationId && !o.userData.grabbableId) {
+              o.userData = { ...pu };
+            }
+            if (!interactMeshes.current.includes(o)) interactMeshes.current.push(o);
+          }
+        }
       });
+      cacheHasApparatus.current = interactMeshes.current.some(
+        (o) => o.userData?.apparatusPartId
+      );
     }
 
-    raycaster.setFromCamera(screenCenter, camera); // reuse cached Vector2
-    const hit = raycaster.intersectObjects(interactMeshes.current, false)[0]?.object;
-    const stationId = (hit?.userData?.stationId as string | undefined) ?? null;
-    const grabbableId = (hit?.userData?.grabbableId as string | undefined) ?? null;
-    const apparatusPartId = (hit?.userData?.apparatusPartId as string | undefined) ?? null;
-    const newHighlight = stationId ?? grabbableId ?? apparatusPartId ?? null;
+    // ── Raycast with recursive=true to catch nested meshes ──
+    raycaster.setFromCamera(screenCenter, camera);
+    raycaster.far = 12; // limit range — only interact with close apparatus
+    const hits = raycaster.intersectObjects(interactMeshes.current, true);
+    const hitObj = hits[0]?.object ?? null;
+    const resolved = resolveInteractable(hitObj);
+
+    currentFocusRef.current = resolved;
+
+    const newHighlight = resolved.stationId ?? resolved.grabbableId ?? resolved.apparatusPartId ?? null;
     if (newHighlight !== lastHighlight.current) {
       setHighlightedStationId(newHighlight);
       lastHighlight.current = newHighlight;
     }
 
-    if (keys.interact && !interactLatch.current) {
-      interactLatch.current = true;
-      if (grabbedId) {
-        const rb = rigidBodies.current[grabbedId];
-        rb?.setGravityScale(1, true);
-        rb?.setLinearDamping(0.7);
-        rb?.setAngularDamping(0.7);
-        setGrabbedId(null);
-        setGrabbedLabel(null);
-      } else if (apparatusPartId) {
-        onApparatusInteract(apparatusPartId);
-      } else if (grabbableId) {
-        const rb = rigidBodies.current[grabbableId];
-        const profile = GRABBABLES.find((g) => g.id === grabbableId);
-        if (rb && profile) {
-          rb.setGravityScale(0, true);
-          rb.setLinearDamping(2.7);
-          rb.setAngularDamping(profile.angularDamping);
-          rb.setLinvel({ x: 0, y: 0, z: 0 }, true);
-          rb.setAngvel({ x: 0, y: 0, z: 0 }, true);
-          setGrabbedId(grabbableId);
-          setGrabbedLabel(profile.label);
-        }
-      }
-    }
-    if (!keys.interact && interactLatch.current) interactLatch.current = false;
-
+    // ── Grabbed object physics follow ──
     if (grabbedId) {
       const rb = rigidBodies.current[grabbedId];
       const profile = GRABBABLES.find((g) => g.id === grabbedId);
@@ -881,7 +1050,7 @@ function PlayerController({ targetStationId, setNearStation, setHighlightedStati
         camera.getWorldDirection(direction);
         targetPos.copy(camera.position)
           .add(direction.multiplyScalar(Math.abs(profile.gripOffset[2]) + 0.75));
-        gripVec.set(profile.gripOffset[0], profile.gripOffset[1], 0); // reuse, no allocation
+        gripVec.set(profile.gripOffset[0], profile.gripOffset[1], 0);
         targetPos.add(gripVec);
         const cur = rb.translation();
         tmp.set(targetPos.x - cur.x, targetPos.y - cur.y, targetPos.z - cur.z);
@@ -889,6 +1058,18 @@ function PlayerController({ targetStationId, setNearStation, setHighlightedStati
         rb.setAngvel({ x: 0, y: 0, z: 0 }, true);
       }
     }
+
+    // ── Debug telemetry (updated every frame for real-time visibility) ──
+    setDebugInfo({
+      fKeyDown: fKeyDown.current,
+      focusedApparatus: resolved.apparatusPartId ?? resolved.grabbableId ?? resolved.stationId ?? "none",
+      raycasterHit: hitObj?.name ?? hitObj?.uuid?.slice(0, 8) ?? "none",
+      cacheSize: interactMeshes.current.length,
+      cacheHasApparatus: cacheHasApparatus.current,
+      cooldownActive: interactCooldown.current,
+      pointerLocked: !!document.pointerLockElement,
+      dispatchReady: !interactCooldown.current && !!resolved.apparatusPartId,
+    });
   });
 
   return <PointerLockControls />;
@@ -963,7 +1144,7 @@ function useLabAudio(playerPos: THREE.Vector3, reactionLevel: number) {
   }, []); // ← empty deps: create once, never re-create
 }
 
-export default function ImmersiveLabExperience({ subject, mode, experiment, onRunResult, runtime, setRuntime, eventFeed, lastOutcome, studentName }: {
+export default function ImmersiveLabExperience({ subject, mode, experiment, onRunResult, runtime, setRuntime, eventFeed, setEventFeed: setEventFeedProp, lastOutcome, studentName }: {
   subject: Subject;
   mode: LabModeType;
   experiment: Experiment;
@@ -971,13 +1152,24 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
   runtime: ExperimentRuntime;
   setRuntime: React.Dispatch<React.SetStateAction<ExperimentRuntime>>;
   eventFeed: InteractionEvent[];
+  setEventFeed?: React.Dispatch<React.SetStateAction<InteractionEvent[]>>;
   lastOutcome: ExperimentOutcome | null;
   studentName?: string;
 }) {
   const canvasContainerRef = useRef<HTMLDivElement>(null);
+  // Local event feed — merged with parent's if provided
+  const [localEventFeed, setLocalEventFeed] = useState<InteractionEvent[]>([]);
+  const setEventFeed = (updater: React.SetStateAction<InteractionEvent[]>) => {
+    setLocalEventFeed(updater);
+    if (setEventFeedProp) setEventFeedProp(updater);
+  };
+  const mergedEventFeed = localEventFeed.length > 0 ? localEventFeed : eventFeed;
+
   const [nearStation, setNearStation] = useState(true); // always true — auto-spawn places student at bench
   const [cinematicFade, setCinematicFade] = useState(false);
   const [spawnedStation, setSpawnedStation] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<DebugInfo>(defaultDebugInfo);
+  const [showDebug, setShowDebug] = useState(false);
   const [highlightedStationId, setHighlightedStationId] = useState<string | null>(null);
   const [grabbedId, setGrabbedId] = useState<string | null>(null);
   const [grabbedLabel, setGrabbedLabel] = useState<string | null>(null);
@@ -1052,8 +1244,8 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
     // While they're still navigating, always show movement/navigation guidance.
     if (nearStation && mechanicalAlerts.length)
       return explainAlert(mechanicalAlerts[0], studentName);
-    return aiGuide(mode, subject, nearStation, distanceToStation, eventFeed, grabbedLabel, transferActive, studentName);
-  }, [mode, subject, nearStation, distanceToStation, eventFeed, grabbedLabel, transferActive, mechanicalAlerts, studentName]);
+    return aiGuide(mode, subject, nearStation, distanceToStation, mergedEventFeed, grabbedLabel, transferActive, studentName);
+  }, [mode, subject, nearStation, distanceToStation, mergedEventFeed, grabbedLabel, transferActive, mechanicalAlerts, studentName]);
 
   useLabAudio(playerPos, reactionLevel);
 
@@ -1183,40 +1375,67 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
     setMechanicalAlerts((a) => [`${selectedMaintenance} ${action} workflow completed.`, ...a].slice(0, 4));
   };
 
+  // Map station click → primary apparatus for subject (bench hitbox fallback)
+  const STATION_PRIMARY_APPARATUS: Record<string, string> = {
+    chemistry: "burette-valve",
+    physics: "circuit-socket-a",
+    biology: "microscope-focus",
+  };
+
   const handleApparatusInteract = (partId: string) => {
+    // If student clicked the bench surface (stationId), route to subject's primary apparatus
+    const resolvedPartId = LAB_STATIONS.some((s) => s.id === partId)
+      ? (STATION_PRIMARY_APPARATUS[subject] ?? partId)
+      : partId;
+
+    // ── Inject telemetry event immediately on ANY successful interaction dispatch ──
+    const eventMsg = resolvedPartId.includes("burette") ? `Burette ${resolvedPartId.replace("burette-", "")} operated`
+      : resolvedPartId.includes("burner") ? "Bunsen burner adjusted"
+      : resolvedPartId.includes("microscope") ? `Microscope ${resolvedPartId.replace("microscope-", "")} adjusted`
+      : resolvedPartId.includes("circuit") ? `Circuit ${resolvedPartId.replace("circuit-", "")} toggled`
+      : `Apparatus interaction: ${resolvedPartId}`;
+    setEventFeed((prev) => [
+      {
+        id: `apparatus-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        message: eventMsg,
+        timestamp: Date.now(),
+        severity: "success",
+      } as InteractionEvent,
+      ...prev.slice(0, 9),
+    ]);
     setMechanics((m) => {
-      if (partId === "microscope-focus") {
+      if (resolvedPartId === "microscope-focus") {
         const j = APPARATUS_PROFILES.microscope.joints[0];
         const next = stepJoint(m.microscopeFocusTarget, j, 1);
         setApparatusState((s) => ({ ...s, microscope: "active" }));
         return { ...m, microscopeFocusTarget: next >= j.max ? j.min : next };
       }
-      if (partId === "microscope-turret") {
+      if (resolvedPartId === "microscope-turret") {
         const j = APPARATUS_PROFILES.microscope.joints[1];
         const next = clampJoint((m.microscopeTurretTarget + 1) % 3, j);
         setApparatusState((s) => ({ ...s, microscope: "aligned" }));
         return { ...m, microscopeTurretTarget: next };
       }
-      if (partId === "microscope-stage") {
+      if (resolvedPartId === "microscope-stage") {
         const jx = APPARATUS_PROFILES.microscope.joints[2];
         const jy = APPARATUS_PROFILES.microscope.joints[3];
         const nx = m.microscopeStageXTarget >= jx.max ? jx.min : stepJoint(m.microscopeStageXTarget, jx, 1);
         const ny = m.microscopeStageYTarget <= jy.min ? jy.max : stepJoint(m.microscopeStageYTarget, jy, -1);
         return { ...m, microscopeStageXTarget: nx, microscopeStageYTarget: ny };
       }
-      if (partId === "burette-valve") {
+      if (resolvedPartId === "burette-valve") {
         const j = APPARATUS_PROFILES.burette.joints[0];
         const next = stepJoint(m.buretteValveTarget, j, 1);
         setApparatusState((s) => ({ ...s, burette: next > 0.7 ? "pressurized" : "active" }));
         if (next > 0.9) setMechanicalAlerts((a) => ["Valve near over-rotation threshold. Pressure risk rising.", ...a].slice(0, 4));
         return { ...m, buretteValveTarget: next >= j.max ? j.min : next };
       }
-      if (partId === "burette-clamp") {
+      if (resolvedPartId === "burette-clamp") {
         const locked = m.buretteClampTarget > 0.5 ? 0 : 1;
         setApparatusState((s) => ({ ...s, burette: locked ? "locked" : "mounted" }));
         return { ...m, buretteClampTarget: locked };
       }
-      if (partId === "burner-knob") {
+      if (resolvedPartId === "burner-knob") {
         const j = APPARATUS_PROFILES.burner.joints[0];
         const next = stepJoint(m.burnerKnobTarget, j, 1);
         const value = next >= j.max ? j.min : next;
@@ -1225,14 +1444,14 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
         if (value > 0.9) setMechanicalAlerts((a) => ["Burner overdrive detected. Thermal stress increasing.", ...a].slice(0, 4));
         return { ...m, burnerKnobTarget: value };
       }
-      if (partId === "circuit-socket-a") {
+      if (resolvedPartId === "circuit-socket-a") {
         const next = m.circuitSnapATarget > 0.5 ? 0 : 1;
         const state: ApparatusState = next && m.circuitSnapBTarget > 0.5 ? "active" : "aligned";
         setApparatusState((s) => ({ ...s, circuit: state }));
         if (next !== m.circuitSnapBTarget) setMechanicalAlerts((a) => isApparatusRelevant(subject, "circuit") ? ["Circuit polarity/continuity mismatch. Connector fault risk.", ...a].slice(0, 4) : a);
         return { ...m, circuitSnapATarget: next };
       }
-      if (partId === "circuit-socket-b") {
+      if (resolvedPartId === "circuit-socket-b") {
         const next = m.circuitSnapBTarget > 0.5 ? 0 : 1;
         const state: ApparatusState = next && m.circuitSnapATarget > 0.5 ? "active" : "aligned";
         setApparatusState((s) => ({ ...s, circuit: state }));
@@ -1311,12 +1530,7 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
             gl.toneMapping = THREE.ACESFilmicToneMapping;
             gl.toneMappingExposure = 1.08;
           }}
-          onClick={() => {
-            // Left-click fallback: fire apparatus interact for currently highlighted part
-            if (highlightedStationId) {
-              handleApparatusInteract(highlightedStationId);
-            }
-          }}
+
         >
           <color attach="background" args={["#030712"]} />
           <fog attach="fog" args={["#07101d", 15 - reactionLevel * 4, qc.fogFar - reactionLevel * 8]} />
@@ -1390,6 +1604,7 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
               targetStationId={station.id}
               setNearStation={setNearStation}
               setHighlightedStationId={setHighlightedStationId}
+              setDebugInfo={setDebugInfo}
               grabbedId={grabbedId}
               setGrabbedId={setGrabbedId}
               rigidBodies={rigidBodies}
@@ -1441,6 +1656,67 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
                 Preparing apparatus…
               </div>
             </>
+          )}
+        </div>
+
+        {/* ── INTERACTION DEBUG OVERLAY — toggle with ` (backtick) ── */}
+        <div
+          onClick={() => setShowDebug((v) => !v)}
+          style={{
+            position: "absolute", bottom: 14, right: 14, zIndex: 30,
+            background: showDebug ? "rgba(2,8,22,0.96)" : "rgba(2,8,22,0.7)",
+            border: `1px solid ${debugInfo.dispatchReady ? "rgba(80,220,160,0.6)" : "rgba(255,100,80,0.5)"}`,
+            borderRadius: 10, padding: showDebug ? "12px 14px" : "6px 10px",
+            fontFamily: "monospace", fontSize: 11, cursor: "pointer",
+            pointerEvents: "auto", backdropFilter: "blur(6px)",
+            color: "#c8e8ff", minWidth: showDebug ? 230 : "auto",
+            boxShadow: debugInfo.dispatchReady ? "0 0 12px rgba(60,200,120,0.2)" : "0 0 12px rgba(255,80,60,0.15)",
+            transition: "all 0.18s",
+          }}
+        >
+          {!showDebug ? (
+            <span style={{ opacity: 0.7, fontSize: 10, letterSpacing: "0.08em" }}>
+              {debugInfo.dispatchReady
+                ? <span style={{ color: "#5aedb8" }}>● INTERACT READY</span>
+                : <span style={{ color: "#ff8060" }}>○ DEBUG</span>}
+            </span>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              <div style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", opacity: 0.5, marginBottom: 3 }}>
+                Interaction Debug — click to collapse
+              </div>
+              {[
+                { label: "Pointer locked", val: debugInfo.pointerLocked, bool: true },
+                { label: "F key down", val: debugInfo.fKeyDown, bool: true },
+                { label: "Focused apparatus", val: debugInfo.focusedApparatus, bool: false },
+                { label: "Raycast hit", val: debugInfo.raycasterHit, bool: false },
+                { label: "Cache size", val: debugInfo.cacheSize, bool: false },
+                { label: "Cache has apparatus", val: debugInfo.cacheHasApparatus, bool: true },
+                { label: "Cooldown active", val: debugInfo.cooldownActive, bool: true, invert: true },
+                { label: "Dispatch READY", val: debugInfo.dispatchReady, bool: true },
+              ].map(({ label, val, bool, invert }) => {
+                const isOk = bool
+                  ? invert ? !val : !!val
+                  : val !== "none" && val !== 0;
+                return (
+                  <div key={label} style={{ display: "flex", justifyContent: "space-between", gap: 16, borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: 3 }}>
+                    <span style={{ opacity: 0.6 }}>{label}</span>
+                    <span style={{ color: bool ? (isOk ? "#5aedb8" : "#ff8060") : "#ffe080", fontWeight: 600 }}>
+                      {typeof val === "boolean" ? (val ? "true" : "false") : String(val)}
+                    </span>
+                  </div>
+                );
+              })}
+              {!debugInfo.dispatchReady && (
+                <div style={{ marginTop: 4, padding: "5px 8px", background: "rgba(255,60,40,0.12)", borderRadius: 6, border: "1px solid rgba(255,80,60,0.3)", fontSize: 10, color: "#ffb0a0" }}>
+                  {!debugInfo.pointerLocked && "⚠ Click canvas to lock pointer — "}
+                  {!debugInfo.cacheHasApparatus && "⚠ Scene not loaded yet — "}
+                  {debugInfo.focusedApparatus === "none" && "⚠ Crosshair not on apparatus — "}
+                  {debugInfo.cooldownActive && "⚠ Cooldown active (280ms) — "}
+                  Check items above
+                </div>
+              )}
+            </div>
           )}
         </div>
 
@@ -1539,10 +1815,22 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
 
         {/* ── Crosshair ── */}
         <div style={{ position: "absolute", left: "50%", top: "50%", width: 14, height: 14, transform: `translate(-50%, -50%) translateY(${Math.sin(pulse * 2.6) * 0.6}px)`, border: `1px solid ${nearStation ? "#8ff8cc" : grabbedId ? "#ffd59f" : "#87b7df"}`, borderRadius: "50%", boxShadow: nearStation ? "0 0 18px rgba(143,248,204,0.6)" : grabbedId ? "0 0 18px rgba(255,213,159,0.6)" : "0 0 14px rgba(135,183,223,0.4)" }} />
-        {/* Press F hint when looking at apparatus */}
-        {nearStation && !grabbedId && (
-          <div style={{ position: "absolute", left: "50%", top: "calc(50% + 22px)", transform: "translateX(-50%)", background: "rgba(0,0,0,0.55)", border: "1px solid rgba(143,248,204,0.5)", borderRadius: 6, padding: "3px 10px", color: "#8ff8cc", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
-            Press F to interact
+        {/* Press F hint — shown when crosshair is on any interactable */}
+        {(nearStation || debugInfo.focusedApparatus !== "none") && !grabbedId && (
+          <div style={{
+            position: "absolute", left: "50%", top: "calc(50% + 22px)",
+            transform: "translateX(-50%)",
+            background: debugInfo.dispatchReady ? "rgba(0,30,14,0.75)" : "rgba(0,0,0,0.55)",
+            border: `1px solid ${debugInfo.dispatchReady ? "rgba(80,240,160,0.7)" : "rgba(143,200,255,0.4)"}`,
+            borderRadius: 6, padding: "3px 12px",
+            color: debugInfo.dispatchReady ? "#5aefb8" : "#8ad4ff",
+            fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", whiteSpace: "nowrap",
+            boxShadow: debugInfo.dispatchReady ? "0 0 12px rgba(60,220,140,0.3)" : "none",
+            transition: "all 0.15s",
+          }}>
+            {debugInfo.dispatchReady
+              ? `[ F ] — ${debugInfo.focusedApparatus}`
+              : "[ F ] to interact"}
           </div>
         )}
 
