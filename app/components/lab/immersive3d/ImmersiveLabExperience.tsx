@@ -105,7 +105,7 @@ const KEYMAP = [
   { name: "backward", keys: ["KeyS", "ArrowDown"] },
   { name: "left", keys: ["KeyA", "ArrowLeft"] },
   { name: "right", keys: ["KeyD", "ArrowRight"] },
-  { name: "interact", keys: ["KeyE"] },
+  { name: "interact", keys: ["KeyF"] },
   { name: "run", keys: ["ShiftLeft"] },
 ] as const;
 
@@ -178,8 +178,8 @@ function isApparatusRelevant(subject: Subject, alertText: string): boolean {
 function aiGuide(
   mode: LabModeType,
   subject: Subject,
-  proximity: boolean,
-  distanceToStation: number,
+  _proximity: boolean,
+  _distanceToStation: number,
   events: InteractionEvent[],
   grabbedLabel: string | null,
   transferActive: boolean,
@@ -190,28 +190,28 @@ function aiGuide(
   const hi = name ? `${name}, ` : "";
 
   if (transferActive)
-    return `${hi}nice work! Keep tilting steadily to pour the liquid into the target beaker. Don't rush — slow and steady gives the best results.`;
+    return `${hi}maintain a steady pour angle — slow and controlled transfers minimise acid-base measurement error.`;
   if (grabbedLabel)
-    return `${hi}you're holding the ${grabbedLabel}. Walk close to the station and look at it — then press E to place or interact with it.`;
-  if (!proximity) {
-    if (distanceToStation > 12)
-      return `${hey}walk toward the glowing ${subject} station — use W/A/S/D keys to move, and move your mouse to look around.`;
-    if (distanceToStation > 6)
-      return `${hi}you're getting closer! Keep walking toward the glowing ${subject} bay. You'll be able to interact when you're right in front of it.`;
-    return `${hi}almost there! Take a few more steps toward the ${subject} station — look for the glowing blue marker right in front of the bench.`;
-  }
-  // Near station
+    return `${hi}you're holding the ${grabbedLabel}. Aim it at the apparatus and press F to interact or place it.`;
+
+  // Student is always auto-positioned at station — no walking guidance needed
   if (mode === "guided") {
     const last = events[0]?.message;
     if (last?.toLowerCase().includes("missing"))
-      return `${hi}looks like some materials are missing. Look at each item in the Materials Rig panel on the right and click "Load" to add them to the bench.`;
-    return `${hey}you're at the ${subject} bay! Look at any instrument and press E to interact with it. Start with loading your materials on the right panel →`;
+      return `${hi}some reagents are missing. Use the Materials Rig panel on the right to load them onto the bench.`;
+    if (subject === "chemistry")
+      return `${hey}your apparatus is prepared. Focus the crosshair on the burette and press F to begin titration. Load reagents from the right panel first.`;
+    if (subject === "physics")
+      return `${hey}the circuit board is ready. Press F on each socket to connect the circuit, then activate the coil to observe electromagnetic induction.`;
+    if (subject === "biology")
+      return `${hey}the microscope slide is loaded. Press F on the focus knob to adjust magnification and observe the specimen clearly.`;
+    return `${hey}your apparatus is prepared. Press F on any instrument to begin the practical.`;
   }
   if (mode === "exam")
-    return `${hi}exam mode — work carefully and press E on each instrument in order. Take your time before each step.`;
+    return `${hi}exam conditions active — follow the procedure precisely. Press F on each instrument in the correct sequence. Record all observations.`;
   if (mode === "research")
-    return `${hi}research mode! Try changing one thing at a time and notice what happens. Record your observations in the Lab Record panel →`;
-  return `${hey}you're at the station! Press E while looking at any instrument to use it. Use the panel on the right to load materials.`;
+    return `${hi}research mode — vary one parameter at a time and observe the effect. Record your findings in the Lab Record panel on the right.`;
+  return `${hey}apparatus ready. Press F on any instrument to interact with it. Load materials from the right panel.`;
 }
 
 function LabRoom({ subject, pulse }: { subject: Subject; pulse: number }) {
@@ -723,6 +723,35 @@ function MechanicalApparatusRigs({
   );
 }
 
+
+// ─────────────────────────────────────────────────────────────
+// CameraAutoSpawn — teleports camera instantly to experiment bench
+// Runs whenever targetStationId changes (new practical selected)
+// ─────────────────────────────────────────────────────────────
+function CameraAutoSpawn({ targetStationId, onSpawned }: { targetStationId: string; onSpawned: () => void }) {
+  const { camera } = useThree();
+  const spawned = useRef<string | null>(null);
+
+  useFrame(() => {
+    if (spawned.current === targetStationId) return;
+    const station = LAB_STATIONS.find((s) => s.id === targetStationId);
+    if (!station) return;
+
+    // Position camera 2.2 units in front of bench, at eye height
+    const stationX = station.x * 2.5;
+    const stationZ = station.z * 1.5;
+    camera.position.set(stationX, 2.6, stationZ + 2.8);
+    // Face the bench (negative Z = toward -Z wall)
+    camera.rotation.set(-0.18, 0, 0);
+    camera.updateMatrixWorld();
+
+    spawned.current = targetStationId;
+    onSpawned();
+  });
+
+  return null;
+}
+
 function PlayerController({ targetStationId, setNearStation, setHighlightedStationId, grabbedId, setGrabbedId, rigidBodies, setGrabbedLabel, setPlayerState, onApparatusInteract }: {
   targetStationId: string;
   setNearStation: (v: boolean) => void;
@@ -791,14 +820,10 @@ function PlayerController({ targetStationId, setNearStation, setHighlightedStati
       lastForwardY.current = forwardY;
     }
 
-    const target = objects.find((o) => o.id === targetStationId);
-    const near = Boolean(target && Math.sqrt(
-      Math.pow(camera.position.x - target.pos.x, 2) +
-      Math.pow(camera.position.z - target.pos.z, 2)
-    ) < 5.5);
-    if (near !== lastNear.current) {
-      setNearStation(near);
-      lastNear.current = near;
+    // Auto-spawn places student directly at station — nearStation is always true
+    if (!lastNear.current) {
+      setNearStation(true);
+      lastNear.current = true;
     }
 
     // Rebuild mesh cache every 120 frames (~2 sec) instead of every frame
@@ -950,14 +975,16 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
   studentName?: string;
 }) {
   const canvasContainerRef = useRef<HTMLDivElement>(null);
-  const [nearStation, setNearStation] = useState(false);
+  const [nearStation, setNearStation] = useState(true); // always true — auto-spawn places student at bench
+  const [cinematicFade, setCinematicFade] = useState(false);
+  const [spawnedStation, setSpawnedStation] = useState<string | null>(null);
   const [highlightedStationId, setHighlightedStationId] = useState<string | null>(null);
   const [grabbedId, setGrabbedId] = useState<string | null>(null);
   const [grabbedLabel, setGrabbedLabel] = useState<string | null>(null);
   const [pulse, setPulse] = useState(0);
   const [pointerLocked, setPointerLocked] = useState(false);
   const [reactionLevel, setReactionLevel] = useState(0);
-  const [playerPos, setPlayerPos] = useState(new THREE.Vector3(0, 3.0, 7));
+  const [playerPos, setPlayerPos] = useState(new THREE.Vector3(0, 2.6, 5));
   const [forwardY, setForwardY] = useState(0);
   const [sourceFill, setSourceFill] = useState(0.62);
   const [targetFill, setTargetFill] = useState(0.22);
@@ -1030,9 +1057,14 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
 
   useLabAudio(playerPos, reactionLevel);
 
+  // Trigger cinematic fade-in whenever experiment/subject changes
   useEffect(() => {
+    setCinematicFade(true);
+    setSpawnedStation(null); // force re-spawn
     setRuntime(getDefaultRuntime());
     setMechanicalAlerts([]);
+    const t = setTimeout(() => setCinematicFade(false), 900);
+    return () => clearTimeout(t);
   }, [subject, experiment.id, setRuntime]);
 
   useEffect(() => {
@@ -1268,7 +1300,7 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
       <KeyboardControls map={KEYMAP as unknown as { name: string; keys: string[] }[]}>
         <Canvas
           shadows={qc.shadows}
-          camera={{ position: [0, 3.0, 7], fov: 70 }}
+          camera={{ position: [0, 2.6, 5], fov: 70 }}
           gl={{
             antialias: qc.antialias,
             powerPreference: "high-performance",
@@ -1278,6 +1310,12 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
           onCreated={({ gl }) => {
             gl.toneMapping = THREE.ACESFilmicToneMapping;
             gl.toneMappingExposure = 1.08;
+          }}
+          onClick={() => {
+            // Left-click fallback: fire apparatus interact for currently highlighted part
+            if (highlightedStationId) {
+              handleApparatusInteract(highlightedStationId);
+            }
           }}
         >
           <color attach="background" args={["#030712"]} />
@@ -1344,6 +1382,10 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
             />
             <MechanicalApparatusRigs pulse={pulse} controls={mechanics} />
             <StationBeacons activeStationId={station.id} highlightedStationId={highlightedStationId} />
+            <CameraAutoSpawn
+              targetStationId={station.id}
+              onSpawned={() => setSpawnedStation(station.id)}
+            />
             <PlayerController
               targetStationId={station.id}
               setNearStation={setNearStation}
@@ -1381,6 +1423,27 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
       </KeyboardControls>
 
       <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+        {/* ── Cinematic fade overlay — shown on experiment switch ── */}
+        <div style={{
+          position: "absolute", inset: 0, zIndex: 20,
+          background: "#030712",
+          opacity: cinematicFade ? 1 : 0,
+          transition: "opacity 0.5s ease",
+          pointerEvents: "none",
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        }}>
+          {cinematicFade && (
+            <>
+              <div style={{ color: "#5aedb8", fontSize: 13, fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", opacity: 0.8 }}>
+                Entering {station.name}
+              </div>
+              <div style={{ color: "rgba(140,200,255,0.5)", fontSize: 11, marginTop: 6, letterSpacing: "0.1em" }}>
+                Preparing apparatus…
+              </div>
+            </>
+          )}
+        </div>
+
         {/* ── Click-to-start overlay — shown until pointer lock is acquired ── */}
         {!pointerLocked && (
           <div
@@ -1398,45 +1461,59 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
               zIndex: 10,
               fontFamily: "'Segoe UI', system-ui, sans-serif",
             }}>
-            <div style={{ fontSize: 52, marginBottom: 10 }}>🔬</div>
-            <div style={{ color: "#cce8ff", fontWeight: 800, fontSize: 22, marginBottom: 6, letterSpacing: "0.02em" }}>
+            {/* Subject icon */}
+            <div style={{ fontSize: 44, marginBottom: 12, filter: "drop-shadow(0 0 20px rgba(80,200,255,0.5))" }}>
+              {subject === "chemistry" ? "⚗️" : subject === "physics" ? "⚡" : "🔬"}
+            </div>
+
+            {/* Experiment title */}
+            <div style={{ color: "#cce8ff", fontWeight: 800, fontSize: 22, marginBottom: 4, letterSpacing: "0.02em", textAlign: "center" }}>
               {experiment.title}
             </div>
-            <div style={{ color: "#88b8d8", fontSize: 13, marginBottom: 22 }}>
+            <div style={{ color: "#88b8d8", fontSize: 13, marginBottom: 20, textAlign: "center", maxWidth: 340 }}>
               {experiment.description}
             </div>
 
-            {/* Step-by-step card */}
+            {/* AAA Onboarding card — apparatus-first, no walking */}
             <div style={{
-              background: "rgba(8,22,46,0.75)", border: "1px solid rgba(80,160,255,0.25)",
-              borderRadius: 14, padding: "16px 24px", marginBottom: 22, maxWidth: 400,
-              display: "flex", flexDirection: "column", gap: 10,
+              background: "rgba(8,22,46,0.85)", border: "1px solid rgba(80,220,160,0.3)",
+              borderRadius: 14, padding: "16px 24px", marginBottom: 22, maxWidth: 380,
+              display: "flex", flexDirection: "column", gap: 11,
+              boxShadow: "0 0 30px rgba(40,200,140,0.1)",
             }}>
+              <div style={{ color: "#5aedb8", fontSize: 10, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 2 }}>
+                Your apparatus is prepared
+              </div>
               {[
-                { icon: "1️⃣", text: "Click anywhere to enter the lab" },
-                { icon: "2️⃣", text: "Use W A S D keys to walk toward the glowing station" },
-                { icon: "3️⃣", text: "Look around with your mouse" },
-                { icon: "4️⃣", text: "Stand in front of any instrument and press E to use it" },
-                { icon: "5️⃣", text: "The AI guide on the top-left will tell you what to do next" },
-              ].map(({ icon, text }) => (
-                <div key={icon} style={{ display: "flex", alignItems: "center", gap: 12, color: "#b8d8f8", fontSize: 13 }}>
-                  <span style={{ fontSize: 18, flexShrink: 0 }}>{icon}</span>
+                { icon: "✦", text: "You will appear directly at the experiment bench — no walking required" },
+                { icon: "F", text: "Press F on any instrument to interact with it", key: true },
+                { icon: "🖱", text: "Or left-click any glowing apparatus to interact" },
+                { icon: "→", text: "Load reagents using the Materials Rig panel on the right" },
+              ].map(({ icon, text, key }) => (
+                <div key={icon} style={{ display: "flex", alignItems: "flex-start", gap: 12, color: "#b8d8f8", fontSize: 13 }}>
+                  <span style={{
+                    flexShrink: 0, fontSize: key ? 11 : 16, fontWeight: key ? 800 : 400,
+                    background: key ? "rgba(80,220,160,0.2)" : "transparent",
+                    border: key ? "1px solid rgba(80,220,160,0.5)" : "none",
+                    borderRadius: key ? 4 : 0, padding: key ? "1px 6px" : 0,
+                    color: key ? "#5aedb8" : "inherit", marginTop: key ? 2 : 0,
+                  }}>{icon}</span>
                   <span>{text}</span>
                 </div>
               ))}
             </div>
 
             <div style={{
-              background: "linear-gradient(90deg, rgba(41,149,255,0.9), rgba(33,201,167,0.9))",
+              background: "linear-gradient(90deg, rgba(41,149,255,0.92), rgba(33,201,167,0.92))",
               color: "#fff", fontWeight: 700, fontSize: 15,
-              padding: "12px 36px", borderRadius: 12,
-              boxShadow: "0 0 24px rgba(40,160,255,0.35)",
+              padding: "12px 40px", borderRadius: 12,
+              boxShadow: "0 0 28px rgba(40,200,140,0.35)",
               letterSpacing: "0.04em",
             }}>
-              ▶ Click to Start
+              ▶ Enter Lab
             </div>
-            <div style={{ color: "rgba(120,170,220,0.5)", fontSize: 11, marginTop: 10 }}>
-              Press Esc at any time to exit the lab view
+            <div style={{ color: "rgba(120,170,220,0.45)", fontSize: 11, marginTop: 8 }}>
+              Press Esc at any time to exit
             </div>
           </div>
         )}
@@ -1462,10 +1539,10 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
 
         {/* ── Crosshair ── */}
         <div style={{ position: "absolute", left: "50%", top: "50%", width: 14, height: 14, transform: `translate(-50%, -50%) translateY(${Math.sin(pulse * 2.6) * 0.6}px)`, border: `1px solid ${nearStation ? "#8ff8cc" : grabbedId ? "#ffd59f" : "#87b7df"}`, borderRadius: "50%", boxShadow: nearStation ? "0 0 18px rgba(143,248,204,0.6)" : grabbedId ? "0 0 18px rgba(255,213,159,0.6)" : "0 0 14px rgba(135,183,223,0.4)" }} />
-        {/* Press E hint when near station and not yet interacting */}
+        {/* Press F hint when looking at apparatus */}
         {nearStation && !grabbedId && (
           <div style={{ position: "absolute", left: "50%", top: "calc(50% + 22px)", transform: "translateX(-50%)", background: "rgba(0,0,0,0.55)", border: "1px solid rgba(143,248,204,0.5)", borderRadius: 6, padding: "3px 10px", color: "#8ff8cc", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
-            Press E to interact
+            Press F to interact
           </div>
         )}
 
@@ -1527,7 +1604,7 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
             {[
               { key: "W/A/S/D", label: "Move" },
               { key: "Mouse", label: "Look" },
-              { key: "E", label: "Interact" },
+              { key: "F", label: "Interact" },
               { key: "Shift", label: "Sprint" },
             ].map(({ key, label }) => (
               <div key={key} style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10, opacity: 0.65 }}>
@@ -1538,52 +1615,21 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
           </div>
         </div>
 
-        {/* ── DIRECTION COMPASS / WAYPOINT ARROW (top-center) ── */}
-        {!nearStation && (
-          <div style={{
-            position: "absolute", left: "50%", top: 12,
-            transform: "translateX(-50%)",
-            display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-            pointerEvents: "none",
-          }}>
-            {/* Arrow SVG rotated toward station */}
-            <div style={{
-              transform: `rotate(${stationAngleDeg}deg)`,
-              transition: "transform 0.3s ease",
-              filter: "drop-shadow(0 0 8px rgba(100,200,255,0.7))",
-            }}>
-              <svg width="28" height="36" viewBox="0 0 28 36">
-                <polygon points="14,2 26,28 14,22 2,28" fill="#4ec9ff" fillOpacity="0.92" />
-                <polygon points="14,2 26,28 14,22 2,28" fill="none" stroke="#ffffff" strokeWidth="1.5" strokeOpacity="0.5" />
-              </svg>
-            </div>
-            {/* Distance label */}
-            <div style={{
-              background: "rgba(5,18,36,0.82)", border: "1px solid rgba(80,180,255,0.4)",
-              borderRadius: 8, padding: "3px 10px",
-              color: "#89d4ff", fontSize: 11, fontWeight: 600, letterSpacing: "0.06em",
-              backdropFilter: "blur(4px)",
-              whiteSpace: "nowrap",
-            }}>
-              {station.name} · {Math.round(distanceToStation)}m away
-            </div>
-          </div>
-        )}
-        {nearStation && (
-          <div style={{
-            position: "absolute", left: "50%", top: 12,
-            transform: "translateX(-50%)",
-            background: "rgba(5,26,18,0.88)",
-            border: "1px solid rgba(80,220,150,0.55)",
-            borderRadius: 10, padding: "5px 14px",
-            color: "#5aedb8", fontSize: 12, fontWeight: 700,
-            letterSpacing: "0.08em",
-            backdropFilter: "blur(4px)",
-            boxShadow: "0 0 14px rgba(60,210,130,0.2)",
-          }}>
-            ✓ At {station.name}
-          </div>
-        )}
+        {/* ── EXPERIMENT LOCATION BANNER (top-center) — always shown ── */}
+        <div style={{
+          position: "absolute", left: "50%", top: 12,
+          transform: "translateX(-50%)",
+          background: "rgba(5,26,18,0.88)",
+          border: "1px solid rgba(80,220,150,0.55)",
+          borderRadius: 10, padding: "5px 14px",
+          color: "#5aedb8", fontSize: 12, fontWeight: 700,
+          letterSpacing: "0.08em",
+          backdropFilter: "blur(4px)",
+          boxShadow: "0 0 14px rgba(60,210,130,0.2)",
+          pointerEvents: "none",
+        }}>
+          ✓ At {station.name}
+        </div>
 
         {/* ── STATUS PANEL (top-right) — clean, student-friendly ── */}
         <div style={{
@@ -1600,7 +1646,7 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
             <span style={{ opacity: 0.6 }}>Station</span>
             <span style={{ fontWeight: 600 }}>{station.name}</span>
             <span style={{ opacity: 0.6 }}>Status</span>
-            <span style={{ color: nearStation ? "#5aedb8" : "#88aacc", fontWeight: 600 }}>{nearStation ? "● Ready to use" : "○ Walk closer"}</span>
+            <span style={{ color: "#5aedb8", fontWeight: 600 }}>● Ready to use</span>
           </div>
           {/* Reaction progress — shown only when active */}
           {reactionLevel > 0.05 && (
@@ -1673,18 +1719,17 @@ export default function ImmersiveLabExperience({ subject, mode, experiment, onRu
         <div style={{ position: "absolute", left: "50%", bottom: 50, transform: "translateX(-50%)", display: "flex", gap: 8, pointerEvents: "auto" }}>
           <button
             onClick={onRunResult}
-            disabled={!nearStation}
             style={{
               padding: "10px 18px", borderRadius: 12,
-              border: nearStation ? "1px solid rgba(80,220,160,0.5)" : "1px solid rgba(80,120,160,0.3)",
-              background: nearStation ? "linear-gradient(90deg, rgba(41,149,255,0.88), rgba(33,201,167,0.88))" : "rgba(60,80,100,0.4)",
-              color: "#fff", fontWeight: 700, cursor: nearStation ? "pointer" : "not-allowed",
+              border: "1px solid rgba(80,220,160,0.5)",
+              background: "linear-gradient(90deg, rgba(41,149,255,0.88), rgba(33,201,167,0.88))",
+              color: "#fff", fontWeight: 700, cursor: "pointer",
               fontSize: 13, letterSpacing: "0.04em",
-              boxShadow: nearStation ? "0 0 20px rgba(40,200,140,0.25)" : "none",
+              boxShadow: "0 0 20px rgba(40,200,140,0.25)",
               transition: "all 0.2s",
             }}
           >
-            {nearStation ? "▶ Execute Experiment" : "Walk to station first"}
+            ▶ Execute Experiment
           </button>
           <button
             onClick={() => { setRuntime(getDefaultRuntime()); setSourceFill(0.62); setTargetFill(0.22); setSpill(0); }}
