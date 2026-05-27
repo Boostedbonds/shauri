@@ -480,7 +480,7 @@ export default function AdminGate({ children }: { children: React.ReactNode }) {
                     }}
                     type="text"
                     autoComplete="off"
-                    placeholder="e.g. Dracula"
+                    placeholder="Enter your name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     onFocus={() => setNameFocus(true)}
